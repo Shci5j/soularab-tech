@@ -1,13 +1,13 @@
 {
-  "background_color": "#000000",
-  "dir": "auto",
+  "background_color": "#e5b54f",
+  "dir": "ltr",
   "display": "standalone",
-  "name": "روح العرب",
+  "name": "SOULARAB TECH Royal Dashboard",
   "orientation": "any",
   "scope": "/",
-  "short_name": "soularab-tc",
+  "short_name": "soularab-tech",
   "start_url": "/",
-  "theme_color": "#8717a3",
-  "id": "Aboarap1994",
-  "description": "تطبيق شامل ومتمكن بافضل اداء للبرمجيات الحديثة والالكترونية"
+  "theme_color": "#371149",
+  "id": "start_soularab-tech.com",
+  "description": "لوحة تحكم تكنولوجية وأمنية متكاملة لإدارة الأكواد والبيانات بفخامة."
 }
