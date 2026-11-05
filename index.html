@@ -1,23 +1,27 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="ltr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>موقعي التجريبي على GitHub</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOULARAB TECH Royal Dashboard</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>أهلاً بك في موقعي الأول!</h1>
-        <p>تم رفع هذا الموقع بكل سهولة عبر الهاتف باستخدام GitHub.</p>
-        <button id="colorBtn">اضغط لتغيير اللون</button>
-    </div>
 
-    <script src="script.js"></script>
+  <div class="container">
+    <h1>أهلاً بك في لوحة التحكم الملكية!</h1>
+    <p>تم إعداد المشروع بنجاح لتحويله إلى تطبيق APK.</p>
+    <button id="colorBtn">تغيير اللون</button>
+  </div>
+
+  <script src="script.js"></script>
+  
+  <!-- سكريبت تشغيل عامل الخدمة Service Worker -->
+  <script>
+    if (typeof navigator.serviceWorker !== 'undefined') {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+
 </body>
 </html>
-<script>
-  if (typeof navigator.serviceWorker !== 'undefined') {
-    navigator.serviceWorker.register('sw.js')
-  }
-</script>
