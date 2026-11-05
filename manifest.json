@@ -1,0 +1,13 @@
+{
+  "background_color": "#000000",
+  "dir": "auto",
+  "display": "standalone",
+  "name": "روح العرب",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "soularab-tc",
+  "start_url": "/",
+  "theme_color": "#8717a3",
+  "id": "Aboarap1994",
+  "description": "تطبيق شامل ومتمكن بافضل اداء للبرمجيات الحديثة والالكترونية"
+}
