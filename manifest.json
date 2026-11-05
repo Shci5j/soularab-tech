@@ -1,0 +1,13 @@
+{
+  "background_color": "#030303",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "SOULARAB TECH Royal Dashboard",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "soularab",
+  "start_url": "/",
+  "theme_color": "#d4af37",
+  "id": "soularab-tech",
+  "description": "SOULARAB TECH Royal Dashboard"
+}
