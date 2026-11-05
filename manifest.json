@@ -1,13 +1,13 @@
 {
-  "name": "SOULARAB TECH Royal Dashboard",
-  "short_name": "soularab-tech",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#030303",
-  "theme_color": "#d4af37",
+  "background_color": "#d4af35",
   "dir": "ltr",
+  "display": "standalone",
+  "name": "SOULARAB TECH Royal Dashboard",
   "orientation": "any",
   "scope": "/",
-  "id": "start_soularab-tech-com",
-  "description": "لوحة تحكم تكنولوجية وأمنية متكاملة لإدارة الأكواد والبيانات بفخامة."
+  "short_name": "soularab",
+  "start_url": "/",
+  "theme_color": "#030303",
+  "id": "soularab-tech",
+  "description": "SOULARAB TECH Royal Dashboard هو تطبيق متطور ومصمم خصيصاً ليقدم تجربة إدارة رقمية فريدة وفائقة الأمان. يجمع التطبيق بين الفخامة البصرية بتصميمه الفضائي المرصع بالنجوم واللمسات الذهبية المصقولة، وبين القوة الوظيفية الفعالة من خلال 12 قسماً تكنولوجياً متكاملاً."
 }
