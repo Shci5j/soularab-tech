@@ -1,13 +1,13 @@
 {
-  "background_color": "#e5b54f",
-  "dir": "ltr",
-  "display": "standalone",
   "name": "SOULARAB TECH Royal Dashboard",
-  "orientation": "any",
-  "scope": "/",
   "short_name": "soularab-tech",
   "start_url": "/",
-  "theme_color": "#371149",
-  "id": "start_soularab-tech.com",
+  "display": "standalone",
+  "background_color": "#030303",
+  "theme_color": "#d4af37",
+  "dir": "ltr",
+  "orientation": "any",
+  "scope": "/",
+  "id": "start_soularab-tech-com",
   "description": "لوحة تحكم تكنولوجية وأمنية متكاملة لإدارة الأكواد والبيانات بفخامة."
 }
