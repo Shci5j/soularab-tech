@@ -32,6 +32,8 @@ function saveSetting(key, value) {
   }
 }
 
+// تسجيل الدخول معطل افتراضياً؛ يُفعّل من زر داخل التطبيق.
+let loginRequired = readSetting(LOGIN_SETTING_KEY, 'disabled') === 'enabled';
 // تسجيل الدخول معطل افتراضياً؛ يُفعّل من داخل التطبيق.
 let loginRequired = readSetting(LOGIN_SETTING_KEY, 'disabled') === 'enabled';
 let isAuthenticated = false;
@@ -39,6 +41,8 @@ let isAuthenticated = false;
 function showLogin() {
   loginScreen.hidden = false;
   mainScreen.hidden = true;
+  loginToggle.textContent = 'تعطيل تسجيل الدخول';
+  logoutButton.hidden = true;
   loginDisableButton.hidden = false;
   loginMessage.textContent = '';
   document.getElementById('username').focus();
@@ -50,6 +54,7 @@ function showDashboard() {
   loginToggle.textContent = loginRequired
     ? 'تعطيل تسجيل الدخول'
     : 'تفعيل تسجيل الدخول';
+  logoutButton.hidden = !loginRequired;
   logoutButton.hidden = !loginRequired || !isAuthenticated;
 }
 
@@ -94,6 +99,15 @@ loginForm.addEventListener('submit', (event) => {
 });
 
 loginToggle.addEventListener('click', () => {
+  loginRequired = !loginRequired;
+  saveSetting(LOGIN_SETTING_KEY, loginRequired ? 'enabled' : 'disabled');
+
+  if (loginRequired) {
+    showLogin();
+  } else {
+    loginForm.reset();
+    showDashboard();
+  }
   setLoginRequired(!loginRequired);
 });
 

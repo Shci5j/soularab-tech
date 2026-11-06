@@ -10,6 +10,8 @@
         fill="#d4af37" stroke="#d4af37" stroke-width="10" stroke-linejoin="round"/>
   <path d="M132 200 L120 230 L160 220 L200 248 L256 178 L312 248 L352 220 L392 230 L380 200 Z"
         fill="#d4af37"/>
+  <path d="M256 70 L390 126 L390 255 C390 344 330 395 256 437 C182 395 122 344 122 255 L122 126 Z"
+        fill="#0d0d0d" stroke="#d4af37" stroke-width="12"/>
 
   <!-- Inner shield detail and stylized S -->
   <path d="M256 110 C221 148, 178 170, 143 174 L143 244 C143 298 183 336 256 382 C329 336 369 298 369 244 L369 174 C334 170 291 148 256 110 Z"
