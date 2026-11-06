@@ -12,6 +12,7 @@ const mainScreen = document.getElementById('main-screen');
 const loginMessage = document.getElementById('login-message');
 const dashboardMessage = document.getElementById('dashboard-message');
 const loginToggle = document.getElementById('login-toggle');
+const loginDisableButton = document.getElementById('login-disable-button');
 const logoutButton = document.getElementById('logout-button');
 const themeToggle = document.getElementById('theme-toggle');
 
@@ -33,12 +34,16 @@ function saveSetting(key, value) {
 
 // تسجيل الدخول معطل افتراضياً؛ يُفعّل من زر داخل التطبيق.
 let loginRequired = readSetting(LOGIN_SETTING_KEY, 'disabled') === 'enabled';
+// تسجيل الدخول معطل افتراضياً؛ يُفعّل من داخل التطبيق.
+let loginRequired = readSetting(LOGIN_SETTING_KEY, 'disabled') === 'enabled';
+let isAuthenticated = false;
 
 function showLogin() {
   loginScreen.hidden = false;
   mainScreen.hidden = true;
   loginToggle.textContent = 'تعطيل تسجيل الدخول';
   logoutButton.hidden = true;
+  loginDisableButton.hidden = false;
   loginMessage.textContent = '';
   document.getElementById('username').focus();
 }
@@ -50,11 +55,28 @@ function showDashboard() {
     ? 'تعطيل تسجيل الدخول'
     : 'تفعيل تسجيل الدخول';
   logoutButton.hidden = !loginRequired;
+  logoutButton.hidden = !loginRequired || !isAuthenticated;
+}
+
+function setLoginRequired(required) {
+  loginRequired = required;
+  isAuthenticated = false;
+  saveSetting(LOGIN_SETTING_KEY, required ? 'enabled' : 'disabled');
+  loginForm.reset();
+  loginMessage.textContent = '';
+
+  if (required) {
+    showLogin();
+  } else {
+    loginDisableButton.hidden = true;
+    showDashboard();
+  }
 }
 
 if (loginRequired) {
   showLogin();
 } else {
+  loginDisableButton.hidden = true;
   showDashboard();
 }
 
@@ -70,6 +92,7 @@ loginForm.addEventListener('submit', (event) => {
     return;
   }
 
+  isAuthenticated = true;
   loginForm.reset();
   loginMessage.textContent = '';
   showDashboard();
@@ -85,10 +108,16 @@ loginToggle.addEventListener('click', () => {
     loginForm.reset();
     showDashboard();
   }
+  setLoginRequired(!loginRequired);
+});
+
+loginDisableButton.addEventListener('click', () => {
+  setLoginRequired(false);
 });
 
 logoutButton.addEventListener('click', () => {
   if (loginRequired) {
+    isAuthenticated = false;
     loginForm.reset();
     showLogin();
   }
