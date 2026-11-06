@@ -1,67 +1,13 @@
-// 1. نظام الأمان والتحقق من الخمول (24 ساعة)
-const INACTIVITY_LIMIT = 24 * 60 * 60 * 1000;
-
-// بيانات الدخول الافتراضية الثابتة
-const CORRECT_USER = "aboarap";
-const CORRECT_PASS = "aa1994";
-
+// تخطي شاشة الدخول مؤقتاً والفتح المباشر للرئيسية
 window.onload = function() {
-    checkAppSecurity();
-    updateDate();
-    logActivity('فتح التطبيق واستدعاء النظام');
-};
-
-function checkAppSecurity() {
-    const lastLogin = localStorage.getItem('last_login_timestamp');
-    const pinSaved = localStorage.getItem('user_pin');
-    const now = new Date().getTime();
-
-    if (!lastLogin || (now - parseInt(lastLogin)) > INACTIVITY_LIMIT) {
-        document.getElementById('login-screen').classList.remove('hidden');
-    } else if (!pinSaved) {
-        document.getElementById('security-setup-screen').classList.remove('hidden');
-    } else {
-        document.getElementById('main-screen').classList.remove('hidden');
-    }
-}
-
-// دالة تسجيل الدخول بالبيانات المحددة
-function handleLogin(e) {
-    if (e) e.preventDefault();
-    
-    const usernameInput = document.getElementById('username').value.trim();
-    const passwordInput = document.getElementById('password').value.trim();
-    
-    if (usernameInput === CORRECT_USER && passwordInput === CORRECT_PASS) {
-        localStorage.setItem('last_login_timestamp', new Date().getTime());
-        localStorage.setItem('username', usernameInput);
-        
-        document.getElementById('login-screen').classList.add('hidden');
-        
-        if (!localStorage.getItem('user_pin')) {
-            const secScreen = document.getElementById('security-setup-screen');
-            if(secScreen) secScreen.classList.remove('hidden');
-        } else {
-            const mainScreen = document.getElementById('main-screen');
-            if(mainScreen) mainScreen.classList.remove('hidden');
-        }
-        logActivity('تسجيل الدخول بنجاح');
-    } else {
-        alert('الاسم المستعار أو كلمة السر غير صحيحة! يرجى استخدام: aboarap / aa1994');
-    }
-}
-
-function enableBiometricsAndFinish() {
-    const pin = document.getElementById('setup-pin').value;
-    if (pin.length < 4) {
-        alert('يرجى كتابة رمز PIN مكون من 4 أرقام على الأقل');
-        return;
-    }
-    localStorage.setItem('user_pin', pin);
+    // فتح الواجهة الرئيسية فوراً
+    document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('security-setup-screen').classList.add('hidden');
     document.getElementById('main-screen').classList.remove('hidden');
-    logActivity('تفعيل بصمة الأصبع ورمز PIN الخاص');
-}
+    
+    updateDate();
+    logActivity('فتح التطبيق ودخول المملكة البرمجية بنجاح');
+};
 
 // 2. التنقل بين الصفحات والزر العائم
 function openSection(sectionId) {
