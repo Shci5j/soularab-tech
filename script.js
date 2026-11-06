@@ -1,5 +1,9 @@
 // 1. نظام الأمان والتحقق من الخمول (24 ساعة)
-const INACTIVITY_LIMIT = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
+const INACTIVITY_LIMIT = 24 * 60 * 60 * 1000;
+
+// بيانات الدخول الافتراضية الثابتة
+const CORRECT_USER = "aboarap";
+const CORRECT_PASS = "aa1994";
 
 window.onload = function() {
     checkAppSecurity();
@@ -13,27 +17,38 @@ function checkAppSecurity() {
     const now = new Date().getTime();
 
     if (!lastLogin || (now - parseInt(lastLogin)) > INACTIVITY_LIMIT) {
-        // طلب تسجيل الدخول من جديد
         document.getElementById('login-screen').classList.remove('hidden');
     } else if (!pinSaved) {
         document.getElementById('security-setup-screen').classList.remove('hidden');
     } else {
-        // دخول مباشر للرئيسية
         document.getElementById('main-screen').classList.remove('hidden');
     }
 }
 
+// دالة تسجيل الدخول بالبيانات المحددة
 function handleLogin(e) {
-    e.preventDefault();
-    localStorage.setItem('last_login_timestamp', new Date().getTime());
-    document.getElementById('login-screen').classList.add('hidden');
+    if (e) e.preventDefault();
     
-    if (!localStorage.getItem('user_pin')) {
-        document.getElementById('security-setup-screen').classList.remove('hidden');
+    const usernameInput = document.getElementById('username').value.trim();
+    const passwordInput = document.getElementById('password').value.trim();
+    
+    if (usernameInput === CORRECT_USER && passwordInput === CORRECT_PASS) {
+        localStorage.setItem('last_login_timestamp', new Date().getTime());
+        localStorage.setItem('username', usernameInput);
+        
+        document.getElementById('login-screen').classList.add('hidden');
+        
+        if (!localStorage.getItem('user_pin')) {
+            const secScreen = document.getElementById('security-setup-screen');
+            if(secScreen) secScreen.classList.remove('hidden');
+        } else {
+            const mainScreen = document.getElementById('main-screen');
+            if(mainScreen) mainScreen.classList.remove('hidden');
+        }
+        logActivity('تسجيل الدخول بنجاح');
     } else {
-        document.getElementById('main-screen').classList.remove('hidden');
+        alert('الاسم المستعار أو كلمة السر غير صحيحة! يرجى استخدام: aboarap / aa1994');
     }
-    logActivity('تسجيل الدخول بنجاح');
 }
 
 function enableBiometricsAndFinish() {
@@ -55,17 +70,18 @@ function openSection(sectionId) {
     const target = document.getElementById(sectionId);
     if(target) target.classList.remove('hidden');
 
-    // إخفاء زر روح العائم في الصفحة الرئيسية وإظهاره في باقي الصفحات
     const floatingRouh = document.getElementById('floating-rouh-btn');
-    if (sectionId === 'main-screen') {
-        floatingRouh.classList.add('hidden');
-    } else {
-        floatingRouh.classList.remove('hidden');
+    if (floatingRouh) {
+        if (sectionId === 'main-screen') {
+            floatingRouh.classList.add('hidden');
+        } else {
+            floatingRouh.classList.remove('hidden');
+        }
     }
     logActivity(`الانتقال إلى قسم: ${sectionId}`);
 }
 
-// 3. نظام الوضع الفاتح والغامق (Light/Dark Theme)
+// 3. نظام الوضع الفاتح والغامق
 function setTheme(mode) {
     if (mode === 'light') {
         document.body.classList.remove('dark-theme');
@@ -77,7 +93,7 @@ function setTheme(mode) {
     logActivity(`تغيير المظهر إلى الوضع: ${mode}`);
 }
 
-// 4. استدعاء الذكاء الاصطناعي (أدوات الـ 5)
+// 4. استدعاء الذكاء الاصطناعي
 function sendAiPrompt() {
     const prompt = document.getElementById('ai-prompt-input').value;
     if(!prompt) return;
@@ -103,7 +119,7 @@ function sendAiPrompt() {
     logActivity('إرسال أمر جديد لمحرك الذكاء الاصطناعي');
 }
 
-// 5. سجل الأنشطة والعمليات (مع حجب الأكواد السرية)
+// 5. سجل الأنشطة والعمليات
 function logActivity(action) {
     const logsList = document.getElementById('logs-list');
     if(logsList) {
