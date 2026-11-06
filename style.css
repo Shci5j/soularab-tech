@@ -1,34 +1,332 @@
-body {
-    font-family: Tahoma, sans-serif;
-    background-color: #f4f4f9;
-    text-align: center;
-    padding-top: 50px;
+* {
     margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.container {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-    display: inline-block;
+/* الألوان الأساسية والمتغيرات */
+:root {
+    --bg-color: #0d0d0d;
+    --text-color: #ffffff;
+    --gold-main: #d4af37;
+    --gold-light: #f3e5ab;
+    --frame-border: #d4af37;
+    --card-bg: #161616;
+    --input-bg: #1a1a1a;
+    --code-syntax: #00ffcc;
 }
 
-h1 {
-    color: #333;
+/* الوضع الفاتح (Light Mode) */
+body.light-theme {
+    --bg-color: #5e17eb; /* اللون البنفسجي الفاخر للصفحة الرئيسية في الوضع الفاتح */
+    --text-color: #000000;
+    --card-bg: #ffffff;
+    --input-bg: #f0f0f0;
+    --code-syntax: #800080;
 }
 
-button {
-    background-color: #007bff;
-    color: white;
+body.light-theme .sub-page {
+    background-color: #ffffff !important; /* خلفية بيضاء ثابتة لجميع الصفحات الفرعية في الوضع الفاتح */
+    color: #000000 !important;
+}
+
+body.dark-theme .sub-page {
+    background-color: #0d0d0d !important; /* خلفية سوداء ثابتة لجميع الصفحات الفرعية في الوضع الغامق */
+    color: #ffffff !important;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+    direction: rtl;
+    overflow-x: hidden;
+    transition: background-color 0.4s, color 0.4s;
+}
+
+/* 1. تصميم شاشة تسجيل الدخول الإطار الذهبي */
+.screen-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #050505;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    padding: 20px;
+}
+
+.login-frame {
+    background: #0d0d0d;
+    border: 5px solid var(--gold-main);
+    border-radius: 45px;
+    padding: 35px 25px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    box-shadow: 0 0 35px rgba(212, 175, 55, 0.4);
+}
+
+.white-logo {
+    color: #ffffff;
+    margin-bottom: 20px;
+}
+.white-logo i { font-size: 3rem; margin-bottom: 5px; }
+.white-logo h2 { letter-spacing: 2px; }
+.white-logo small { color: var(--gold-main); font-size: 0.75rem; }
+
+.welcome-text { color: var(--gold-light); font-weight: normal; margin-bottom: 5px; }
+.login-title { color: var(--gold-main); font-size: 2rem; margin-bottom: 25px; }
+
+/* إدخالات الأشرطة السوداء */
+.ribbon-input {
+    background: #000000;
+    border: 2px solid var(--gold-main);
+    border-radius: 8px;
+    margin: 15px 0;
+    padding: 5px 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+}
+.ribbon-input input {
+    width: 100%;
+    height: 40px;
+    background: transparent;
     border: none;
-    padding: 10px 20px;
-    font-size: 16px;
-    border-radius: 5px;
+    color: #ffffff;
+    text-align: center;
+    font-size: 1.1rem;
+    outline: none;
+}
+
+.btn-royal-submit {
+    background: linear-gradient(135deg, #d4af37, #aa820a);
+    color: #000000;
+    border: none;
+    padding: 12px 25px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border-radius: 8px;
     cursor: pointer;
+    width: 100%;
     margin-top: 15px;
 }
 
-button:hover {
-    background-color: #0056b3;
+.footer-quote { color: #ffffff; margin-top: 25px; font-size: 0.9rem; }
+
+/* 2. الصفحة الرئيسية (Main Screen) */
+.top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
 }
+
+.search-bar-frame {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid var(--gold-main);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    padding: 5px 12px;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+}
+.search-bar-frame input {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    width: 100%;
+    outline: none;
+}
+
+.header-controls button {
+    background: transparent;
+    border: none;
+    color: var(--gold-main);
+    font-size: 1.2rem;
+    cursor: pointer;
+    margin: 0 4px;
+}
+
+.logo-shield-only {
+    font-size: 2.5rem;
+    color: var(--gold-main);
+}
+
+.dashboard-body {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    padding: 20px;
+    align-items: center;
+}
+
+.side-menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+}
+
+.menu-btn {
+    background: #000000;
+    border: 2px solid var(--gold-main);
+    color: var(--gold-main);
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+}
+
+/* الشبكة الدائرية الـ 4 */
+.main-circles-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.royal-circle-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: #000000;
+    border: 3px solid var(--gold-main);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.circle-inner span {
+    color: var(--gold-main);
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+/* 3. صفحة الأقسام الفرعية (Sections Page) */
+.sub-page {
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.sub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.ai-summon-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--gold-main);
+    cursor: pointer;
+    text-align: center;
+}
+.ai-summon-icon-btn i { font-size: 2rem; display: block; }
+
+.section-group { margin-bottom: 40px; }
+
+.group-title-banner {
+    background: #000000;
+    border: 2px solid var(--gold-main);
+    color: var(--gold-main);
+    width: 60%;
+    margin: 0 auto 20px auto;
+    text-align: center;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.circles-row {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.gold-sparkle-circle {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: #000000;
+    border: 2px dashed var(--gold-main);
+    box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--gold-main);
+}
+
+/* الزر العائم لروح */
+.floating-rouh {
+    position: fixed;
+    bottom: 25px;
+    left: 25px;
+    background: var(--gold-main);
+    color: #000;
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.7);
+    cursor: pointer;
+    z-index: 999;
+}
+
+/* قسم المحادثة واستدعاء الذكاء */
+.chat-terminal {
+    background: #000000;
+    border: 1px solid #333;
+    height: 350px;
+    border-radius: 10px;
+    padding: 15px;
+    overflow-y: auto;
+    color: #ffffff;
+    margin-bottom: 15px;
+}
+.chat-input-bar { display: flex; gap: 10px; }
+.chat-input-bar textarea {
+    flex: 1;
+    height: 50px;
+    background: var(--input-bg);
+    border: 1px solid var(--gold-main);
+    color: var(--text-color);
+    padding: 10px;
+    border-radius: 8px;
+}
+
+/* Modals */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+.modal-box {
+    background: var(--card-bg);
+    border: 2px solid var(--gold-main);
+    padding: 25px;
+    border-radius: 15px;
+    max-width: 400px;
+    width: 90%;
+}
+
+.hidden { display: none !important; }
