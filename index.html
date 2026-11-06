@@ -7,97 +7,38 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="dark-theme">
+<body class="dark-theme" style="background-color: #000; color: #fff; font-family: Tahoma, sans-serif; margin: 0; padding: 0;">
 
     <!-- شاشة تسجيل الدخول -->
-    <div id="login-screen" class="auth-container">
-        <div class="royal-frame">
-            <div class="logo-area">
-                <i class="fa-solid fa-shield-halved logo-icon"></i>
-                <h1>SOULARAB TECH</h1>
-                <p class="subtitle">IDEAS INTO DIGITAL REALITY</p>
-            </div>
+    <div id="login-screen" style="display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw;">
+        <div style="background: #111; border: 2px solid #d4af37; padding: 30px; border-radius: 15px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);">
+            <h1 style="color: #d4af37; margin-bottom: 5px;">SOULARAB TECH</h1>
+            <p style="color: #aaa; font-size: 12px; margin-bottom: 20px;">IDEAS INTO DIGITAL REALITY</p>
             
-            <p class="welcome-text">أهلاً بك أيها المطور المبدع</p>
-            <h2 class="gold-title">تسجيل الدخول</h2>
+            <h2 style="color: #fff; font-size: 18px; margin-bottom: 20px;">تسجيل الدخول</h2>
             
-            <div class="input-group">
-                <input type="text" id="username" placeholder="الاسم المستعار / البريد الإلكتروني" value="aboarap">
-            </div>
+            <input type="text" id="username" value="aboarap" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #222; border: 1px solid #d4af37; color: #fff; border-radius: 8px; box-sizing: border-box; text-align: center;">
             
-            <div class="input-group">
-                <input type="password" id="password" placeholder="كلمة السر" value="aa1994">
-            </div>
+            <input type="password" id="password" value="aa1994" style="width: 100%; padding: 12px; margin-bottom: 20px; background: #222; border: 1px solid #d4af37; color: #fff; border-radius: 8px; box-sizing: border-box; text-align: center;">
             
-            <button type="button" class="royal-btn" onclick="handleLogin()">دخول للمملكة البرمجية</button>
-            
-            <p class="quote-text">مشوار الألف ميل يبدأ بخطوة</p>
+            <button onclick="forceLogin()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #d4af37, #aa7c11); color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">دخول للمملكة البرمجية</button>
         </div>
     </div>
 
-    <!-- الواجهة الرئيسية -->
-    <div id="main-screen" class="main-wrapper hidden">
-        <header class="main-header">
-            <div class="user-welcome">
-                <h2>ماذا تريد أن تفعل اليوم يا زعيم؟</h2>
-                <span id="current-date" class="date-badge"></span>
-            </div>
-            <div class="top-controls">
-                <button onclick="toggleLanguage()" class="icon-btn"><i class="fa-solid fa-globe"></i></button>
-                <button onclick="setTheme('dark')" class="icon-btn"><i class="fa-solid fa-moon"></i></button>
-                <button onclick="setTheme('light')" class="icon-btn"><i class="fa-solid fa-sun"></i></button>
-            </div>
-        </header>
-
-        <section class="modules-grid">
-            <div class="module-card" onclick="openSection('sections-page')">
-                <i class="fa-solid fa-cubes"></i>
+    <!-- الواجهة الرئيسية (تظهر بعد الدخول) -->
+    <div id="main-screen" style="display: none; padding: 20px;">
+        <h1 style="color: #d4af37; text-align: center;">أهلاً بك في لوحة تحكم المملكة البرمجية</h1>
+        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 40px; flex-wrap: wrap;">
+            <div style="background: #111; border: 1px solid #d4af37; padding: 20px; border-radius: 10px; width: 150px; text-align: center; cursor: pointer;" onclick="alert('قسم الأقسام')">
+                <i class="fa-solid fa-cubes fa-2x" style="color: #d4af37; margin-bottom: 10px;"></i>
                 <h3>الأقسام</h3>
-                <p>تصميم وبرمجة</p>
             </div>
-            <div class="module-card" onclick="openSection('whatsapp-page')">
-                <i class="fa-brands fa-whatsapp"></i>
-                <h3>الواتساب</h3>
-                <p>محادثة روح الآلية</p>
+            <div style="background: #111; border: 1px solid #d4af37; padding: 20px; border-radius: 10px; width: 150px; text-align: center; cursor: pointer;" onclick="alert('قسم الذكاء الاصطناعي')">
+                <i class="fa-solid fa-wand-magic-sparkles fa-2x" style="color: #d4af37; margin-bottom: 10px;"></i>
+                <h3>الذكاء</h3>
             </div>
-            <div class="module-card" onclick="openSection('private-page')">
-                <i class="fa-solid fa-user-lock"></i>
-                <h3>خاص</h3>
-                <p>المنطقة الآمنة</p>
-            </div>
-            <div class="module-card highlight" onclick="openSection('ai-page')">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <h3>استدعاء الذكاء</h3>
-                <p>5 أدوات متكاملة</p>
-            </div>
-        </section>
-    </div>
-
-    <!-- صفحة الأقسام -->
-    <div id="sections-page" class="sub-page hidden">
-        <button class="back-btn" onclick="openSection('main-screen')"><i class="fa-solid fa-arrow-right"></i> عودة</button>
-        <h2>الأقسام البرمجية</h2>
-        <div class="circle-grid">
-            <div class="circle-item"><i class="fa-solid fa-palette"></i><span>قسم التصميم</span></div>
-            <div class="circle-item"><i class="fa-solid fa-code"></i><span>قسم البرمجة</span></div>
         </div>
     </div>
-
-    <!-- صفحة الذكاء الاصطناعي -->
-    <div id="ai-page" class="sub-page hidden">
-        <button class="back-btn" onclick="openSection('main-screen')"><i class="fa-solid fa-arrow-right"></i> عودة</button>
-        <h2>محرك الذكاء الاصطناعي</h2>
-        <div id="ai-terminal-messages" class="terminal-box"></div>
-        <div class="ai-input-box">
-            <input type="text" id="ai-prompt-input" placeholder="اكتب أمرك البرمجي هنا...">
-            <button onclick="sendAiPrompt()"><i class="fa-solid fa-paper-plane"></i></button>
-        </div>
-    </div>
-
-    <!-- الزر العائم "روح" -->
-    <button id="floating-rouh-btn" class="floating-btn hidden" onclick="openSection('ai-page')">
-        <i class="fa-solid fa-robot"></i> روح
-    </button>
 
     <script src="script.js"></script>
 </body>
