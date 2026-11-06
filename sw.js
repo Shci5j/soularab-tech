@@ -1,45 +1,55 @@
-// اسم ذاكرة التخزين المؤقت
-const CACHE_NAME = 'soularab-dashboard-v1';
+'use strict';
 
-// الملفات الأساسية المضمونة للتخزين المؤقت
-const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+const CACHE_NAME = 'soularab-tech-v2';
+const BASE_URL = new URL('./', self.location.href);
+const PRECACHE_URLS = [
+  BASE_URL.href,
+  new URL('index.html', BASE_URL).href,
+  new URL('style.css', BASE_URL).href,
+  new URL('script.js', BASE_URL).href,
+  new URL('manifest.json', BASE_URL).href,
+  new URL('icon.svg', BASE_URL).href
 ];
 
-// حدث التثبيت وتخزين الملفات مسبقاً
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(PRECACHE_ASSETS);
-      self.skipWaiting();
-    })()
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
   );
 });
 
-// حدث التفعيل والاستحواذ الفوري على الصفحة
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then((cacheNames) => Promise.all(
+        cacheNames
+          .filter((name) => name.startsWith('soularab-tech-') && name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      ))
+      .then(() => self.clients.claim())
+  );
 });
 
-// التعامل مع الطلبات والشبكة والتخزين المؤقت
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const requestUrl = new URL(request.url);
+
+  if (request.method !== 'GET' || requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
   event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-
-      // مطابقة الطلب مع الذاكرة المؤقتة
-      const cachedResponse = await cache.match(event.request);
-
-      // التحقق مما إذا كان الملف مخزناً
-      if (cachedResponse !== undefined) {
+    caches.match(request).then((cachedResponse) => {
+      if (cachedResponse) {
         return cachedResponse;
-      } else {
-        // وإلا، الانتقال للشبكة (الإنترنت)
-        return fetch(event.request);
       }
-    })()
+
+      if (request.mode === 'navigate') {
+        return fetch(request).catch(() => caches.match(BASE_URL));
+      }
+
+      return fetch(request);
+    })
   );
 });

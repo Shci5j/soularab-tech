@@ -1,45 +1,70 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOULARAB TECH - Royal System</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111111">
+  <meta name="description" content="لوحة تحكم SOULARAB TECH">
+  <title>SOULARAB TECH - لوحة التحكم</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./script.js" defer></script>
 </head>
-<body class="dark-theme" style="background-color: #000; color: #fff; font-family: Tahoma, sans-serif; margin: 0; padding: 0;">
+<body class="dark-theme">
+  <main class="app">
+    <section id="login-screen" class="panel login-panel" aria-labelledby="login-title" hidden>
+      <img class="brand-icon" src="./icon.svg" alt="" width="72" height="72">
+      <p class="eyebrow">SOULARAB TECH</p>
+      <h1 id="login-title">تسجيل الدخول</h1>
+      <p class="muted">أدخل بيانات الدخول ��فتح لوحة التحكم.</p>
 
-    <!-- شاشة تسجيل الدخول -->
-    <div id="login-screen" style="display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw;">
-        <div style="background: #111; border: 2px solid #d4af37; padding: 30px; border-radius: 15px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);">
-            <h1 style="color: #d4af37; margin-bottom: 5px;">SOULARAB TECH</h1>
-            <p style="color: #aaa; font-size: 12px; margin-bottom: 20px;">IDEAS INTO DIGITAL REALITY</p>
-            
-            <h2 style="color: #fff; font-size: 18px; margin-bottom: 20px;">تسجيل الدخول</h2>
-            
-            <input type="text" id="username" value="aboarap" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #222; border: 1px solid #d4af37; color: #fff; border-radius: 8px; box-sizing: border-box; text-align: center;">
-            
-            <input type="password" id="password" value="aa1994" style="width: 100%; padding: 12px; margin-bottom: 20px; background: #222; border: 1px solid #d4af37; color: #fff; border-radius: 8px; box-sizing: border-box; text-align: center;">
-            
-            <button onclick="forceLogin()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #d4af37, #aa7c11); color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">دخول للمملكة البرمجية</button>
+      <form id="login-form">
+        <label for="username">اسم المستخدم</label>
+        <input id="username" name="username" type="text" autocomplete="username" required>
+
+        <label for="password">كلمة المرور</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <p id="login-message" class="message" aria-live="polite"></p>
+        <button class="button button-primary" type="submit">دخول</button>
+      </form>
+
+      <p class="demo-note">تسجيل الدخول في هذه النسخة تجريبي ولا يوفر حماية حقيقية.</p>
+    </section>
+
+    <section id="main-screen" class="dashboard" aria-labelledby="dashboard-title" hidden>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SOULARAB TECH</p>
+          <h1 id="dashboard-title">لوحة التحكم</h1>
         </div>
-    </div>
-
-    <!-- الواجهة الرئيسية (تظهر بعد الدخول) -->
-    <div id="main-screen" style="display: none; padding: 20px;">
-        <h1 style="color: #d4af37; text-align: center;">أهلاً بك في لوحة تحكم المملكة البرمجية</h1>
-        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 40px; flex-wrap: wrap;">
-            <div style="background: #111; border: 1px solid #d4af37; padding: 20px; border-radius: 10px; width: 150px; text-align: center; cursor: pointer;" onclick="alert('قسم الأقسام')">
-                <i class="fa-solid fa-cubes fa-2x" style="color: #d4af37; margin-bottom: 10px;"></i>
-                <h3>الأقسام</h3>
-            </div>
-            <div style="background: #111; border: 1px solid #d4af37; padding: 20px; border-radius: 10px; width: 150px; text-align: center; cursor: pointer;" onclick="alert('قسم الذكاء الاصطناعي')">
-                <i class="fa-solid fa-wand-magic-sparkles fa-2x" style="color: #d4af37; margin-bottom: 10px;"></i>
-                <h3>الذكاء</h3>
-            </div>
+        <div class="topbar-actions">
+          <button id="theme-toggle" class="button button-secondary" type="button" aria-pressed="false">الوضع الفاتح</button>
+          <button id="login-toggle" class="button button-secondary" type="button">تفعيل تسجيل الدخول</button>
+          <button id="logout-button" class="button button-secondary" type="button" hidden>تسجيل الخروج</button>
         </div>
-    </div>
+      </header>
 
-    <script src="script.js"></script>
+      <p class="welcome">أهلاً بك في لوحة تحكم المملكة البرمجية.</p>
+
+      <div class="card-grid">
+        <button class="feature-card" type="button" data-message="قسم الأقسام غير مفعّل في هذه النسخة.">
+          <span class="card-icon" aria-hidden="true">▦</span>
+          <span class="card-title">الأقسام</span>
+          <span class="card-description">استعرض أقسام لوحة التحكم.</span>
+        </button>
+        <button class="feature-card" type="button" data-message="خدمة الذكاء الاصطناعي غير متصلة في هذه النسخة.">
+          <span class="card-icon" aria-hidden="true">✦</span>
+          <span class="card-title">الذكاء</span>
+          <span class="card-description">واجهة تجريبية لخدمة الذكاء الاصطناعي.</span>
+        </button>
+      </div>
+
+      <p id="dashboard-message" class="dashboard-message" aria-live="polite"></p>
+    </section>
+
+    <noscript><p>يتطلب تشغيل التطبيق تفعيل JavaScript في المتصفح.</p></noscript>
+  </main>
 </body>
 </html>
