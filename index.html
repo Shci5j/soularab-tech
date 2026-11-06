@@ -3,150 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOULARAB TECH - Royal Hub</title>
-    <link rel="manifest" href="manifest.json">
+    <title>SOULARAB TECH - Royal System</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="dark-theme">
 
-    <!-- 1. شاشة تسجيل الدخول الأولى (تظهر عند التثبيت أو الخمول لمدة 24 ساعة) -->
-    <div id="login-screen" class="screen-overlay">
-        <div class="login-frame">
-            <!-- الشعار الملكي باللون الأبيض -->
-            <div class="white-logo">
-                <i class="fa-solid fa-shield-halved"></i>
-                <h2>SOULARAB TECH</h2>
-                <small>IDEAS INTO DIGITAL REALITY</small>
+    <!-- شاشة تسجيل الدخول -->
+    <div id="login-screen" class="auth-container">
+        <div class="royal-frame">
+            <div class="logo-area">
+                <i class="fa-solid fa-shield-halved logo-icon"></i>
+                <h1>SOULARAB TECH</h1>
+                <p class="subtitle">IDEAS INTO DIGITAL REALITY</p>
             </div>
             
-            <h3 class="welcome-text">أهلاً بك أيها المطور المبدع</h3>
-            <h2 class="login-title">تسجيل الدخول</h2>
-
-            <form id="login-form" onsubmit="handleLogin(event)">
-                <div class="ribbon-input">
-                    <input type="text" id="username" placeholder="الاسم المستعار / البريد الإلكتروني" required>
-                </div>
-                <div class="ribbon-input">
-                    <input type="password" id="password" placeholder="كلمة السر" required>
-                </div>
-                <button type="submit" class="btn-royal-submit">دخول للمملكة البرمجية</button>
-            </form>
-
-            <p class="footer-quote">مشوار الألف ميل يبدأ بخطوة</p>
-        </div>
-    </div>
-
-    <!-- 2. شاشة تفعيل الأمان والبصمة (بعد التسجيل لأول مرة) -->
-    <div id="security-setup-screen" class="screen-overlay hidden">
-        <div class="login-frame">
-            <i class="fa-solid fa-fingerprint gold-icon-lg"></i>
-            <h2>تأمين التطبيق الملكي</h2>
-            <p>يرجى ضبط رمز الـ PIN الخاص بك وتفعيل البصمة لحماية بيانات المشاريع</p>
-            <div class="ribbon-input">
-                <input type="password" id="setup-pin" maxlength="6" placeholder="رمز الـ PIN الخاص (6 أرقام)" required>
+            <p class="welcome-text">أهلاً بك أيها المطور المبدع</p>
+            <h2 class="gold-title">تسجيل الدخول</h2>
+            
+            <div class="input-group">
+                <input type="text" id="username" placeholder="الاسم المستعار / البريد الإلكتروني" value="aboarap">
             </div>
-            <button class="btn-royal-submit" onclick="enableBiometricsAndFinish()">تفعيل البصمة والدخول</button>
+            
+            <div class="input-group">
+                <input type="password" id="password" placeholder="كلمة السر" value="aa1994">
+            </div>
+            
+            <button type="button" class="royal-btn" onclick="handleLogin()">دخول للمملكة البرمجية</button>
+            
+            <p class="quote-text">مشوار الألف ميل يبدأ بخطوة</p>
         </div>
     </div>
 
-    <!-- 3. الواجهة الرئيسية (Main Screen) -->
+    <!-- الواجهة الرئيسية -->
     <div id="main-screen" class="main-wrapper hidden">
-        
-        <!-- الهيدر العلوي وشريط البحث -->
-        <header class="top-header">
-            <div class="header-right">
-                <div class="search-bar-frame">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" placeholder="ماذا تريد أن تفعل اليوم يا زعيم" id="global-search">
-                    <div class="header-controls">
-                        <button title="تبديل اللغة" onclick="toggleLanguage()"><i class="fa-solid fa-language"></i></button>
-                        <button title="الوضع الفاتح" onclick="setTheme('light')"><i class="fa-solid fa-sun"></i></button>
-                        <button title="الوضع الغامق" onclick="setTheme('dark')"><i class="fa-solid fa-moon"></i></button>
-                    </div>
-                </div>
-                <span class="date-badge" id="current-date"></span>
+        <header class="main-header">
+            <div class="user-welcome">
+                <h2>ماذا تريد أن تفعل اليوم يا زعيم؟</h2>
+                <span id="current-date" class="date-badge"></span>
             </div>
-            <div class="header-left">
-                <i class="fa-solid fa-shield-halved logo-shield-only"></i>
+            <div class="top-controls">
+                <button onclick="toggleLanguage()" class="icon-btn"><i class="fa-solid fa-globe"></i></button>
+                <button onclick="setTheme('dark')" class="icon-btn"><i class="fa-solid fa-moon"></i></button>
+                <button onclick="setTheme('light')" class="icon-btn"><i class="fa-solid fa-sun"></i></button>
             </div>
         </header>
 
-        <!-- جسم الصفحة الرئيسية -->
-        <main class="dashboard-body">
-            
-            <!-- القائمة الجانبية اليمنى (الأزرار الثلاثة) -->
-            <div class="side-menu-buttons">
-                <button class="menu-btn" onclick="openModal('logs-modal')">
-                    <i class="fa-solid fa-clock-rotate-left"></i> مراجعة سجل التغيرات
-                </button>
-                <button class="menu-btn" onclick="openModal('settings-modal')">
-                    <i class="fa-solid fa-sliders"></i> الإعدادات العامة
-                </button>
-                <button class="menu-btn" onclick="openSection('rouh-chat')">
-                    <i class="fa-solid fa-headset"></i> السكرتيرة روح
-                </button>
+        <section class="modules-grid">
+            <div class="module-card" onclick="openSection('sections-page')">
+                <i class="fa-solid fa-cubes"></i>
+                <h3>الأقسام</h3>
+                <p>تصميم وبرمجة</p>
             </div>
-
-            <!-- الأقسام الـ 4 الدائرية الأساسية -->
-            <div class="main-circles-grid">
-                <div class="royal-circle-btn" onclick="openSection('sections-page')">
-                    <div class="circle-inner">
-                        <span>الأقسام</span>
-                    </div>
-                </div>
-
-                <div class="royal-circle-btn" onclick="openSection('whatsapp-section')">
-                    <div class="circle-inner">
-                        <span>الواتساب</span>
-                    </div>
-                </div>
-
-                <div class="royal-circle-btn" onclick="openSection('private-section')">
-                    <div class="circle-inner">
-                        <span>خاص</span>
-                    </div>
-                </div>
-
-                <div class="royal-circle-btn" onclick="openSection('ai-summon-section')">
-                    <div class="circle-inner">
-                        <span>استدعاء الذكاء</span>
-                    </div>
-                </div>
+            <div class="module-card" onclick="openSection('whatsapp-page')">
+                <i class="fa-brands fa-whatsapp"></i>
+                <h3>الواتساب</h3>
+                <p>محادثة روح الآلية</p>
             </div>
-        </main>
+            <div class="module-card" onclick="openSection('private-page')">
+                <i class="fa-solid fa-user-lock"></i>
+                <h3>خاص</h3>
+                <p>المنطقة الآمنة</p>
+            </div>
+            <div class="module-card highlight" onclick="openSection('ai-page')">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <h3>استدعاء الذكاء</h3>
+                <p>5 أدوات متكاملة</p>
+            </div>
+        </section>
     </div>
 
-    <!-- 4. صفحة الأقسام الفرعية (Sections Page) -->
+    <!-- صفحة الأقسام -->
     <div id="sections-page" class="sub-page hidden">
-        <header class="sub-header">
-            <div class="sub-header-left">
-                <button class="ai-summon-icon-btn" title="استدعاء الذكاء للقسم" onclick="openSection('ai-summon-section')">
-                    <i class="fa-solid fa-brain"></i>
-                    <span>استدعاء الذكاء</span>
-                </button>
-            </div>
-            <div class="sub-header-center">
-                <div class="search-bar-frame">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" placeholder="بحث داخل الأقسام...">
-                    <div class="header-controls">
-                        <button onclick="toggleLanguage()"><i class="fa-solid fa-language"></i></button>
-                        <button onclick="setTheme('light')"><i class="fa-solid fa-sun"></i></button>
-                        <button onclick="setTheme('dark')"><i class="fa-solid fa-moon"></i></button>
-                    </div>
-                </div>
-            </div>
-            <div class="sub-header-right">
-                <h1 class="page-title">الأقسام</h1>
-                <i class="fa-solid fa-shield-halved logo-shield-only"></i>
-                <button class="back-home-btn" onclick="openSection('main-screen')"><i class="fa-solid fa-house"></i> الرئيسية</button>
-            </div>
-        </header>
+        <button class="back-btn" onclick="openSection('main-screen')"><i class="fa-solid fa-arrow-right"></i> عودة</button>
+        <h2>الأقسام البرمجية</h2>
+        <div class="circle-grid">
+            <div class="circle-item"><i class="fa-solid fa-palette"></i><span>قسم التصميم</span></div>
+            <div class="circle-item"><i class="fa-solid fa-code"></i><span>قسم البرمجة</span></div>
+        </div>
+    </div>
 
-        <div class="sections-content">
-            <!-- قسم التصميم والأدوات -->
-            <div class="section-group">
-                <div class="group-title-banner">قسم التصميم والأدوات</div>
-                <div class="circles-row">
-                    <div class="gold-sparkle-circle" onclick="alert
+    <!-- صفحة الذكاء الاصطناعي -->
+    <div id="ai-page" class="sub-page hidden">
+        <button class="back-btn" onclick="openSection('main-screen')"><i class="fa-solid fa-arrow-right"></i> عودة</button>
+        <h2>محرك الذكاء الاصطناعي</h2>
+        <div id="ai-terminal-messages" class="terminal-box"></div>
+        <div class="ai-input-box">
+            <input type="text" id="ai-prompt-input" placeholder="اكتب أمرك البرمجي هنا...">
+            <button onclick="sendAiPrompt()"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <!-- الزر العائم "روح" -->
+    <button id="floating-rouh-btn" class="floating-btn hidden" onclick="openSection('ai-page')">
+        <i class="fa-solid fa-robot"></i> روح
+    </button>
+
+    <script src="script.js"></script>
+</body>
+</html>
