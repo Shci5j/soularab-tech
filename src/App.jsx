@@ -26,6 +26,12 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState({ title: '', description: '', risk: 'medium' });
   const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('st-api-token') || '');
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [sendingChat, setSendingChat] = useState(false);
+  const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -60,6 +66,40 @@ export default function App() {
 
   useEffect(() => { refresh(); const id = window.setInterval(refresh, 15000); return () => clearInterval(id); }, [apiToken]);
 
+  async function loadAssistant() {
+    setAssistantStatus({ connected: false, loading: true });
+    try {
+      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
+      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
+      setModels(result.items || []);
+      setSelectedModel((current) => current || result.items?.[0]?.name || '');
+      if (!result.items?.length) setNotice('Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.');
+    } catch (error) {
+      setAssistantStatus({ connected: false, loading: false });
+      setModels([]);
+      setNotice(error.message);
+    }
+  }
+
+  async function sendChat(event) {
+    event.preventDefault();
+    const content = chatInput.trim();
+    if (!content || !selectedModel || sendingChat) return;
+    const next = [...chatMessages, { role: 'user', content }];
+    setChatMessages(next);
+    setChatInput('');
+    setSendingChat(true);
+    try {
+      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, messages: next }) });
+      setChatMessages([...next, result.message]);
+    } catch (error) {
+      setChatMessages([...next, { role: 'assistant', content: 'تعذر إكمال الطلب: ' + error.message }]);
+    } finally {
+      setSendingChat(false);
+    }
+  }
+
+  useEffect(() => { if (active === 'assistant') loadAssistant(); }, [active, apiToken]);
   async function createProposal(event) {
     event.preventDefault();
     if (!proposal.title.trim() || !proposal.description.trim()) return;
@@ -107,6 +147,30 @@ export default function App() {
         <AuditList events={events}/>
       </section>}
 
+      {active === "assistant" && <section className="content">
+        <div className="assistant-toolbar panel-card">
+          <div><h3>المساعد المحلي</h3><p className="muted">تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.</p></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? "جارٍ الفحص…" : assistantStatus.connected ? "Ollama متصلة" : "Ollama غير متصلة"}</span><button className="button secondary" onClick={loadAssistant}>فحص الاتصال</button></div>
+        </div>
+        <div className="chat-panel panel-card">
+          <div className="chat-heading"><div><h3>محادثة جديدة</h3><small>المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.</small></div>
+            <select aria-label="اختر النموذج" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={!models.length}>
+              {!models.length && <option value="">لا توجد نماذج متاحة</option>}
+              {models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}
+            </select>
+          </div>
+          <div className="chat-transcript" aria-live="polite">
+            {!chatMessages.length && <div className="chat-empty"><span>✦</span><strong>ما الذي نعمل عليه اليوم؟</strong><p>اختر نموذجاً محلياً وابدأ محادثتك. لن يتم إرسال رسائلك إلى خدمة سحابية.</p></div>}
+            {chatMessages.map((message, index) => <article key={index} className={"chat-message " + message.role}><small>{message.role === "user" ? "أنت" : "المساعد"}</small><p>{message.content}</p></article>)}
+            {sendingChat && <div className="chat-thinking">النموذج يفكر…</div>}
+          </div>
+          <form className="chat-compose" onSubmit={sendChat}>
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? "اكتب رسالتك هنا…" : "شغّل Ollama وثبّت نموذجاً محلياً أولاً"} disabled={!models.length || sendingChat} />
+            <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? "جارٍ الإرسال…" : "إرسال ↑"}</button>
+          </form>
+          <p className="chat-footnote">يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.</p>
+        </div>
+      </section>}
       {active === 'security' && <section className="content two-col">
         <div className="panel-card"><div className="section-heading"><div><h3>طلبات الموافقة</h3><p>الموافقة لا تعني التنفيذ التلقائي</p></div><span className="pill">{approvals.length} معلّق</span></div>
           {approvals.length ? approvals.map((item) => <article className="approval" key={item.id}><div className="approval-top"><strong>{item.title}</strong><span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? 'مرتفع' : item.risk === 'low' ? 'منخفض' : 'متوسط'}</span></div><p>{item.description}</p><small>{new Date(item.created_at).toLocaleString('ar')}</small><div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>موافقة</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>رفض</button></div></article>) : <Empty text="لا توجد طلبات معلّقة حالياً."/>}
