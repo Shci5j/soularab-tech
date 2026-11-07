@@ -54,6 +54,14 @@ def database():
 def init_db() -> None:
     with database() as db:
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','archived')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS approvals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -109,6 +117,11 @@ def require_access(authorization: str | None = Header(default=None)) -> None:
     scheme, _, supplied = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not secrets.compare_digest(supplied, API_TOKEN):
         raise HTTPException(status_code=401, detail="رمز الوصول غير صحيح أو غير موجود.")
+
+
+class ProjectCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=100)
+    description: str = Field(default="", max_length=1000)
 
 
 class ApprovalCreate(BaseModel):
@@ -218,6 +231,44 @@ def capabilities():
         "providers": {"ollama": "local_loopback_opt_in", "llama_cpp": "not_connected", "comfyui": "not_connected", "whisper_cpp": "not_connected"},
         "policy": {"external_network": "opt_in", "mutations": "explicit_approval", "execution_after_approval": "separate_action"},
     }
+
+
+@app.get("/api/projects")
+def list_projects(status: Literal["active", "archived"] | None = None, _: None = Depends(require_access)):
+    with database() as db:
+        if status:
+            rows = db.execute("SELECT * FROM projects WHERE status=? ORDER BY updated_at DESC LIMIT 200", (status,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM projects ORDER BY updated_at DESC LIMIT 200").fetchall()
+    return {"items": [row_dict(row) for row in rows]}
+
+
+@app.post("/api/projects", status_code=201)
+def create_project(payload: ProjectCreate, _: None = Depends(require_access)):
+    timestamp = now()
+    with database() as db:
+        cursor = db.execute(
+            "INSERT INTO projects(title, description, status, created_at, updated_at) VALUES(?,?, 'active', ?, ?)",
+            (payload.title.strip(), payload.description.strip(), timestamp, timestamp),
+        )
+        project_id = cursor.lastrowid
+    workspace = DATA_DIR / "workspaces" / str(project_id)
+    workspace.mkdir(parents=True, exist_ok=True)
+    audit("project.created", f"تم إنشاء مساحة المشروع #${project_id}: {payload.title.strip()}")
+    return {"id": project_id, "title": payload.title.strip(), "status": "active", "workspace_ready": True}
+
+
+@app.post("/api/projects/{project_id}/archive")
+def archive_project(project_id: int, _: None = Depends(require_access)):
+    with database() as db:
+        row = db.execute("SELECT id, status FROM projects WHERE id=?", (project_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="المشروع غير موجود.")
+        if row["status"] == "archived":
+            raise HTTPException(status_code=409, detail="المشروع مؤرشف مسبقاً.")
+        db.execute("UPDATE projects SET status='archived', updated_at=? WHERE id=?", (now(), project_id))
+    audit("project.archived", f"تمت أرشفة المشروع #${project_id}")
+    return {"id": project_id, "status": "archived"}
 
 
 @app.get("/api/approvals")
