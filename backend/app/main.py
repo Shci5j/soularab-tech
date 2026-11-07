@@ -277,11 +277,13 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 BLOCKED_EXTENSIONS = {".exe", ".dll", ".so", ".sh", ".bat", ".cmd", ".ps1", ".apk", ".msi", ".com"}
 
 
-def project_workspace(project_id: int) -> Path:
+def project_workspace(project_id: int, require_active: bool = False) -> Path:
     with database() as db:
-        project = db.execute("SELECT id FROM projects WHERE id=?", (project_id,)).fetchone()
+        project = db.execute("SELECT id, status FROM projects WHERE id=?", (project_id,)).fetchone()
     if project is None:
         raise HTTPException(status_code=404, detail="المشروع غير موجود.")
+    if require_active and project["status"] != "active":
+        raise HTTPException(status_code=409, detail="لا يمكن رفع ملفات إلى مشروع مؤرشف.")
     root = (DATA_DIR / "workspaces" / str(project_id)).resolve()
     root.mkdir(parents=True, exist_ok=True)
     return root
@@ -312,7 +314,7 @@ def list_project_files(project_id: int, _: None = Depends(require_access)):
 
 @app.post("/api/projects/{project_id}/files", status_code=201)
 async def upload_project_file(project_id: int, file: UploadFile = File(...), _: None = Depends(require_access)):
-    root = project_workspace(project_id)
+    root = project_workspace(project_id, require_active=True)
     filename = safe_filename(file.filename)
     target = (root / filename).resolve()
     if target.parent != root or target.exists():
