@@ -32,6 +32,9 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
+  const [projects, setProjects] = useState([]);
+  const [projectForm, setProjectForm] = useState({ title: '', description: '' });
+  const [loadingProjects, setLoadingProjects] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -100,6 +103,49 @@ export default function App() {
   }
 
   useEffect(() => { if (active === 'assistant') loadAssistant(); }, [active, apiToken]);
+  async function loadProjects() {
+    setLoadingProjects(true);
+    try {
+      const result = await request('/api/projects');
+      setProjects(result.items || []);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setLoadingProjects(false);
+    }
+  }
+
+  async function createProject(event) {
+    event.preventDefault();
+    if (!projectForm.title.trim()) return;
+    setBusy(true);
+    try {
+      await request('/api/projects', { method: 'POST', body: JSON.stringify(projectForm) });
+      setProjectForm({ title: '', description: '' });
+      setNotice('تم إنشاء مساحة المشروع ومجلدها المحلي.');
+      await loadProjects();
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function archiveProject(id) {
+    setBusy(true);
+    try {
+      await request('/api/projects/' + id + '/archive', { method: 'POST' });
+      setNotice('تمت أرشفة المشروع دون حذف ملفاته.');
+      await loadProjects();
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => { if (active === 'files') loadProjects(); }, [active, apiToken]);
+
   async function createProposal(event) {
     event.preventDefault();
     if (!proposal.title.trim() || !proposal.description.trim()) return;
@@ -145,6 +191,32 @@ export default function App() {
         <div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div>
         <div className="section-heading"><div><h3>آخر العمليات</h3><p>سجل قابل للمراجعة</p></div><button className="text-button" onClick={() => setActive('security')}>عرض الكل</button></div>
         <AuditList events={events}/>
+      </section>}
+
+      {active === 'files' && <section className="content">
+        <div className="project-layout">
+          <div className="panel-card">
+            <h3>إنشاء مساحة مشروع</h3>
+            <p className="muted">كل مشروع يحصل على سجل مستقل ومجلد محلي خاص به على جهاز الخادم.</p>
+            <form className="proposal-form" onSubmit={createProject}>
+              <label>اسم المشروع<input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required minLength="2" maxLength="100" placeholder="مثال: متجر إلكتروني"/></label>
+              <label>وصف المشروع<textarea rows="3" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} maxLength="1000" placeholder="اكتب وصفاً مختصراً (اختياري)"/></label>
+              <button className="button primary" disabled={busy || !projectForm.title.trim()}>{busy ? 'جارٍ الإنشاء…' : 'إنشاء المشروع +'}</button>
+            </form>
+          </div>
+          <div className="panel-card project-list-panel">
+            <div className="section-heading"><div><h3>مشاريعي</h3><p>المشاريع النشطة والمؤرشفة</p></div><button className="button secondary" onClick={loadProjects}>تحديث ↻</button></div>
+            {loadingProjects ? <Empty text="جارٍ تحميل المشاريع…"/> : projects.length ? <div className="project-list">
+              {projects.map((project) => <article className="project-card" key={project.id}>
+                <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? 'نشط' : 'مؤرشف'}</span></div>
+                <strong>{project.title}</strong><p>{project.description || 'لا يوجد وصف لهذا المشروع.'}</p>
+                <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
+                {project.status === 'active' && <button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>أرشفة المشروع</button>}
+              </article>)}
+            </div> : <Empty text="لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج."/>}
+          </div>
+        </div>
+        <div className="panel-card workspace-note"><strong>ملاحظة حول الملفات</strong><p>تم إنشاء مجلد مستقل لكل مشروع على الخادم. واجهة رفع الملفات وتصفحها وإصداراتها ستكون المرحلة التالية؛ لم نفعّل الوصول إلى ملفات الجهاز عشوائياً، حفاظاً على خصوصيتك.</p></div>
       </section>}
 
       {active === "assistant" && <section className="content">
