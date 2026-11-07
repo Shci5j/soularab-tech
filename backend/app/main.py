@@ -287,9 +287,11 @@ def project_workspace(project_id: int) -> Path:
 
 
 def safe_filename(filename: str | None) -> str:
-    raw = (filename or "").replace("\\", "/")
+    raw = filename or ""
+    if "/" in raw or "\\" in raw:
+        raise HTTPException(status_code=400, detail="يجب رفع اسم ملف فقط دون مسارات.")
     name = Path(raw).name.strip()
-    if not name or name in {".", ".."} or name.startswith(".") or "/" in name or "\\" in name:
+    if not name or name in {".", ".."} or name.startswith("."):
         raise HTTPException(status_code=400, detail="اسم الملف غير صالح.")
     if Path(name).suffix.lower() in BLOCKED_EXTENSIONS:
         raise HTTPException(status_code=415, detail="نوع الملف التنفيذي هذا غير مسموح برفعه.")
