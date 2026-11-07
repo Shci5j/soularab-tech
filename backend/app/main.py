@@ -33,8 +33,29 @@ def connect() -> sqlite3.Connection:
     return db
 
 
+@asynccontextmanager
+async def _unused_async_context():
+    yield
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def database():
+    db = connect()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def init_db() -> None:
-    with connect() as db:
+    with database() as db:
         db.executescript("""
         CREATE TABLE IF NOT EXISTS approvals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +77,7 @@ def init_db() -> None:
 
 
 def audit(action: str, details: str) -> None:
-    with connect() as db:
+    with database() as db:
         db.execute("INSERT INTO audit(action, details, created_at) VALUES(?,?,?)", (action, details[:2000], now()))
 
 
@@ -124,7 +145,7 @@ def capabilities():
 
 @app.get("/api/approvals")
 def list_approvals(status: Literal["pending", "approved", "rejected"] | None = None, _: None = Depends(require_access)):
-    with connect() as db:
+    with database() as db:
         if status:
             rows = db.execute("SELECT * FROM approvals WHERE status=? ORDER BY id DESC LIMIT 100", (status,)).fetchall()
         else:
@@ -134,7 +155,7 @@ def list_approvals(status: Literal["pending", "approved", "rejected"] | None = N
 
 @app.post("/api/approvals", status_code=201)
 def create_approval(payload: ApprovalCreate, _: None = Depends(require_access)):
-    with connect() as db:
+    with database() as db:
         cursor = db.execute(
             "INSERT INTO approvals(title,description,risk,status,created_at) VALUES(?,?,?,'pending',?)",
             (payload.title, payload.description, payload.risk, now()),
@@ -146,7 +167,7 @@ def create_approval(payload: ApprovalCreate, _: None = Depends(require_access)):
 
 @app.post("/api/approvals/{approval_id}/decision")
 def decide_approval(approval_id: int, payload: ApprovalDecision, _: None = Depends(require_access)):
-    with connect() as db:
+    with database() as db:
         row = db.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="طلب الموافقة غير موجود.")
@@ -162,7 +183,7 @@ def decide_approval(approval_id: int, payload: ApprovalDecision, _: None = Depen
 
 @app.get("/api/audit")
 def get_audit(limit: int = Query(default=30, ge=1, le=100), _: None = Depends(require_access)):
-    with connect() as db:
+    with database() as db:
         rows = db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     return {"items": [row_dict(row) for row in rows]}
 
