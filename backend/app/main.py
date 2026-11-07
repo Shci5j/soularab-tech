@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -31,14 +31,6 @@ def connect() -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     return db
-
-
-@asynccontextmanager
-async def _unused_async_context():
-    yield
-
-
-from contextlib import contextmanager
 
 
 @contextmanager
