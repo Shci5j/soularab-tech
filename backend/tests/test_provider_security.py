@@ -71,6 +71,10 @@ class ProjectApiTests(unittest.TestCase):
                     self.assertEqual(traversal.status_code, 400)
                     executable = client.post(f"/api/projects/{project_id}/files", files={"file": ("payload.exe", b"x", "application/octet-stream")})
                     self.assertEqual(executable.status_code, 415)
+                    archived = client.post(f"/api/projects/{project_id}/archive")
+                    self.assertEqual(archived.status_code, 200)
+                    denied = client.post(f"/api/projects/{project_id}/files", files={"file": ("later.txt", b"x", "text/plain")})
+                    self.assertEqual(denied.status_code, 409)
 
 
 if __name__ == "__main__":
