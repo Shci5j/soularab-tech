@@ -23,9 +23,6 @@ class LocalProviderSecurityTests(unittest.TestCase):
             validate_local_provider_url("http://user:pass@127.0.0.1:11434")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -53,3 +50,28 @@ class ProjectApiTests(unittest.TestCase):
                     self.assertEqual(archived.status_code, 200)
                     self.assertEqual(archived.json()["status"], "archived")
                     self.assertTrue((data_dir / "workspaces" / str(project_id)).is_dir())
+
+    def test_upload_list_download_and_reject_unsafe_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            with patch.object(main, "DATA_DIR", data_dir), patch.object(main, "DB_PATH", data_dir / "files.sqlite3"), patch.object(main, "API_TOKEN", ""), patch.object(main, "APP_ENV", "local"):
+                with TestClient(main.app) as client:
+                    created = client.post("/api/projects", json={"title": "Files Project"})
+                    project_id = created.json()["id"]
+
+                    uploaded = client.post(f"/api/projects/{project_id}/files", files={"file": ("notes.txt", b"hello world", "text/plain")})
+                    self.assertEqual(uploaded.status_code, 201)
+                    listed = client.get(f"/api/projects/{project_id}/files")
+                    self.assertEqual(listed.json()["items"][0]["name"], "notes.txt")
+
+                    downloaded = client.get(f"/api/projects/{project_id}/files/notes.txt")
+                    self.assertEqual(downloaded.content, b"hello world")
+
+                    traversal = client.post(f"/api/projects/{project_id}/files", files={"file": ("../escape.txt", b"x", "text/plain")})
+                    self.assertEqual(traversal.status_code, 400)
+                    executable = client.post(f"/api/projects/{project_id}/files", files={"file": ("payload.exe", b"x", "application/octet-stream")})
+                    self.assertEqual(executable.status_code, 415)
+
+
+if __name__ == "__main__":
+    unittest.main()
