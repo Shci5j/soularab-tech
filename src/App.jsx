@@ -35,6 +35,9 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [projectForm, setProjectForm] = useState({ title: '', description: '' });
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projectFiles, setProjectFiles] = useState([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -146,6 +149,59 @@ export default function App() {
 
   useEffect(() => { if (active === 'files') loadProjects(); }, [active, apiToken]);
 
+  async function openProject(project) {
+    setSelectedProject(project);
+    try {
+      const result = await request('/api/projects/' + project.id + '/files');
+      setProjectFiles(result.items || []);
+    } catch (error) { setNotice(error.message); }
+  }
+
+  async function uploadProjectFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedProject) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setNotice('حجم الملف يتجاوز الحد المسموح (10 ميغابايت).');
+      return;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    setUploadingFile(true);
+    try {
+      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files', {
+        method: 'POST',
+        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+        body: form,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || 'تعذر رفع الملف.');
+      setNotice('تم رفع الملف بنجاح.');
+      await openProject(selectedProject);
+    } catch (error) { setNotice(error.message); }
+    finally { setUploadingFile(false); }
+  }
+
+  async function downloadProjectFile(filename) {
+    if (!selectedProject) return;
+    try {
+      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
+        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.detail || 'تعذر تنزيل الملف.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) { setNotice(error.message); }
+  }
+
   async function createProposal(event) {
     event.preventDefault();
     if (!proposal.title.trim() || !proposal.description.trim()) return;
@@ -211,12 +267,19 @@ export default function App() {
                 <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? 'نشط' : 'مؤرشف'}</span></div>
                 <strong>{project.title}</strong><p>{project.description || 'لا يوجد وصف لهذا المشروع.'}</p>
                 <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
-                {project.status === 'active' && <button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>أرشفة المشروع</button>}
+                {project.status === 'active' && <div className="project-actions"><button className="text-button" onClick={() => openProject(project)}>إدارة الملفات</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>أرشفة</button></div>}
               </article>)}
             </div> : <Empty text="لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج."/>}
           </div>
         </div>
-        <div className="panel-card workspace-note"><strong>ملاحظة حول الملفات</strong><p>تم إنشاء مجلد مستقل لكل مشروع على الخادم. واجهة رفع الملفات وتصفحها وإصداراتها ستكون المرحلة التالية؛ لم نفعّل الوصول إلى ملفات الجهاز عشوائياً، حفاظاً على خصوصيتك.</p></div>
+        {selectedProject && <div className="panel-card workspace-files">
+          <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>إدارة الملفات داخل مساحة هذا المشروع فقط</p></div><button className="text-button" onClick={() => setSelectedProject(null)}>إغلاق</button></div>
+          <label className="upload-control">رفع ملف (حد أقصى 10 MB)<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
+          {uploadingFile && <p className="muted">جارٍ رفع الملف…</p>}
+          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>تنزيل</button></div>)}</div> : <Empty text="لا توجد ملفات في مساحة هذا المشروع بعد."/>}
+          <p className="chat-footnote">الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.</p>
+        </div>}
+        <div className="panel-card workspace-note"><strong>حماية الملفات</strong><p>تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.</p></div>
       </section>}
 
       {active === "assistant" && <section className="content">
