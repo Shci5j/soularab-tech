@@ -41,3 +41,15 @@ jobs:
         run: python -m compileall -q backend/app
       - name: Run backend unit tests
         run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
+
+  containers:
+    name: Validate self-hosted containers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare deployment environment
+        run: cp .env.docker.example .env
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+      - name: Build application containers
+        run: docker compose build backend frontend
