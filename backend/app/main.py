@@ -10,15 +10,16 @@ from pathlib import Path
 from urllib.parse import urlparse
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import httpx
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("SOULARAB_DATA_DIR", ROOT / "data")).expanduser()
 DB_PATH = DATA_DIR / "soularab.sqlite3"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -269,6 +270,74 @@ def archive_project(project_id: int, _: None = Depends(require_access)):
         db.execute("UPDATE projects SET status='archived', updated_at=? WHERE id=?", (now(), project_id))
     audit("project.archived", f"تمت أرشفة المشروع #${project_id}")
     return {"id": project_id, "status": "archived"}
+
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+BLOCKED_EXTENSIONS = {".exe", ".dll", ".so", ".sh", ".bat", ".cmd", ".ps1", ".apk", ".msi", ".com"}
+
+
+def project_workspace(project_id: int) -> Path:
+    with database() as db:
+        project = db.execute("SELECT id FROM projects WHERE id=?", (project_id,)).fetchone()
+    if project is None:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود.")
+    root = (DATA_DIR / "workspaces" / str(project_id)).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def safe_filename(filename: str | None) -> str:
+    raw = filename or ""
+    if "/" in raw or "\\" in raw:
+        raise HTTPException(status_code=400, detail="يجب رفع اسم ملف فقط دون مسارات.")
+    name = Path(raw).name.strip()
+    if not name or name in {".", ".."} or name.startswith("."):
+        raise HTTPException(status_code=400, detail="اسم الملف غير صالح.")
+    if Path(name).suffix.lower() in BLOCKED_EXTENSIONS:
+        raise HTTPException(status_code=415, detail="نوع الملف التنفيذي هذا غير مسموح برفعه.")
+    return name
+
+
+@app.get("/api/projects/{project_id}/files")
+def list_project_files(project_id: int, _: None = Depends(require_access)):
+    root = project_workspace(project_id)
+    items = []
+    for entry in sorted(root.iterdir(), key=lambda item: item.name.lower()):
+        if entry.is_file() and not entry.is_symlink():
+            stat = entry.stat()
+            items.append({"name": entry.name, "size": stat.st_size, "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()})
+    return {"items": items[:200], "max_upload_bytes": MAX_UPLOAD_BYTES}
+
+
+@app.post("/api/projects/{project_id}/files", status_code=201)
+async def upload_project_file(project_id: int, file: UploadFile = File(...), _: None = Depends(require_access)):
+    root = project_workspace(project_id)
+    filename = safe_filename(file.filename)
+    target = (root / filename).resolve()
+    if target.parent != root or target.exists():
+        raise HTTPException(status_code=409, detail="الملف موجود مسبقاً أو أن مساره غير مسموح.")
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="الحد الأقصى لحجم الملف 10 ميغابايت.")
+    if not content:
+        raise HTTPException(status_code=400, detail="لا يمكن رفع ملف فارغ.")
+    try:
+        with target.open("xb") as output:
+            output.write(content)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="الملف موجود مسبقاً.") from exc
+    audit("project.file.uploaded", f"رفع ملف {filename} إلى المشروع #{project_id} ({len(content)} bytes)")
+    return {"name": filename, "size": len(content), "uploaded": True}
+
+
+@app.get("/api/projects/{project_id}/files/{filename}")
+def download_project_file(project_id: int, filename: str, _: None = Depends(require_access)):
+    root = project_workspace(project_id)
+    safe = safe_filename(filename)
+    target = (root / safe).resolve()
+    if target.parent != root or not target.is_file() or target.is_symlink():
+        raise HTTPException(status_code=404, detail="الملف غير موجود.")
+    return FileResponse(target, filename=safe)
 
 
 @app.get("/api/approvals")
