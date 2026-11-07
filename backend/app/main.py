@@ -24,6 +24,7 @@ API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
+ALLOW_DOCKER_OLLAMA = os.getenv("SOULARAB_ALLOW_DOCKER_OLLAMA", "").lower() == "true"
 ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if v.strip()]
 
 
@@ -142,7 +143,7 @@ def validate_local_provider_url(value: str) -> str:
     if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("OLLAMA_BASE_URL must be a plain HTTP loopback URL.")
     host = parsed.hostname.lower()
-    if host == "localhost":
+    if host == "localhost" or (host == "ollama" and ALLOW_DOCKER_OLLAMA):
         return value.rstrip("/")
     try:
         address = ipaddress.ip_address(host)

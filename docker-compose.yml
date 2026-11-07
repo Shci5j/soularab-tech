@@ -1,0 +1,50 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      SOULARAB_ENV: production
+      SOULARAB_DATA_DIR: /data
+      SOULARAB_CORS_ORIGINS: ${SOULARAB_CORS_ORIGINS:-http://localhost:8080}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      SOULARAB_ALLOW_DOCKER_OLLAMA: ${SOULARAB_ALLOW_DOCKER_OLLAMA:-true}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
+    volumes:
+      - soularab_data:/data
+    restart: unless-stopped
+    networks:
+      - soularab_internal
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - soularab_internal
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ai"]
+    volumes:
+      - ollama_data:/root/.ollama
+    expose:
+      - "11434"
+    restart: unless-stopped
+    networks:
+      - soularab_internal
+
+volumes:
+  soularab_data:
+  ollama_data:
+
+networks:
+  soularab_internal:
+    driver: bridge
