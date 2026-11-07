@@ -26,6 +26,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState({ title: '', description: '', risk: 'medium' });
   const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('st-api-token') || '');
+  const [authRequired, setAuthRequired] = useState(false);
+  const [loginToken, setLoginToken] = useState('');
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
@@ -50,10 +52,21 @@ export default function App() {
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
     if (!response.ok) {
+      if (response.status === 401) setAuthRequired(true);
       const body = await response.json().catch(() => ({}));
       throw new Error(body.detail || `تعذر إكمال الطلب (${response.status})`);
     }
     return response.json();
+  }
+
+  function unlockWorkspace(event) {
+    event.preventDefault();
+    const value = loginToken.trim();
+    if (!value) return;
+    sessionStorage.setItem('st-api-token', value);
+    setApiToken(value);
+    setAuthRequired(false);
+    setLoginToken('');
   }
 
   async function refresh() {
@@ -317,6 +330,16 @@ export default function App() {
 
       {active !== 'overview' && active !== 'security' && <section className="content"><div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">تم تجهيز نقطة التكامل ضمن النواة</span></div><div className="panel-card roadmap"><h3>حالة هذا القسم</h3><p>الواجهة الأساسية جاهزة، أما محرك التنفيذ وربط الأدوات فيُضافان كوحدات مستقلة بعد فحص الترخيص والموارد المطلوبة.</p><div className="roadmap-row"><span>واجهة المستخدم</span><b className="good">جاهزة</b></div><div className="roadmap-row"><span>واجهة API الخلفية</span><b className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصلة' : 'بانتظار التشغيل'}</b></div><div className="roadmap-row"><span>الموصلات والنماذج</span><b>غير مفعّلة افتراضياً</b></div><button className="button secondary" onClick={() => setActive('security')}>إدارة الموافقات والأمان</button></div></section>}
     </main>
+      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <form className="auth-card" onSubmit={unlockWorkspace}>
+          <div className="brand-mark auth-mark">ST</div>
+          <p className="eyebrow">SOULARAB TECH / SECURE ACCESS</p>
+          <h2 id="auth-title">مساحة العمل محمية</h2>
+          <p>أدخل رمز الوصول الذي ضبطته في ملف إعدادات الخادم لفتح لوحة التحكم. يُحفظ الرمز في جلسة المتصفح الحالية فقط.</p>
+          <label>رمز الوصول<input type="password" value={loginToken} onChange={(e) => setLoginToken(e.target.value)} autoComplete="current-password" required placeholder="أدخل رمز API"/></label>
+          <button className="button primary" disabled={!loginToken.trim()}>فتح مساحة العمل</button>
+        </form>
+      </div>}
   </div>;
 }
 
