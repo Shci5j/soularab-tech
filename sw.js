@@ -1,12 +1,10 @@
 'use strict';
 
-const CACHE_NAME = 'soularab-tech-v2';
+const CACHE_NAME = 'soularab-tech-v3';
 const BASE_URL = new URL('./', self.location.href);
 const PRECACHE_URLS = [
   BASE_URL.href,
   new URL('index.html', BASE_URL).href,
-  new URL('style.css', BASE_URL).href,
-  new URL('script.js', BASE_URL).href,
   new URL('manifest.json', BASE_URL).href,
   new URL('icon.svg', BASE_URL).href
 ];
@@ -22,9 +20,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((cacheNames) => Promise.all(
-        cacheNames
-          .filter((name) => name.startsWith('soularab-tech-') && name !== CACHE_NAME)
+      .then((names) => Promise.all(
+        names.filter((name) => name.startsWith('soularab-tech-') && name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       ))
       .then(() => self.clients.claim())
@@ -33,23 +30,25 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  const requestUrl = new URL(request.url);
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/')) return;
 
-  if (request.method !== 'GET' || requestUrl.origin !== self.location.origin) {
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).then((response) => {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(BASE_URL.href, copy));
+      return response;
+    }).catch(async () => (await caches.match(request)) || (await caches.match(BASE_URL.href))));
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      if (request.mode === 'navigate') {
-        return fetch(request).catch(() => caches.match(BASE_URL));
-      }
-
-      return fetch(request);
-    })
-  );
+  event.respondWith(caches.match(request).then(async (cached) => {
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  }));
 });
