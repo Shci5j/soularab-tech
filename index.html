@@ -1,74 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111111">
-  <meta name="description" content="لوحة تحكم SOULARAB TECH">
-  <title>SOULARAB TECH - لوحة التحكم</title>
-  <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="manifest" href="./manifest.json">
-  <link rel="stylesheet" href="./style.css">
-  <script src="./script.js" defer></script>
-</head>
-<body class="dark-theme">
-  <main class="app">
-    <section id="login-screen" class="panel login-panel" aria-labelledby="login-title" hidden>
-      <img class="brand-icon" src="./icon.svg" alt="" width="72" height="72">
-      <p class="eyebrow">SOULARAB TECH</p>
-      <h1 id="login-title">تسجيل الدخول</h1>
-      <p class="muted">أدخل بيانات الدخول لفتح لوحة التحكم.</p>
-
-      <form id="login-form">
-        <label for="username">اسم المستخدم</label>
-        <input id="username" name="username" type="text" autocomplete="username" required>
-
-        <label for="password">كلمة المرور</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-
-        <p id="login-message" class="message" aria-live="polite"></p>
-        <button class="button button-primary" type="submit">دخول</button>
-      </form>
-
-      <button id="login-disable-button" class="button button-secondary" type="button" hidden>
-        تعطيل تسجيل الدخول
-      </button>
-
-      <p class="demo-note">تسجيل الدخول في هذه النسخة تجريبي ولا يوفر حماية حقيقية.</p>
-    </section>
-
-    <section id="main-screen" class="dashboard" aria-labelledby="dashboard-title" hidden>
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">SOULARAB TECH</p>
-          <h1 id="dashboard-title">لوحة التحكم</h1>
-        </div>
-        <div class="topbar-actions">
-          <button id="theme-toggle" class="button button-secondary" type="button" aria-pressed="false">الوضع الفاتح</button>
-          <button id="login-toggle" class="button button-secondary" type="button">تفعيل تسجيل الدخول</button>
-          <button id="logout-button" class="button button-secondary" type="button" hidden>تسجيل الخروج</button>
-        </div>
-      </header>
-
-      <p class="welcome">أهلاً بك في لوحة تحكم المملكة البرمجية.</p>
-
-      <div class="card-grid">
-        <button class="feature-card" type="button" data-message="قسم الأقسام غير مفعّل في هذه النسخة.">
-          <span class="card-icon" aria-hidden="true">▦</span>
-          <span class="card-title">الأقسام</span>
-          <span class="card-description">استعرض أقسام لوحة التحكم.</span>
-        </button>
-        <button class="feature-card" type="button" data-message="خدمة الذكاء الاصطناعي غير متصلة في هذه النسخة.">
-          <span class="card-icon" aria-hidden="true">✦</span>
-          <span class="card-title">الذكاء</span>
-          <span class="card-description">واجهة تجريبية لخدمة الذكاء الاصطناعي.</span>
-        </button>
-      </div>
-
-      <p id="dashboard-message" class="dashboard-message" aria-live="polite"></p>
-    </section>
-
-    <noscript><p>يتطلب تشغيل التطبيق تفعيل JavaScript في المتصفح.</p></noscript>
-  </main>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#101010" />
+    <meta name="description" content="منصة SOULARAB TECH للذكاء الاصطناعي والإبداع الرقمي" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>SOULARAB TECH | منصة الذكاء والإبداع</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
