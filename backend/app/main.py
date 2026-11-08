@@ -359,7 +359,7 @@ async def speech_engine_status(_: None = Depends(require_access)):
 async def transcribe_audio(file: UploadFile = File(...), _: None = Depends(require_access)):
     filename = safe_filename(file.filename)
     if Path(filename).suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
-        raise HTTPException(status_code=415, detail="صيغة الصوت غير مدعومة. استخدم WAV أو MP3 أو M4A أو OGG أو WEBM أو FLAC.")
+        raise HTTPException(status_code=415, detail="صيغة الملف غير مدعومة. استخدم WAV أو فعّل --convert في whisper-server مع تثبيت FFmpeg للصيغ الأخرى.")
     content = await file.read(MAX_AUDIO_BYTES + 1)
     if not content:
         raise HTTPException(status_code=400, detail="الملف الصوتي فارغ.")
