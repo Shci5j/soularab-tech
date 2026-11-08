@@ -470,8 +470,14 @@ export default function App() {
   async function decide(id, decision) {
     setBusy(true);
     try {
-      await request(`/api/approvals/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, note: 'قرار من لوحة التحكم' }) });
-      setNotice(decision === 'approved' ? 'سُجلت الموافقة فقط؛ التنفيذ يحتاج خطوة مستقلة.' : 'تم رفض الطلب وتسجيل القرار.');
+      const result = await request(`/api/approvals/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, note: 'قرار من لوحة التحكم' }) });
+      if (result.task_id) {
+        setNotice(decision === 'approved'
+          ? (language === 'ar' ? 'تمت الموافقة ونُقلت المهمة إلى قائمة الانتظار. لم يبدأ التنفيذ.' : 'Approved and moved the linked task to the queue. Execution has not started.')
+          : (language === 'ar' ? 'تم رفض الطلب وإلغاء المهمة المرتبطة.' : 'Request rejected and linked task cancelled.'));
+      } else {
+        setNotice(decision === 'approved' ? 'سُجلت الموافقة فقط؛ التنفيذ يحتاج خطوة مستقلة.' : 'تم رفض الطلب وتسجيل القرار.');
+      }
       await refresh();
     } catch (error) { setNotice(error.message); }
     finally { setBusy(false); }
@@ -583,27 +589,18 @@ export default function App() {
 
   async function submitAgentPlan(event) {
     event.preventDefault();
-    const steps=agentDraft.steps.split('\n').map(v=>v.trim()).filter(Boolean);
+    const steps=agentDraft.steps.split('\\n').map(v=>v.trim()).filter(Boolean);
     const title=agentDraft.title.trim();
     if(title.length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً واضحاً وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
-    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\n');
+    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\\n');
     setAgentSubmitting(true);
-    let queuedTaskId=null;
     try {
-      const queued=await request('/api/tasks',{method:'POST',body:JSON.stringify({title,description,department:'system'})});
-      queuedTaskId=queued.id;
-      const approval=await request('/api/approvals',{method:'POST',body:JSON.stringify({title,description,risk:agentDraft.risk})});
-      setVaultItems(items=>[{id:Date.now(),title,content:description+'\n\nTask ID: '+queuedTaskId+'\nApproval ID: '+approval.id,category:'task',createdAt:new Date().toISOString()},...items]);
+      const result=await request('/api/agent-plans',{method:'POST',body:JSON.stringify({title,description,risk:agentDraft.risk,department:'system'})});
+      setVaultItems(items=>[{id:Date.now(),title,content:description+'\\n\\nTask ID: '+result.task_id+'\\nApproval ID: '+result.approval_id,category:'task',createdAt:new Date().toISOString()},...items]);
       setAgentDraft({title:'',steps:'',risk:'medium'});
       await refresh();
-      setNotice(language==='ar'?'أُضيفت الخطة إلى طابور المهام وأُرسلت للموافقة. لم يبدأ أي تنفيذ.':'Plan added to the task queue and submitted for approval. No execution has started.');
-    } catch(error) {
-      if(queuedTaskId!==null) {
-        try { await request('/api/tasks/'+queuedTaskId+'/cancel',{method:'POST'}); } catch {}
-        await refresh();
-      }
-      setNotice(error.message);
-    }
+      setNotice(language==='ar'?'أُنشئت الخطة والمهمة وطلب الموافقة بعملية واحدة. المهمة بانتظار الموافقة ولن يبدأ التنفيذ تلقائياً.':'Plan, task, and approval request created atomically. The task is awaiting approval; execution will not start automatically.');
+    } catch(error) { setNotice(error.message); }
     finally{setAgentSubmitting(false);}
   }
   function createDomainRunbook(event) {
@@ -810,7 +807,7 @@ export default function App() {
       </section>}
       {active === 'security' && <section className="content two-col">
         <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</h3><p>{language === 'ar' ? 'الموافقة لا تعني التنفيذ التلقائي' : 'Approval does not trigger execution' }</p></div><span className="pill">{approvals.length} {language === 'ar' ? 'معلّق' : 'pending'}</span></div>
-          {approvals.length ? approvals.map((item) => <article className="approval" key={item.id}><div className="approval-top"><strong>{item.title}</strong><span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? (language === 'ar' ? 'مرتفع' : 'High') : item.risk === 'low' ? (language === 'ar' ? 'منخفض' : 'Low') : (language === 'ar' ? 'متوسط' : 'Medium')}</span></div><p>{item.description}</p><small>{new Date(item.created_at).toLocaleString('ar')}</small><div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>{language === 'ar' ? 'موافقة' : 'Approve'}</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>{language === 'ar' ? 'رفض' : 'Reject'}</button></div></article>) : <Empty text={language === 'ar' ? 'لا توجد طلبات معلّقة حالياً.' : 'No pending requests.'}/>}
+          {approvals.length ? approvals.map((item) => <article className="approval" key={item.id}><div className="approval-top"><strong>{item.title}</strong><span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? (language === 'ar' ? 'مرتفع' : 'High') : item.risk === 'low' ? (language === 'ar' ? 'منخفض' : 'Low') : (language === 'ar' ? 'متوسط' : 'Medium')}</span></div><p>{item.description}</p><small>{new Date(item.created_at).toLocaleString(language === 'ar' ? 'ar' : 'en-US')}</small>{item.task_id && <small className="approval-task-link">{language === 'ar' ? 'المهمة المرتبطة' : 'Linked task'} #{item.task_id}</small>}<div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>{language === 'ar' ? 'موافقة' : 'Approve'}</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>{language === 'ar' ? 'رفض' : 'Reject'}</button></div></article>) : <Empty text={language === 'ar' ? 'لا توجد طلبات معلّقة حالياً.' : 'No pending requests.'}/>}
         </div>
         <div className="panel-card"><h3>{language === 'ar' ? 'تسجيل طلب جديد' : 'Create a request'}</h3><p className="muted">{language === 'ar' ? 'سجّل الإجراء المقترح ليظهر في قائمة المراجعة. لا ينفذ النظام أي تغيير من هذه الخطوة.' : 'Submit a proposed action for review. This step does not execute any change.'}</p><form className="proposal-form" onSubmit={createProposal}><label>{language === 'ar' ? 'عنوان الإجراء' : 'Action title'}<input value={proposal.title} onChange={(e) => setProposal({...proposal, title:e.target.value})} required maxLength="120" placeholder="مثال: ربط مزود نموذج محلي"/></label><label>{language === 'ar' ? 'التفاصيل' : 'Details'}<textarea value={proposal.description} onChange={(e) => setProposal({...proposal, description:e.target.value})} required rows="4" maxLength="2000" placeholder={language === 'ar' ? 'ما الذي سيتغير؟ ولماذا؟' : 'What will change, and why?'} /></label><label>{language === 'ar' ? 'مستوى المخاطر' : 'Risk level'}<select value={proposal.risk} onChange={(e) => setProposal({...proposal, risk:e.target.value})}><option value="low">{language === 'ar' ? 'منخفض' : 'Low'}</option><option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option><option value="high">{language === 'ar' ? 'مرتفع' : 'High'}</option></select></label><button className="button primary" disabled={busy}>{language === 'ar' ? 'إرسال للمراجعة' : 'Submit for review'}</button></form></div>
         <div className="panel-card"><h3>{language === 'ar' ? 'مفتاح الوصول المحلي' : 'Local access token'}</h3><p className="muted">{language === 'ar' ? 'أدخل رمز API الذي ضبطته في الخادم. يُحفظ في جلسة المتصفح الحالية فقط.' : 'Enter the API token configured on the server. It is stored only for this browser session.'}</p><form onSubmit={(e) => {e.preventDefault();sessionStorage.setItem('st-api-token',apiToken);refresh();}}><label>{language === 'ar' ? 'رمز API' : 'API token'}<input type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder={language === 'ar' ? 'اتركه فارغاً إذا لم تضبطه' : 'Leave blank if not configured'}/></label><button className="button secondary">{language === 'ar' ? 'حفظ للجلسة' : 'Save for session'}</button></form></div>
