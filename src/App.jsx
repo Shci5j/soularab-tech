@@ -20,6 +20,7 @@ function Icon({ children }) { return <span className="icon" aria-hidden="true">{
 
 export default function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('st-language') || 'ar');
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('st-api-base-url') || API);
   const [active, setActiveState] = useState('overview');
   function setActive(next) {
     if (next === active) return;
@@ -84,6 +85,10 @@ export default function App() {
   const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
 
   useEffect(() => {
+    localStorage.setItem('st-api-base-url', apiBaseUrl.trim().replace(/\\/+$/, ''));
+  }, [apiBaseUrl]);
+
+  useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     localStorage.setItem('st-language', language);
@@ -138,7 +143,7 @@ export default function App() {
   }, [theme]);
 
   async function request(path, options = {}) {
-    const response = await fetch(API + path, {
+    const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
@@ -273,7 +278,7 @@ export default function App() {
     form.append('file', file);
     setUploadingFile(true);
     try {
-      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files', {
+      const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + '/api/projects/' + selectedProject.id + '/files', {
         method: 'POST',
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
         body: form,
@@ -289,7 +294,7 @@ export default function App() {
   async function downloadProjectFile(filename) {
     if (!selectedProject) return;
     try {
-      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
+      const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
       });
       if (!response.ok) {
@@ -440,6 +445,7 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'تقليل الحركة' : 'Reduce motion'}</strong><small>{language === 'ar' ? 'إيقاف الانتقالات والحركات الزخرفية' : 'Disable transitions and decorative motion'}</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الاتصال والخدمات' : 'Connections & services'}</h3>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'عنوان الخادم الخلفي' : 'Backend API URL'}</strong><small>{language === 'ar' ? 'اتركه فارغاً لاستخدام نفس النطاق، أو أدخل عنوان خادم موثوق يدعم CORS.' : 'Leave blank to use the same origin, or enter a trusted server URL with CORS enabled.'}</small></div><input type="url" value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} placeholder="https://your-server.example"/></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حالة الخادم' : 'Server status'}</strong><small>{api.state === 'online' ? (language === 'ar' ? 'الخادم متصل' : 'Server connected') : (language === 'ar' ? 'بانتظار تشغيل الخلفية' : 'Waiting for backend')}</small></div><button className="button secondary" onClick={refresh}>{language === 'ar' ? 'فحص الاتصال ↻' : 'Check connection ↻'}</button></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حالة المساعد' : 'Assistant status'}</strong><small>{assistantStatus.connected ? (language === 'ar' ? 'متصل بالنموذج المحلي' : 'Connected to local model') : (language === 'ar' ? 'غير متصل حالياً' : 'Currently disconnected')}</small></div><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص المساعد' : 'Check assistant'}</button></div>
           </div>
