@@ -75,12 +75,36 @@ export default function App() {
   const [repoLoading, setRepoLoading] = useState(false);
   const [repoError, setRepoError] = useState('');
   const [deviceInfo, setDeviceInfo] = useState(null);
+  const [vaultItems, setVaultItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('st-vault') || '[]'); } catch { return []; }
+  });
+  const [vaultDraft, setVaultDraft] = useState({ title: '', content: '', category: 'note' });
 
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     localStorage.setItem('st-language', language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('st-vault', JSON.stringify(vaultItems));
+  }, [vaultItems]);
+
+  function saveVaultItem(event) {
+    event.preventDefault();
+    if (!vaultDraft.title.trim() || !vaultDraft.content.trim()) return;
+    setVaultItems((items) => [{ id: Date.now(), ...vaultDraft, createdAt: new Date().toISOString() }, ...items]);
+    setVaultDraft({ title: '', content: '', category: 'note' });
+    setNotice('تم حفظ العنصر في الخزنة المحلية على هذا الجهاز.');
+  }
+
+  function exportVault() {
+    const blob = new Blob([JSON.stringify(vaultItems, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'soularab-vault-backup.json'; link.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     const fonts = { ibm: "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif", system: "system-ui, sans-serif", tahoma: "Tahoma, Arial, sans-serif", georgia: "Georgia, serif" };
@@ -405,7 +429,21 @@ export default function App() {
           <p className="chat-footnote">تُحفظ تفضيلات الواجهة على هذا الجهاز فقط. لا تغيّر إعدادات الخادم أو تمنح أي موصل صلاحيات جديدة.</p>
         </div>
       </section>}
-      {active === 'vault' && <section className="content"><div className="panel-card destination-page"><h2>الخزنة</h2><p>مكان مخصص لحفظ الأعمال القائمة والمؤجلة، والأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة.</p><p className="muted">واجهة الخزنة قيد التجهيز؛ لن تُعرض بيانات غير محفوظة أو غير متاحة على الخادم.</p></div></section>}
+      {active === 'vault' && <section className="content">
+        <div className="section-heading"><div><h2>الخزنة</h2><p className="muted">ملاحظاتك وأفكارك ومقتطفات العمل محفوظة محلياً على هذا الجهاز.</p></div><button className="button secondary" onClick={exportVault} disabled={!vaultItems.length}>تصدير نسخة JSON</button></div>
+        <div className="vault-layout">
+          <div className="panel-card"><h3>حفظ عنصر جديد</h3><form className="proposal-form" onSubmit={saveVaultItem}>
+            <label>عنوان العنصر<input value={vaultDraft.title} onChange={(e) => setVaultDraft({...vaultDraft,title:e.target.value})} required maxLength="120" placeholder="عنوان الفكرة أو الملاحظة"/></label>
+            <label>التصنيف<select value={vaultDraft.category} onChange={(e) => setVaultDraft({...vaultDraft,category:e.target.value})}><option value="note">ملاحظة</option><option value="idea">فكرة</option><option value="task">مهمة مؤجلة</option><option value="code">مقتطف برمجي</option><option value="reference">مرجع</option></select></label>
+            <label>المحتوى<textarea rows="6" value={vaultDraft.content} onChange={(e) => setVaultDraft({...vaultDraft,content:e.target.value})} required maxLength="12000" placeholder="اكتب المحتوى الذي تريد الاحتفاظ به…"/></label>
+            <button className="button primary" disabled={!vaultDraft.title.trim() || !vaultDraft.content.trim()}>حفظ في الخزنة</button>
+          </form></div>
+          <div className="panel-card"><div className="section-heading"><div><h3>المحفوظات</h3><p>{vaultItems.length} عنصر محفوظ على هذا الجهاز</p></div></div>
+            {vaultItems.length ? <div className="vault-list">{vaultItems.map((item) => <article className="vault-item" key={item.id}><div className="vault-item-head"><strong>{item.title}</strong><span className="pill">{({note:'ملاحظة',idea:'فكرة',task:'مهمة',code:'كود',reference:'مرجع'})[item.category] || 'عنصر'}</span></div><p>{item.content}</p><div className="vault-item-foot"><small>{new Date(item.createdAt).toLocaleString('ar')}</small><button className="text-button" onClick={() => setVaultItems((items) => items.filter((entry) => entry.id !== item.id))}>حذف</button></div></article>)}</div> : <Empty text="الخزنة فارغة حالياً. احفظ أول فكرة أو ملاحظة من النموذج."/>}
+          </div>
+        </div>
+        <p className="chat-footnote">محتويات الخزنة تُحفظ في مساحة التخزين المحلية للمتصفح ولا تُرفع إلى الخادم. استخدم تصدير JSON للاحتفاظ بنسخة احتياطية قبل مسح بيانات المتصفح.</p>
+      </section>}
       {active === 'files' && <section className="content">
         <div className="project-layout">
           <div className="panel-card">
