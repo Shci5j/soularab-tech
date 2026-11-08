@@ -317,12 +317,14 @@ export default function App() {
       const imageRefs = outputs.flatMap((output) => Array.isArray(output.images) ? output.images : []).slice(0, 8);
       const images = await Promise.all(imageRefs.map(async (item) => {
         const params = new URLSearchParams({ filename: item.filename || '', subfolder: item.subfolder || '', type: 'output' });
-        const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/image/view?' + params.toString(), {
-          headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
-        });
-        if (!response.ok) return null;
-        const blob = await response.blob();
-        return { url: URL.createObjectURL(blob), name: item.filename || 'generated-image' };
+        try {
+          const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/image/view?' + params.toString(), {
+            headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+          });
+          if (!response.ok) return null;
+          const blob = await response.blob();
+          return { url: URL.createObjectURL(blob), name: item.filename || 'generated-image' };
+        } catch { return null; }
       }));
       setMediaImages(images.filter(Boolean));
       if (imageRefs.length && !images.some(Boolean)) setNotice(language === 'ar' ? 'تم جلب سجل المهمة لكن تعذر تحميل ملفات الصور.' : 'Job history loaded, but image files could not be fetched.');
