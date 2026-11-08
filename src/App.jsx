@@ -71,6 +71,7 @@ export default function App() {
   const [mediaStatus, setMediaStatus] = useState({ image: false, speech: false, loading: false });
   const [mediaWorkflow, setMediaWorkflow] = useState('');
   const [mediaQueue, setMediaQueue] = useState(null);
+  const [mediaHistory, setMediaHistory] = useState(null);
   const [mediaTranscript, setMediaTranscript] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -251,6 +252,16 @@ export default function App() {
       const result = await request('/api/media/image/queue', { method: 'POST', body: JSON.stringify({ workflow }) });
       setMediaQueue(result);
       setNotice(language === 'ar' ? 'تم إرسال مهمة التوليد إلى ComfyUI المحلي.' : 'Generation job queued on local ComfyUI.');
+    } catch (error) { setNotice(error.message); }
+    finally { setMediaBusy(false); }
+  }
+
+  async function loadMediaHistory() {
+    if (!mediaQueue?.prompt_id) return;
+    setMediaBusy(true);
+    try {
+      const result = await request('/api/media/image/history/' + encodeURIComponent(mediaQueue.prompt_id));
+      setMediaHistory(result);
     } catch (error) { setNotice(error.message); }
     finally { setMediaBusy(false); }
   }
@@ -606,7 +617,7 @@ export default function App() {
               <label>{language === 'ar' ? 'سير العمل بصيغة JSON (API)' : 'Workflow JSON (API format)'}<textarea rows="9" value={mediaWorkflow} onChange={(e) => setMediaWorkflow(e.target.value)} spellCheck="false" placeholder={'{\n  "3": { "class_type": "KSampler", "inputs": {} }\n}'}/></label>
               <button className="button primary" disabled={mediaBusy || !mediaStatus.image || !mediaWorkflow.trim()}>{mediaBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال مهمة التوليد' : 'Queue generation')}</button>
             </form>
-            {mediaQueue && <div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div>}
+            {mediaQueue && <><div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div><button className="button secondary" onClick={loadMediaHistory} disabled={mediaBusy}>{language === 'ar' ? 'فحص نتيجة المهمة' : 'Check job result'}</button>{mediaHistory && <label>{language === 'ar' ? 'بيانات النتيجة' : 'Result data'}<textarea rows="6" readOnly value={JSON.stringify(mediaHistory, null, 2)}/></label>}</>}
             <p className="chat-footnote">{language === 'ar' ? 'يلزم تشغيل ComfyUI على جهاز الخادم وتصدير سير العمل بصيغة API. زر الإرسال ينفذ المهمة المطلوبة محلياً.' : 'Run ComfyUI on the server and export the workflow in API format. Submitting queues the requested local job.'}</p>
           </div>
           <div className="panel-card">
