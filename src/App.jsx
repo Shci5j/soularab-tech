@@ -175,6 +175,51 @@ export default function App() {
     localStorage.setItem('st-preferences', JSON.stringify(preferences));
   }, [preferences]);
 
+  function exportSettingsBackup() {
+    const backup = {
+      format: 'soularab-settings',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings: { language, theme, preferences, apiBaseUrl: cleanApiBase(apiBaseUrl) },
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'soularab-settings-backup.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice(language === 'ar' ? 'تم تنزيل نسخة إعدادات الواجهة. لم تتضمن مفاتيح الدخول.' : 'Settings backup downloaded. Authentication tokens were not included.');
+  }
+
+  async function importSettingsBackup(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      if (file.size > 1024 * 1024) throw new Error(language === 'ar' ? 'حجم ملف الإعدادات يتجاوز الحد المسموح.' : 'Settings file exceeds the allowed size.');
+      const parsed = JSON.parse(await file.text());
+      const settings = parsed?.settings;
+      if (parsed?.format !== 'soularab-settings' || parsed?.version !== 1 || !settings || !['ar', 'en'].includes(settings.language) || !['dark', 'light'].includes(settings.theme) || typeof settings.preferences !== 'object' || settings.preferences === null) {
+        throw new Error(language === 'ar' ? 'ملف الإعدادات غير صالح أو غير مدعوم.' : 'Invalid or unsupported settings backup.');
+      }
+      const nextPreferences = {
+        font: ['ibm', 'system', 'tahoma', 'georgia'].includes(settings.preferences.font) ? settings.preferences.font : 'ibm',
+        fontScale: [85, 90, 95, 100, 105, 110, 115, 120, 125].includes(Number(settings.preferences.fontScale)) ? Number(settings.preferences.fontScale) : 100,
+        density: ['comfortable', 'compact'].includes(settings.preferences.density) ? settings.preferences.density : 'comfortable',
+        reducedMotion: Boolean(settings.preferences.reducedMotion),
+      };
+      const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
+      setPreferences(nextPreferences);
+      setLanguage(settings.language);
+      setTheme(settings.theme);
+      setApiBaseUrl(nextApiUrl);
+      setNotice(language === 'ar' ? 'تم استيراد الإعدادات. لم يتم استيراد كلمات المرور أو رموز الوصول.' : 'Settings restored. Passwords and access tokens were not imported.');
+    } catch (error) {
+      setNotice(error.message || (language === 'ar' ? 'تعذر استيراد الإعدادات.' : 'Could not import settings.'));
+    }
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('st-theme', theme);
@@ -957,6 +1002,11 @@ export default function App() {
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'تقليل الحركة' : 'Reduce motion'}</strong><small>{language === 'ar' ? 'إيقاف الانتقالات والحركات الزخرفية' : 'Disable transitions and decorative motion'}</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
+          </div>
+          <div className="settings-group"><h3>{language === 'ar' ? 'النسخ الاحتياطي للإعدادات' : 'Settings backup'}</h3>
+            <p className="muted">{language === 'ar' ? 'احفظ اللغة والمظهر وتفضيلات الواجهة وعنوان الخادم لاستعادتها لاحقاً أو نقلها إلى جهاز آخر.' : 'Back up language, appearance, interface preferences, and backend URL for later restoration or transfer to another device.'}</p>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'تصدير الإعدادات' : 'Export settings'}</strong><small>{language === 'ar' ? 'تنزيل ملف JSON متوافق مع هذا التطبيق' : 'Download a JSON file compatible with this app'}</small></div><button type="button" className="button secondary" onClick={exportSettingsBackup}>{language === 'ar' ? 'تنزيل نسخة الإعدادات' : 'Download settings backup'}</button></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'استيراد الإعدادات' : 'Import settings'}</strong><small>{language === 'ar' ? 'استعادة الإعدادات من ملف سابق؛ لن تُستورد رموز الدخول' : 'Restore from a previous file; authentication tokens are never imported'}</small></div><label className="button secondary">{language === 'ar' ? 'اختيار ملف JSON' : 'Choose JSON file'}<input type="file" accept="application/json,.json" onChange={importSettingsBackup} hidden/></label></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الاتصال والخدمات' : 'Connections & services'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'عنوان الخادم الخلفي' : 'Backend API URL'}</strong><small>{language === 'ar' ? 'اتركه فارغاً لاستخدام نفس النطاق، أو أدخل عنوان خادم موثوق يدعم CORS.' : 'Leave blank to use the same origin, or enter a trusted server URL with CORS enabled.'}</small></div><input type="url" value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} placeholder="https://your-server.example"/></div>
