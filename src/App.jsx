@@ -383,7 +383,7 @@ export default function App() {
 
       {active === 'overview' && <section className="content home-content">
         <div className="workspace-calendar" aria-label={todayLabel}><span className="calendar-mark">▦</span><div><small>{language === 'ar' ? 'التاريخ اليوم' : 'TODAY'}</small><strong>{todayLabel}</strong></div><span className="calendar-live">{language === 'ar' ? 'محدّث تلقائياً' : 'LIVE DATE'}</span></div>
-        <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label="افتح مساعد روح">
+        <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label={language === 'ar' ? 'افتح مساعد روح' : 'Open Rooh assistant'}>
           <span className="rooh-emblem" aria-hidden="true"><span className="rooh-orbit orbit-a"></span><span className="rooh-orbit orbit-b"></span><span className="rooh-core">روح</span></span>
           <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'مساعدك الذكي في قلب المنصة' : 'Your intelligent assistant at the heart of the workspace'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
           <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
@@ -395,14 +395,14 @@ export default function App() {
           <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'Open settings ←' : 'فتح الإعدادات ←'}</b></button>
         </div>
         <div className="operations-center">
-          <div className="section-heading"><div><h3>مركز العمليات</h3><p>ملخص الاتصال والمهام التي تحتاج قرارك</p></div></div>
+          <div className="section-heading"><div><h3>{language === 'ar' ? 'مركز العمليات' : 'Operations center'}</h3><p>{language === 'ar' ? 'ملخص الاتصال والمهام التي تحتاج قرارك' : 'Connection summary and tasks awaiting your decision'}</p></div></div>
           <div className="stats-grid">
-            <article className="stat-card"><span>حالة الخادم</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصل' : 'غير متصل'}</strong><small>{api.mode || 'بانتظار تشغيل الخلفية'}</small></article>
-            <article className="stat-card"><span>طلبات الموافقة</span><strong>{approvals.length}</strong><small>تنتظر مراجعتك</small></article>
-            <article className="stat-card"><span>الأقسام</span><strong>10</strong><small>واجهة موحدة</small></article>
-            <article className="stat-card"><span>الاتصال الخارجي</span><strong className="good">مقيّد</strong><small>لا اتصال دون إعداد وموافقة</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'حالة الخادم' : 'Server status'}</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? (language === 'ar' ? 'متصل' : 'Online') : (language === 'ar' ? 'غير متصل' : 'Offline')}</strong><small>{api.mode || (language === 'ar' ? 'بانتظار تشغيل الخلفية' : 'Backend not running')}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</span><strong>{approvals.length}</strong><small>{language === 'ar' ? 'تنتظر مراجعتك' : 'Awaiting your review'}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'الأقسام' : 'Modules'}</span><strong>10</strong><small>{language === 'ar' ? 'واجهة موحدة' : 'Unified workspace'}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
           </div>
-          <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة</small></span><b>فتح الخزنة ←</b></button>
+          <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>{language === 'ar' ? 'الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة' : 'Active and deferred work, saved code, and items under review'}</small></span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
         </div>
       </section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
