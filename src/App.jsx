@@ -93,6 +93,10 @@ export default function App() {
   const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
   const [siteDraft, setSiteDraft] = useState({ title: 'SOULARAB TECH', subtitle: 'Ideas into digital reality', description: 'A clear, elegant digital experience for your next idea.', buttonText: 'Get in touch', color: '#c49a43' });
   const [siteHtml, setSiteHtml] = useState('');
+  const [brandDraft, setBrandDraft] = useState({ name:'SOULARAB TECH', initials:'ST', tagline:'IDEAS INTO DIGITAL REALITY', primary:'#c49a43', secondary:'#171519', accent:'#e8d9b5' });
+  const [brandReady, setBrandReady] = useState(false);
+  const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\\nProjects\\nSettings' });
+  const [appHtml, setAppHtml] = useState('');
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -450,6 +454,38 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+
+  function prepareBrandIdentity(event) {
+    event.preventDefault();
+    setBrandDraft((current) => ({...current, initials: current.initials.trim().slice(0,4).toUpperCase() || 'ST'}));
+    setBrandReady(true);
+    setNotice(language === 'ar' ? 'تم إعداد مسودة الهوية. الشعار الرسمي لم يتغير.' : 'Identity draft prepared. The official logo is unchanged.');
+  }
+  function downloadBrandSvg() {
+    if (!brandReady) return;
+    const esc = (v) => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900"><rect width="1200" height="900" fill="${brandDraft.secondary}"/><path d="M600 120 L820 205 V420 Q820 590 600 690 Q380 590 380 420 V205 Z" fill="none" stroke="${brandDraft.primary}" stroke-width="12"/><path d="M470 260 L520 205 L565 250 L600 195 L635 250 L680 205 L730 260" fill="none" stroke="${brandDraft.accent}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><text x="600" y="445" text-anchor="middle" fill="${brandDraft.primary}" font-family="Georgia,serif" font-size="180" font-weight="bold">${esc(brandDraft.initials)}</text><path d="M430 730 H770" stroke="${brandDraft.primary}" stroke-width="3"/><text x="600" y="790" text-anchor="middle" fill="${brandDraft.accent}" font-family="Arial,sans-serif" font-size="48" letter-spacing="7">${esc(brandDraft.name)}</text><text x="600" y="840" text-anchor="middle" fill="${brandDraft.primary}" font-family="Arial,sans-serif" font-size="20" letter-spacing="5">${esc(brandDraft.tagline)}</text></svg>`;
+    const url = URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-brand-concept.svg'; link.click(); URL.revokeObjectURL(url);
+  }
+  function downloadBrandGuide() {
+    if (!brandReady) return;
+    const guide=[brandDraft.name,brandDraft.tagline,'','CONCEPT ONLY — OFFICIAL LOGO UNCHANGED','Primary: '+brandDraft.primary,'Secondary: '+brandDraft.secondary,'Accent: '+brandDraft.accent,'Monogram: '+brandDraft.initials].join('\\n');
+    const url=URL.createObjectURL(new Blob([guide],{type:'text/plain;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-brand-guide.txt'; link.click(); URL.revokeObjectURL(url);
+  }
+  function buildAppStarter(event) {
+    event.preventDefault();
+    const esc=(v)=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const name=esc(appDraft.name.trim()||'My App'), desc=esc(appDraft.description);
+    const color=/^#[0-9a-fA-F]{6}$/.test(appDraft.color)?appDraft.color:'#c49a43';
+    const cards=appDraft.features.split('\\n').map(v=>v.trim()).filter(Boolean).slice(0,8).map(v=>'<article><span>✦</span><h2>'+esc(v)+'</h2><p>Organize, review, and manage this area in one place.</p></article>').join('');
+    const html=`<!doctype html><html lang="und" dir="auto"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>*{box-sizing:border-box}body{margin:0;background:#111;color:#f5f1e9;font:16px system-ui}header{padding:24px 7%;display:flex;justify-content:space-between;border-bottom:1px solid #ffffff20}header b{color:${color};letter-spacing:.15em}main{max-width:1100px;margin:auto;padding:72px 7%}h1{font-size:clamp(36px,7vw,68px);margin:0 0 16px}main>p{color:#aaa;line-height:1.8;max-width:650px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:48px}article{padding:26px;border:1px solid #ffffff20;border-radius:18px;background:#1a1a1e}article span{color:${color}}article p{color:#aaa;line-height:1.6}footer{padding:30px 7%;color:#777;border-top:1px solid #ffffff20}@media(max-width:600px){main{padding-top:44px}}</style><header><b>SOULARAB APP STUDIO</b><span>WORKSPACE</span></header><main><h1>${name}</h1><p>${desc}</p><section class="grid">${cards}</section></main><footer>Starter interface · Extend with your own data and backend</footer></html>`;
+    setAppHtml(html);
+  }
+  function downloadAppStarter() {
+    if (!appHtml) return;
+    const url=URL.createObjectURL(new Blob([appHtml],{type:'text/html;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-app-starter.html'; link.click(); URL.revokeObjectURL(url);
+  }
+
   function inspectDevice() {
     setDeviceInfo({
       browser: navigator.userAgent, language: navigator.language, platform: navigator.platform || (language === 'ar' ? 'غير متاح' : 'Unavailable'),
@@ -632,6 +668,37 @@ export default function App() {
       </section>}
 
 
+
+      {active === 'design' && <section className="content">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'استوديو التصميم والهوية' : 'Design & identity studio'}</h2><p className="muted">{language === 'ar' ? 'أنشئ لوحة هوية قابلة للتصدير مع الحفاظ على الشعار الرسمي المعتمد.' : 'Create an exportable identity concept while preserving the approved official logo.'}</p></div><span className="pill">{language === 'ar' ? 'مسودة تصميم' : 'Design draft'}</span></div>
+        <div className="two-col">
+          <div className="panel-card"><h3>{language === 'ar' ? 'بيانات الهوية' : 'Identity details'}</h3><form className="proposal-form" onSubmit={prepareBrandIdentity}>
+            <label>{language === 'ar' ? 'اسم العلامة' : 'Brand name'}<input value={brandDraft.name} onChange={e=>setBrandDraft({...brandDraft,name:e.target.value})} maxLength="80" required/></label>
+            <label>{language === 'ar' ? 'الأحرف المختصرة' : 'Monogram'}<input value={brandDraft.initials} onChange={e=>setBrandDraft({...brandDraft,initials:e.target.value})} maxLength="4"/></label>
+            <label>{language === 'ar' ? 'الشعار النصي' : 'Tagline'}<input value={brandDraft.tagline} onChange={e=>setBrandDraft({...brandDraft,tagline:e.target.value})} maxLength="100"/></label>
+            <label>{language === 'ar' ? 'اللون الرئيسي' : 'Primary color'}<input type="color" value={brandDraft.primary} onChange={e=>setBrandDraft({...brandDraft,primary:e.target.value})}/></label>
+            <label>{language === 'ar' ? 'لون الخلفية' : 'Background color'}<input type="color" value={brandDraft.secondary} onChange={e=>setBrandDraft({...brandDraft,secondary:e.target.value})}/></label>
+            <label>{language === 'ar' ? 'اللون المساعد' : 'Accent color'}<input type="color" value={brandDraft.accent} onChange={e=>setBrandDraft({...brandDraft,accent:e.target.value})}/></label>
+            <button className="button primary">{language === 'ar' ? 'تحديث لوحة الهوية' : 'Prepare identity sheet'}</button>
+          </form></div>
+          <div className="panel-card"><h3>{language === 'ar' ? 'معاينة الهوية' : 'Identity preview'}</h3><svg viewBox="0 0 600 460" role="img" aria-label="Brand identity concept" style={{width:'100%',borderRadius:'16px',background:brandDraft.secondary}}>
+            <path d="M300 55 L410 100 V215 Q410 300 300 355 Q190 300 190 215 V100 Z" fill="none" stroke={brandDraft.primary} strokeWidth="7"/><path d="M235 135 L260 105 L282 130 L300 100 L318 130 L340 105 L365 135" fill="none" stroke={brandDraft.accent} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/><text x="300" y="245" textAnchor="middle" fill={brandDraft.primary} fontSize="112" fontFamily="Georgia,serif" fontWeight="bold">{brandDraft.initials.slice(0,4).toUpperCase()}</text><path d="M160 375 H440" stroke={brandDraft.primary} strokeWidth="2"/><text x="300" y="410" textAnchor="middle" fill={brandDraft.accent} fontSize="23" letterSpacing="3">{brandDraft.name.slice(0,32)}</text><text x="300" y="438" textAnchor="middle" fill={brandDraft.primary} fontSize="11" letterSpacing="2">{brandDraft.tagline.slice(0,54)}</text>
+          </svg><div className="module-action-list"><button className="button secondary" onClick={downloadBrandSvg} disabled={!brandReady}>{language === 'ar' ? 'تصدير SVG' : 'Export SVG'}</button><button className="button secondary" onClick={downloadBrandGuide} disabled={!brandReady}>{language === 'ar' ? 'تصدير دليل الهوية TXT' : 'Export brand guide TXT'}</button></div><p className="chat-footnote">{language === 'ar' ? 'هذه مسودة مفاهيمية ولا تعدّل الشعار الذهبي الرسمي لـ SOULARAB TECH.' : 'This is a concept draft and does not alter the official gold SOULARAB TECH logo.'}</p></div>
+        </div>
+      </section>}
+      {active === 'apps' && <section className="content">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'منشئ التطبيقات' : 'Application starter'}</h2><p className="muted">{language === 'ar' ? 'أنشئ واجهة تطبيق متعددة الأقسام مع معاينة وتصدير ملف مستقل.' : 'Create a multi-section app interface with preview and standalone export.'}</p></div></div>
+        <div className="two-col">
+          <div className="panel-card"><h3>{language === 'ar' ? 'إعداد التطبيق' : 'App setup'}</h3><form className="proposal-form" onSubmit={buildAppStarter}>
+            <label>{language === 'ar' ? 'اسم التطبيق' : 'App name'}<input value={appDraft.name} onChange={e=>setAppDraft({...appDraft,name:e.target.value})} maxLength="80" required/></label>
+            <label>{language === 'ar' ? 'وصف التطبيق' : 'App description'}<textarea rows="3" value={appDraft.description} onChange={e=>setAppDraft({...appDraft,description:e.target.value})} maxLength="500"/></label>
+            <label>{language === 'ar' ? 'الأقسام (كل قسم في سطر)' : 'Sections (one per line)'}<textarea rows="6" value={appDraft.features} onChange={e=>setAppDraft({...appDraft,features:e.target.value})} maxLength="1200"/></label>
+            <label>{language === 'ar' ? 'اللون الرئيسي' : 'Primary color'}<input type="color" value={appDraft.color} onChange={e=>setAppDraft({...appDraft,color:e.target.value})}/></label>
+            <button className="button primary">{language === 'ar' ? 'إنشاء واجهة التطبيق' : 'Generate app interface'}</button>
+          </form></div>
+          <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'المعاينة والتصدير' : 'Preview & export'}</h3><p className="muted">{language === 'ar' ? 'واجهة أولية قابلة للتطوير وربطها بقاعدة بيانات.' : 'An interface starter ready for future backend integration.'}</p></div><button className="button secondary" onClick={downloadAppStarter} disabled={!appHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>{appHtml ? <iframe title="Application preview" sandbox="" srcDoc={appHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#111'}}/> : <Empty text={language === 'ar' ? 'أدخل بيانات التطبيق ثم أنشئ المعاينة.' : 'Enter app details and generate a preview.'}/>}</div>
+        </div><p className="chat-footnote">{language === 'ar' ? 'هذه واجهة ثابتة أولية؛ تسجيل الدخول وقواعد البيانات والتزامن تحتاج خادماً وربطاً إضافياً.' : 'This is a static UI starter; authentication, databases, and synchronization need additional backend integration.'}</p>
+      </section>}
       {active === 'web' && <section className="content">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'منشئ المواقع' : 'Website builder'}</h2><p className="muted">{language === 'ar' ? 'أنشئ صفحة هبوط أولية، شاهد معاينتها مباشرة، ثم نزّل ملف HTML مستقلاً.' : 'Create a starter landing page, preview it live, and download a standalone HTML file.'}</p></div></div>
         <div className="two-col">
@@ -670,7 +737,7 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {!['overview','security','files','assistant','media','web','work','hub','root','settings','vault'].includes(active) && <section className="content">
+      {!['overview','security','files','assistant','media','web','design','apps','work','hub','root','settings','vault'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
