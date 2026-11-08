@@ -24,13 +24,16 @@ export default function App() {
     setActiveState(next);
   }
   useEffect(() => {
-    window.history.replaceState({ soularabPage: 'overview' }, '', window.location.pathname + window.location.search);
+    window.history.replaceState({ soularabPage: 'overview', soularabRoot: true }, '', window.location.pathname + window.location.search);
+    window.history.pushState({ soularabPage: 'overview', soularabRoot: true }, '', window.location.pathname + window.location.search);
     const handleBack = (event) => {
-      const page = event.state?.soularabPage;
-      if (page) setActiveState(page);
+      if (event.state?.soularabRoot) {
+        setActiveState('overview');
+        window.history.pushState({ soularabPage: 'overview', soularabRoot: true }, '', window.location.pathname + window.location.search);
+      } else if (event.state?.soularabPage) setActiveState(event.state.soularabPage);
       else {
         setActiveState('overview');
-        window.history.pushState({ soularabPage: 'overview' }, '', window.location.pathname + window.location.search);
+        window.history.pushState({ soularabPage: 'overview', soularabRoot: true }, '', window.location.pathname + window.location.search);
       }
     };
     window.addEventListener('popstate', handleBack);
