@@ -530,7 +530,7 @@ export default function App() {
         : (language === 'ar' ? 'اقترح بنية تطبيق عملية. أعد JSON فقط بالمفاتيح name وdescription وfeatures، واجعل features مصفوفة من 4 إلى 7 أقسام قصيرة. اسم التطبيق: ' + draft.name + '. الوصف: ' + draft.description : 'Suggest an app structure. Return JSON only with name, description, features as an array of 4 to 7 short section names. App: ' + draft.name + '. Description: ' + draft.description);
       const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: model, temperature: 0.45, messages: [{ role: 'user', content: prompt }] }) });
       const raw = result.message && result.message.content ? result.message.content.trim() : '';
-      const parsed = JSON.parse(raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, ''));
+      const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
       if (isWebsite) {
         if (![parsed.title, parsed.subtitle, parsed.description, parsed.buttonText].every((value) => typeof value === 'string' && value.trim())) throw new Error('Invalid website draft');
         setSiteDraft((current) => ({ ...current, title: parsed.title.slice(0,80), subtitle: parsed.subtitle.slice(0,120), description: parsed.description.slice(0,600), buttonText: parsed.buttonText.slice(0,40) }));
@@ -539,7 +539,7 @@ export default function App() {
         if (typeof parsed.name !== 'string' || typeof parsed.description !== 'string' || !Array.isArray(parsed.features)) throw new Error('Invalid app draft');
         const features = parsed.features.filter((value) => typeof value === 'string' && value.trim()).slice(0,8);
         if (features.length < 3) throw new Error('Not enough app sections');
-        setAppDraft((current) => ({ ...current, name: parsed.name.slice(0,80), description: parsed.description.slice(0,500), features: features.join('\\n').slice(0,1200) }));
+        setAppDraft((current) => ({ ...current, name: parsed.name.slice(0,80), description: parsed.description.slice(0,500), features: features.join('\n').slice(0,1200) }));
         setNotice(language === 'ar' ? 'جهّز روح هيكل التطبيق. راجعه ثم أنشئ المعاينة.' : 'Rooh drafted the app structure. Review it and generate the preview.');
       }
     } catch (error) {
@@ -1062,7 +1062,7 @@ export default function App() {
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
-            <form className="proposal-form" onSubmit={(event) => { event.preventDefault(); if (!moduleDraft.title.trim() || !moduleDraft.details.trim()) return; setVaultItems((items) => [{ id: Date.now(), title: moduleDraft.title.trim(), content: current.title + '\\n\\n' + moduleDraft.details.trim(), category: 'task', createdAt: new Date().toISOString() }, ...items]); setModuleDraft({ title: '', details: '' }); setNotice('تم حفظ التكليف في الخزنة المحلية.'); }}>
+            <form className="proposal-form" onSubmit={(event) => { event.preventDefault(); if (!moduleDraft.title.trim() || !moduleDraft.details.trim()) return; setVaultItems((items) => [{ id: Date.now(), title: moduleDraft.title.trim(), content: current.title + '\n\n' + moduleDraft.details.trim(), category: 'task', createdAt: new Date().toISOString() }, ...items]); setModuleDraft({ title: '', details: '' }); setNotice('تم حفظ التكليف في الخزنة المحلية.'); }}>
               <label>{language === 'ar' ? 'عنوان المهمة' : 'Task title'}<input value={moduleDraft.title} onChange={(e) => setModuleDraft({...moduleDraft,title:e.target.value})} required maxLength="120" placeholder={language === 'ar' ? 'مثال: إعداد صفحة هبوط' : 'Example: Create a landing page'}/></label>
               <label>{language === 'ar' ? 'التفاصيل والمتطلبات' : 'Details and requirements'}<textarea rows="5" value={moduleDraft.details} onChange={(e) => setModuleDraft({...moduleDraft,details:e.target.value})} required maxLength="12000" placeholder={language === 'ar' ? 'اكتب الهدف والنتيجة المطلوبة والقيود…' : 'Describe the goal, expected outcome, and constraints…'}/></label>
               <button className="button primary" disabled={!moduleDraft.title.trim() || !moduleDraft.details.trim()}>{language === 'ar' ? 'حفظ التكليف في الخزنة' : 'Save task to vault'}</button>
