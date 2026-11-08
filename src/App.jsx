@@ -52,8 +52,8 @@ export default function App() {
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
-    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
-    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false }; }
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local' }; }
   });
   function updatePreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }));
@@ -928,7 +928,7 @@ export default function App() {
     vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
   const current = useMemo(() => { if (pageTitles[active]) return pageTitles[active]; const item = modules.find((entry) => entry.id === active) || pageTitles.overview; return language === 'en' && englishModules[active] ? { ...item, title: englishModules[active][0], desc: englishModules[active][1] } : item; }, [active, language]);
-  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+  const dateOptions = preferences.dateFormat === 'short' ? { year: 'numeric', month: '2-digit', day: '2-digit' } : preferences.dateFormat === 'medium' ? { year: 'numeric', month: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };\n  if (preferences.dateFormat === 'long') dateOptions.weekday = 'long';\n  if (preferences.timeZone === 'UTC') dateOptions.timeZone = 'UTC';\n  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', dateOptions).format(new Date());
 
   return <div className="app-shell">
     <main className="main-area">
@@ -989,10 +989,12 @@ export default function App() {
       </div></section>}
       {active === 'settings' && <section className="content">
         <div className="panel-card settings-page">
-          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
+          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local' }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
           <div className="settings-group"><h3>{language === 'ar' ? 'اللغة والمنطقة' : 'Language & region'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'لغة التطبيق' : 'Application language'}</strong><small>{language === 'ar' ? 'تغيير اللغة واتجاه الواجهة' : 'Change language and interface direction'}</small></div><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية · RTL</option><option value="en">English · LTR</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'التاريخ' : 'Date'}</strong><small>{language === 'ar' ? 'التاريخ المعروض في الصفحة الرئيسية حسب وقت جهازك' : 'Date shown on the home screen using your device time'}</small></div><span className="settings-value">{todayLabel}</span></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'تنسيق التاريخ' : 'Date format'}</strong><small>{language === 'ar' ? 'اختيار طريقة عرض التاريخ في لوحة التحكم' : 'Choose how dates appear on the dashboard'}</small></div><select value={preferences.dateFormat || 'long'} onChange={(e) => updatePreference('dateFormat', e.target.value)}><option value="long">{language === 'ar' ? 'مفصل' : 'Long'}</option><option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option><option value="short">{language === 'ar' ? 'مختصر' : 'Short'}</option></select></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'المنطقة الزمنية' : 'Time zone'}</strong><small>{language === 'ar' ? 'استخدام توقيت الجهاز أو توقيت UTC' : 'Use device time or Coordinated Universal Time'}</small></div><select value={preferences.timeZone || 'local'} onChange={(e) => updatePreference('timeZone', e.target.value)}><option value="local">{language === 'ar' ? 'توقيت الجهاز' : 'Device local time'}</option><option value="UTC">UTC</option></select></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'المظهر والتخصيص' : 'Appearance & customization'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'سمة الألوان' : 'Color theme'}</strong><small>{language === 'ar' ? 'اختيار المظهر الداكن أو الفاتح' : 'Choose dark or light appearance'}</small></div><button className="button secondary" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? (language === 'ar' ? 'داكن · تبديل إلى الفاتح' : 'Dark · switch to light') : (language === 'ar' ? 'فاتح · تبديل إلى الداكن' : 'Light · switch to dark')}</button></div>
