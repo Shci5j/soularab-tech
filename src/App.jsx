@@ -79,6 +79,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('st-vault') || '[]'); } catch { return []; }
   });
   const [vaultDraft, setVaultDraft] = useState({ title: '', content: '', category: 'note' });
+  const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -510,7 +511,24 @@ export default function App() {
         <div className="panel-card"><h3>مبادئ الحماية</h3><ul className="safety-list"><li>لا اتصال بمزود خارجي افتراضياً.</li><li>لا تعديل أو حذف أو نشر دون موافقة منفصلة.</li><li>كل قرار يُسجل في سجل التدقيق.</li><li>لا توجد كلمات مرور تجريبية مضمنة في الواجهة.</li><li>المهام الخطرة تتطلب مراجعة بشرية.</li></ul></div>
       </section>}
 
-      {!['overview','security','files','assistant','work','hub','root','settings','vault'].includes(active) && <section className="content"><div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">تم تجهيز نقطة التكامل ضمن النواة</span></div><div className="panel-card roadmap"><h3>حالة هذا القسم</h3><p>الواجهة الأساسية جاهزة، أما محرك التنفيذ وربط الأدوات فيُضافان كوحدات مستقلة بعد فحص الترخيص والموارد المطلوبة.</p><div className="roadmap-row"><span>واجهة المستخدم</span><b className="good">جاهزة</b></div><div className="roadmap-row"><span>واجهة API الخلفية</span><b className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصلة' : 'بانتظار التشغيل'}</b></div><div className="roadmap-row"><span>الموصلات والنماذج</span><b>غير مفعّلة افتراضياً</b></div><button className="button secondary" onClick={() => setActive('security')}>إدارة الموافقات والأمان</button></div></section>}
+      {!['overview','security','files','assistant','work','hub','root','settings','vault'].includes(active) && <section className="content">
+        <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">مساحة تجهيز العمل</span></div>
+        <div className="module-workspace-grid">
+          <div className="panel-card"><h3>إعداد مهمة جديدة</h3><p className="muted">اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.</p>
+            <form className="proposal-form" onSubmit={(event) => { event.preventDefault(); if (!moduleDraft.title.trim() || !moduleDraft.details.trim()) return; setVaultItems((items) => [{ id: Date.now(), title: moduleDraft.title.trim(), content: current.title + '\\n\\n' + moduleDraft.details.trim(), category: 'task', createdAt: new Date().toISOString() }, ...items]); setModuleDraft({ title: '', details: '' }); setNotice('تم حفظ التكليف في الخزنة المحلية.'); }}>
+              <label>عنوان المهمة<input value={moduleDraft.title} onChange={(e) => setModuleDraft({...moduleDraft,title:e.target.value})} required maxLength="120" placeholder="مثال: إعداد صفحة هبوط"/></label>
+              <label>التفاصيل والمتطلبات<textarea rows="5" value={moduleDraft.details} onChange={(e) => setModuleDraft({...moduleDraft,details:e.target.value})} required maxLength="12000" placeholder="اكتب الهدف والنتيجة المطلوبة والقيود…"/></label>
+              <button className="button primary" disabled={!moduleDraft.title.trim() || !moduleDraft.details.trim()}>حفظ التكليف في الخزنة</button>
+            </form>
+          </div>
+          <div className="panel-card"><h3>أدوات مساحة العمل</h3><div className="module-action-list">
+            <button className="module-action" onClick={() => setActive('assistant')}><span>✦</span><div><strong>روح — المساعد الذكي</strong><small>تحليل المتطلبات وصياغة خطة العمل</small></div><b>فتح ←</b></button>
+            <button className="module-action" onClick={() => setActive('files')}><span>▱</span><div><strong>ملفات ومشاريع</strong><small>إنشاء مساحة مشروع وإدارة ملفاته</small></div><b>فتح ←</b></button>
+            <button className="module-action" onClick={() => setActive('vault')}><span>▣</span><div><strong>الخزنة</strong><small>الرجوع إلى التكليفات والملاحظات المحفوظة</small></div><b>فتح ←</b></button>
+            <button className="module-action" onClick={() => setActive('security')}><span>⬡</span><div><strong>الأمان والموافقات</strong><small>مراجعة الطلبات قبل أي إجراء مؤثر</small></div><b>فتح ←</b></button>
+          </div><div className="roadmap-row"><span>واجهة القسم</span><b className="good">جاهزة</b></div><div className="roadmap-row"><span>الخادم المحلي</span><b className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصل' : 'غير متصل'}</b></div><div className="roadmap-row"><span>محرك التنفيذ الخارجي</span><b>غير مربوط بعد</b></div></div>
+        </div>
+      </section>}
     </main>
     <nav className="utility-dock" aria-label="أدوات مساندة">
       <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>الرئيسية</button>
