@@ -74,10 +74,22 @@ def register_execution_routes(app) -> None:
                 ("task.execution.started", f"المهمة #{task_id}: write_project_note في المشروع #{payload.project_id}.", timestamp),
             )
 
+        created_artifact = False
         try:
+            # Exclusive creation prevents overwriting an existing file. If writing
+            # fails midway, remove only the regular file created by this request.
             with target.open("x", encoding="utf-8", newline="\n") as output:
+                created_artifact = True
                 output.write(payload.content)
         except Exception as exc:
+            if created_artifact:
+                try:
+                    if target.is_file() and not target.is_symlink():
+                        target.unlink()
+                except OSError:
+                    # Preserve the original execution failure; the task is still
+                    # marked failed and the audit trail records the exception.
+                    pass
             failed_at = main.now()
             with main.database() as db:
                 db.execute("UPDATE tasks SET status='failed', updated_at=? WHERE id=? AND status='running'", (failed_at, task_id))
