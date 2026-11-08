@@ -98,6 +98,10 @@ def init_db() -> None:
             updated_at TEXT NOT NULL
         );
         """)
+        approval_columns = {row["name"] for row in db.execute("PRAGMA table_info(approvals)").fetchall()}
+        if "task_id" not in approval_columns:
+            db.execute("ALTER TABLE approvals ADD COLUMN task_id INTEGER REFERENCES tasks(id)")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_task_id ON approvals(task_id) WHERE task_id IS NOT NULL")
 
 
 def audit(action: str, details: str) -> None:
@@ -158,6 +162,12 @@ class TaskCreate(BaseModel):
     title: str = Field(min_length=3, max_length=140)
     description: str = Field(default="", max_length=4000)
     department: Literal["work", "hub", "jathr", "files", "system"]
+
+class AgentPlanCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=140)
+    description: str = Field(min_length=5, max_length=4000)
+    risk: Literal["low", "medium", "high"] = "medium"
+    department: Literal["work", "hub", "jathr", "files", "system"] = "system"
 
 
 def validate_local_provider_url(value: str) -> str:
@@ -582,20 +592,52 @@ def create_approval(payload: ApprovalCreate, _: None = Depends(require_access)):
     return {"id": approval_id, "status": "pending", "execution": "not_started"}
 
 
+@app.post("/api/agent-plans", status_code=201)
+def create_agent_plan(payload: AgentPlanCreate, _: None = Depends(require_access)):
+    title = payload.title.strip()
+    description = payload.description.strip()
+    if len(title) < 3 or len(description) < 5:
+        raise HTTPException(status_code=422, detail="أدخل عنواناً ووصفاً صالحين للخطة.")
+    timestamp = now()
+    with database() as db:
+        task_cursor = db.execute(
+            "INSERT INTO tasks(title,description,department,status,created_at,updated_at) VALUES(?,?,?,'waiting_approval',?,?)",
+            (title, description, payload.department, timestamp, timestamp),
+        )
+        task_id = task_cursor.lastrowid
+        approval_cursor = db.execute(
+            "INSERT INTO approvals(title,description,risk,status,created_at,task_id) VALUES(?,?,?,'pending',?,?)",
+            (title, description, payload.risk, timestamp, task_id),
+        )
+        approval_id = approval_cursor.lastrowid
+        db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("agent_plan.created", f"الخطة #{task_id} مرتبطة بطلب الموافقة #{approval_id}. لم يبدأ التنفيذ.", timestamp))
+    return {"task_id": task_id, "task_status": "waiting_approval", "approval_id": approval_id, "approval_status": "pending", "execution": "not_started"}
+
+
 @app.post("/api/approvals/{approval_id}/decision")
 def decide_approval(approval_id: int, payload: ApprovalDecision, _: None = Depends(require_access)):
+    task_status = None
     with database() as db:
         row = db.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="طلب الموافقة غير موجود.")
         if row["status"] != "pending":
             raise HTTPException(status_code=409, detail="تم اتخاذ قرار بشأن هذا الطلب مسبقاً.")
+        timestamp = now()
         db.execute(
             "UPDATE approvals SET status=?, decided_at=?, decision_note=? WHERE id=?",
-            (payload.decision, now(), payload.note, approval_id),
+            (payload.decision, timestamp, payload.note, approval_id),
         )
-    audit(f"approval.{payload.decision}", f"طلب #{approval_id}. لم يتم تنفيذ الإجراء.")
-    return {"id": approval_id, "status": payload.decision, "execution": "not_started"}
+        if row["task_id"] is not None:
+            task = db.execute("SELECT status FROM tasks WHERE id=?", (row["task_id"],)).fetchone()
+            if task is None or task["status"] != "waiting_approval":
+                raise HTTPException(status_code=409, detail="حالة المهمة المرتبطة لا تسمح بتغيير قرار الموافقة.")
+            task_status = "queued" if payload.decision == "approved" else "cancelled"
+            db.execute("UPDATE tasks SET status=?, updated_at=? WHERE id=?", (task_status, timestamp, row["task_id"]))
+        db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", (f"approval.{payload.decision}", f"طلب #{approval_id}. لم يتم تنفيذ الإجراء.", timestamp))
+        if task_status:
+            db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("task.approval_transition", f"المهمة #{row['task_id']} أصبحت {task_status} بعد قرار الموافقة؛ لم يبدأ التنفيذ.", timestamp))
+    return {"id": approval_id, "status": payload.decision, "task_id": row["task_id"], "task_status": task_status, "execution": "not_started"}
 
 
 @app.get("/api/tasks")
@@ -626,6 +668,8 @@ def create_task(payload: TaskCreate, _: None = Depends(require_access)):
 
 @app.post("/api/tasks/{task_id}/cancel")
 def cancel_task(task_id: int, _: None = Depends(require_access)):
+    timestamp = now()
+    linked_approval_id = None
     with database() as db:
         row = db.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
         if row is None:
@@ -634,9 +678,15 @@ def cancel_task(task_id: int, _: None = Depends(require_access)):
             raise HTTPException(status_code=409, detail="لا يمكن تأكيد إيقاف مهمة قيد التنفيذ؛ لا يدعم هذا الإصدار إيقاف عامل تنفيذ.")
         if row["status"] in {"completed", "failed", "cancelled"}:
             raise HTTPException(status_code=409, detail="لا يمكن إلغاء هذه المهمة في حالتها الحالية.")
-        db.execute("UPDATE tasks SET status='cancelled', updated_at=? WHERE id=?", (now(), task_id))
-    audit("task.cancelled", f"تم إلغاء المهمة #{task_id} قبل بدء التنفيذ.")
-    return {"id": task_id, "status": "cancelled", "execution": "not_started"}
+        approval = db.execute("SELECT id FROM approvals WHERE task_id=? AND status='pending'", (task_id,)).fetchone()
+        if approval:
+            linked_approval_id = approval["id"]
+            db.execute("UPDATE approvals SET status='rejected', decided_at=?, decision_note='ألغى المستخدم المهمة قبل الموافقة.' WHERE id=?", (timestamp, linked_approval_id))
+        db.execute("UPDATE tasks SET status='cancelled', updated_at=? WHERE id=?", (timestamp, task_id))
+        db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("task.cancelled", f"تم إلغاء المهمة #{task_id} قبل بدء التنفيذ.", timestamp))
+        if linked_approval_id:
+            db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("approval.rejected", f"أُغلق طلب الموافقة #{linked_approval_id} بسبب إلغاء المهمة #{task_id}.", timestamp))
+    return {"id": task_id, "status": "cancelled", "approval_id": linked_approval_id, "execution": "not_started"}
 
 
 @app.get("/api/audit")
