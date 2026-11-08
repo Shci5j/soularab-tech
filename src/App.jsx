@@ -97,6 +97,10 @@ export default function App() {
   const [brandReady, setBrandReady] = useState(false);
   const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\\nProjects\\nSettings' });
   const [appHtml, setAppHtml] = useState('');
+  const [agentDraft, setAgentDraft] = useState({ title:'', steps:'', risk:'medium' });
+  const [agentSubmitting, setAgentSubmitting] = useState(false);
+  const [domainDraft, setDomainDraft] = useState({ domain:'', provider:'Cloudflare Pages', project:'soularab-site' });
+  const [domainReport, setDomainReport] = useState('');
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -486,6 +490,53 @@ export default function App() {
     const url=URL.createObjectURL(new Blob([appHtml],{type:'text/html;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-app-starter.html'; link.click(); URL.revokeObjectURL(url);
   }
 
+
+  async function submitAgentPlan(event) {
+    event.preventDefault();
+    const steps=agentDraft.steps.split('\\n').map(v=>v.trim()).filter(Boolean);
+    if(agentDraft.title.trim().length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً وثيقة وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
+    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\\n');
+    setAgentSubmitting(true);
+    try {
+      const result=await request('/api/approvals',{method:'POST',body:JSON.stringify({title:agentDraft.title.trim(),description,risk:agentDraft.risk})});
+      setVaultItems(items=>[{id:Date.now(),title:agentDraft.title.trim(),content:description+'\\n\\nApproval ID: '+result.id,category:'task',createdAt:new Date().toISOString()},...items]);
+      setAgentDraft({title:'',steps:'',risk:'medium'});
+      await refresh();
+      setNotice(language==='ar'?'تم إرسال خطة الوكيل إلى قائمة الموافقات. لم يبدأ أي تنفيذ.':'Agent plan submitted for approval. No execution has started.');
+    } catch(error){setNotice(error.message);}
+    finally{setAgentSubmitting(false);}
+  }
+  function createDomainRunbook(event) {
+    event.preventDefault();
+    const domain=domainDraft.domain.trim().toLowerCase();
+    const valid=/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/.test(domain);
+    if(!valid){setNotice(language==='ar'?'اسم النطاق غير صالح.':'Invalid domain name.');setDomainReport('');return;}
+    const lines=[
+      'SOULARAB TECH — DOMAIN & DEPLOYMENT RUNBOOK',
+      'Domain: '+domain,
+      'Provider: '+domainDraft.provider,
+      'Project: '+(domainDraft.project.trim()||'soularab-site'),
+      '',
+      'CHECKLIST',
+      '1. Add the domain to your hosting provider.',
+      '2. Configure the DNS records shown by the provider.',
+      '3. Verify domain ownership and wait for DNS propagation.',
+      '4. Enable HTTPS and force secure redirects.',
+      '5. Configure the frontend build output directory: dist.',
+      '6. Set the backend API URL and trusted CORS origin.',
+      '7. Add provider tokens only in the provider secret manager.',
+      '8. Run a production build and test mobile navigation.',
+      '',
+      'SECURITY: Never put provider API tokens in this file or the frontend.'
+    ].join('\\n');
+    setDomainReport(lines);
+    setNotice(language==='ar'?'تم إنشاء خطة النطاق والنشر. لم يتم شراء النطاق أو تغيير DNS.':'Deployment runbook created. No domain purchase or DNS change was made.');
+  }
+  function downloadDomainRunbook() {
+    if(!domainReport)return;
+    const url=URL.createObjectURL(new Blob([domainReport],{type:'text/plain;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='soularab-domain-runbook.txt';link.click();URL.revokeObjectURL(url);
+  }
+
   function inspectDevice() {
     setDeviceInfo({
       browser: navigator.userAgent, language: navigator.language, platform: navigator.platform || (language === 'ar' ? 'غير متاح' : 'Unavailable'),
@@ -669,6 +720,31 @@ export default function App() {
 
 
 
+
+      {active === 'agents' && <section className="content">
+        <div className="section-heading"><div><h2>{language==='ar'?'استوديو الوكلاء والأتمتة':'Agents & automation studio'}</h2><p className="muted">{language==='ar'?'خطط مهام متعددة الخطوات وأرسلها للموافقة قبل أي تنفيذ.':'Plan multi-step tasks and request approval before any execution.'}</p></div><span className="pill">{language==='ar'?'مراجعة إلزامية':'Approval required'}</span></div>
+        <div className="two-col">
+          <div className="panel-card"><h3>{language==='ar'?'إنشاء خطة وكيل':'Create an agent plan'}</h3><form className="proposal-form" onSubmit={submitAgentPlan}>
+            <label>{language==='ar'?'عنوان المهمة':'Task title'}<input value={agentDraft.title} onChange={e=>setAgentDraft({...agentDraft,title:e.target.value})} maxLength="120" minLength="3" required placeholder={language==='ar'?'مثال: تجهيز ونشر موقع الشركة':'Example: Prepare and publish company website'}/></label>
+            <label>{language==='ar'?'خطوات التنفيذ (كل خطوة في سطر)':'Execution steps (one per line)'}<textarea rows="8" value={agentDraft.steps} onChange={e=>setAgentDraft({...agentDraft,steps:e.target.value})} maxLength="1800" required placeholder={language==='ar'?'1. مراجعة الملفات\\n2. بناء نسخة الإنتاج\\n3. فحص الروابط':'1. Review project files\\n2. Build production version\\n3. Check links'}/></label>
+            <label>{language==='ar'?'مستوى المخاطر':'Risk level'}<select value={agentDraft.risk} onChange={e=>setAgentDraft({...agentDraft,risk:e.target.value})}><option value="low">{language==='ar'?'منخفض':'Low'}</option><option value="medium">{language==='ar'?'متوسط':'Medium'}</option><option value="high">{language==='ar'?'مرتفع':'High'}</option></select></label>
+            <button className="button primary" disabled={agentSubmitting||!agentDraft.title.trim()||!agentDraft.steps.trim()}>{agentSubmitting?(language==='ar'?'جارٍ الإرسال…':'Submitting…'):(language==='ar'?'إرسال إلى الموافقات':'Submit for approval')}</button>
+          </form></div>
+          <div className="panel-card"><h3>{language==='ar'?'ضوابط التنفيذ':'Execution safeguards'}</h3><div className="roadmap-row"><span>{language==='ar'?'حفظ الخطة':'Plan storage'}</span><b className="good">{language==='ar'?'الخزنة المحلية':'Local vault'}</b></div><div className="roadmap-row"><span>{language==='ar'?'مراجعة بشرية':'Human review'}</span><b className="good">{language==='ar'?'مطلوبة':'Required'}</b></div><div className="roadmap-row"><span>{language==='ar'?'التنفيذ التلقائي':'Automatic execution'}</span><b>{language==='ar'?'معطل':'Disabled'}</b></div><p className="chat-footnote">{language==='ar'?'إرسال الخطة ينشئ طلب موافقة وسجلاً تدقيقياً فقط. حتى الموافقة لا تشغّل الأوامر؛ يلزم محرك تنفيذ منفصل ومراجعة أمان.':'Submitting creates an approval request and audit entry only. Even approval does not run commands; a separate execution engine and safety review are required.'}</p><button className="button secondary" onClick={()=>setActive('security')}>{language==='ar'?'فتح قائمة الموافقات':'Open approvals'}</button></div>
+        </div>
+      </section>}
+      {active === 'domains' && <section className="content">
+        <div className="section-heading"><div><h2>{language==='ar'?'النطاقات والاستضافة':'Domains & hosting'}</h2><p className="muted">{language==='ar'?'تحقق من اسم النطاق وجهّز ملف خطوات النشر لمزودك.':'Validate a domain name and prepare a deployment runbook for your provider.'}</p></div></div>
+        <div className="two-col">
+          <div className="panel-card"><h3>{language==='ar'?'إعداد النشر':'Deployment setup'}</h3><form className="proposal-form" onSubmit={createDomainRunbook}>
+            <label>{language==='ar'?'اسم النطاق':'Domain name'}<input value={domainDraft.domain} onChange={e=>setDomainDraft({...domainDraft,domain:e.target.value})} placeholder="example.com" required/></label>
+            <label>{language==='ar'?'مزود الاستضافة':'Hosting provider'}<select value={domainDraft.provider} onChange={e=>setDomainDraft({...domainDraft,provider:e.target.value})}><option>Cloudflare Pages</option><option>GitHub Pages</option><option>Vercel</option><option>Netlify</option><option>Self-hosted Docker</option></select></label>
+            <label>{language==='ar'?'اسم المشروع':'Project name'}<input value={domainDraft.project} onChange={e=>setDomainDraft({...domainDraft,project:e.target.value})} maxLength="80"/></label>
+            <button className="button primary">{language==='ar'?'إنشاء خطة النشر':'Generate deployment runbook'}</button>
+          </form></div>
+          <div className="panel-card"><div className="section-heading"><h3>{language==='ar'?'خطة النشر':'Deployment runbook'}</h3><button className="button secondary" onClick={downloadDomainRunbook} disabled={!domainReport}>{language==='ar'?'تنزيل TXT':'Download TXT'}</button></div>{domainReport?<textarea rows="17" readOnly value={domainReport}/>:<Empty text={language==='ar'?'أدخل النطاق لإنشاء قائمة تحقق للنشر.':'Enter a domain to generate a deployment checklist.'}/>}<p className="chat-footnote">{language==='ar'?'هذه الأداة لا تشتري النطاقات ولا تغيّر سجلات DNS أو تنشر المشروع تلقائياً. يلزم حساب مزود وبيانات اعتماد مخزنة بأمان.':'This tool does not purchase domains, change DNS records, or deploy automatically. Provider accounts and securely stored credentials are required.'}</p></div>
+        </div>
+      </section>}
       {active === 'design' && <section className="content">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'استوديو التصميم والهوية' : 'Design & identity studio'}</h2><p className="muted">{language === 'ar' ? 'أنشئ لوحة هوية قابلة للتصدير مع الحفاظ على الشعار الرسمي المعتمد.' : 'Create an exportable identity concept while preserving the approved official logo.'}</p></div><span className="pill">{language === 'ar' ? 'مسودة تصميم' : 'Design draft'}</span></div>
         <div className="two-col">
@@ -737,7 +813,7 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {!['overview','security','files','assistant','media','web','design','apps','work','hub','root','settings','vault'].includes(active) && <section className="content">
+      {!['overview','security','files','assistant','media','web','design','apps','agents','domains','work','hub','root','settings','vault'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
