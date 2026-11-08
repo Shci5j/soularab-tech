@@ -9,6 +9,7 @@ import stat
 import zipfile
 import io
 import secrets
+import shutil
 import sqlite3
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field, field_validator
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("SOULARAB_DATA_DIR", ROOT / "data")).expanduser()
 DB_PATH = DATA_DIR / "soularab.sqlite3"
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -595,6 +596,109 @@ def create_project(payload: ProjectCreate, _: None = Depends(require_access)):
     workspace.mkdir(parents=True, exist_ok=True)
     audit("project.created", f"تم إنشاء مساحة المشروع #{project_id}: {payload.title.strip()}")
     return {"id": project_id, "title": payload.title.strip(), "status": "active", "workspace_ready": True}
+
+
+MAX_PROJECT_ARCHIVE_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_PROJECT_ARCHIVE_UNPACKED_BYTES = 50 * 1024 * 1024
+
+
+@app.post("/api/projects/import", status_code=201)
+async def import_project_archive(file: UploadFile = File(...), _: None = Depends(require_access)):
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=415, detail="يجب اختيار ملف ZIP صالح.")
+    raw = await file.read(MAX_PROJECT_ARCHIVE_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_PROJECT_ARCHIVE_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="حجم ملف الأرشيف يتجاوز 50 MB.")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail="ملف ZIP تالف أو غير صالح.") from exc
+
+    with archive:
+        infos = archive.infolist()
+        if len(infos) > MAX_PROJECT_ARCHIVE_FILES + 1:
+            raise HTTPException(status_code=413, detail="الأرشيف يحتوي على أكثر من 200 ملف.")
+        names = [item.filename for item in infos]
+        if len(names) != len(set(names)) or "project.json" not in names:
+            raise HTTPException(status_code=400, detail="الأرشيف يفتقد بيانات المشروع أو يحتوي على أسماء مكررة.")
+
+        metadata_info = next(item for item in infos if item.filename == "project.json")
+        metadata_mode = metadata_info.external_attr >> 16
+        metadata_type = stat.S_IFMT(metadata_mode)
+        if metadata_info.is_dir() or stat.S_ISLNK(metadata_mode) or metadata_type not in {0, stat.S_IFREG}:
+            raise HTTPException(status_code=400, detail="بيانات المشروع داخل الأرشيف ليست ملفاً عادياً.")
+        if metadata_info.file_size > 64 * 1024 or metadata_info.flag_bits & 0x1:
+            raise HTTPException(status_code=400, detail="بيانات المشروع داخل الأرشيف غير صالحة.")
+        try:
+            metadata = json.loads(archive.read(metadata_info).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
+            raise HTTPException(status_code=400, detail="تعذر قراءة بيانات المشروع داخل الأرشيف.") from exc
+        if not isinstance(metadata, dict):
+            raise HTTPException(status_code=400, detail="بيانات المشروع داخل الأرشيف غير صالحة.")
+        title = str(metadata.get("title") or "Imported project").strip()[:88]
+        if len(title) < 2:
+            title = "Imported project"
+        title = title + " (restored)"
+
+        files_to_restore = []
+        unpacked_total = 0
+        for info in infos:
+            if info.filename == "project.json":
+                continue
+            mode = info.external_attr >> 16
+            file_type = stat.S_IFMT(mode)
+            if info.is_dir() or stat.S_ISLNK(mode) or file_type not in {0, stat.S_IFREG} or info.flag_bits & 0x1:
+                raise HTTPException(status_code=400, detail="الأرشيف يحتوي على مجلدات أو روابط أو ملفات غير عادية أو مشفرة غير مسموح بها.")
+            if "/" in info.filename or "\\" in info.filename:
+                raise HTTPException(status_code=400, detail="مسارات الملفات داخل الأرشيف غير مسموح بها.")
+            try:
+                filename = safe_filename(info.filename)
+            except HTTPException as exc:
+                raise HTTPException(status_code=400, detail="الأرشيف يحتوي على اسم ملف غير مسموح.") from exc
+            if filename != info.filename:
+                raise HTTPException(status_code=400, detail="الأرشيف يحتوي على اسم ملف غير صالح.")
+            unpacked_total += info.file_size
+            if unpacked_total > MAX_PROJECT_ARCHIVE_UNPACKED_BYTES:
+                raise HTTPException(status_code=413, detail="الحجم بعد فك الأرشيف يتجاوز 50 MB.")
+            files_to_restore.append((info, filename))
+
+        workspaces_dir = DATA_DIR / "workspaces"
+        if workspaces_dir.is_symlink():
+            raise HTTPException(status_code=409, detail="مجلد مساحات المشاريع يشير إلى مسار غير آمن.")
+        workspaces_dir.mkdir(parents=True, exist_ok=True)
+        workspace_base = workspaces_dir.resolve()
+        if workspace_base.parent != DATA_DIR.resolve():
+            raise HTTPException(status_code=409, detail="مجلد مساحات المشاريع خارج مسار التخزين المسموح.")
+
+        timestamp = now()
+        with database() as db:
+            cursor = db.execute(
+                "INSERT INTO projects(title, description, status, created_at, updated_at) VALUES(?,?, 'active', ?, ?)",
+                (title, str(metadata.get("description") or "")[:1000], timestamp, timestamp),
+            )
+            project_id = cursor.lastrowid
+        workspace = workspace_base / str(project_id)
+        workspace_created = False
+        try:
+            workspace.mkdir(parents=False, exist_ok=False)
+            workspace_created = True
+            for info, filename in files_to_restore:
+                content = archive.read(info)
+                if len(content) != info.file_size:
+                    raise ValueError("Archive entry size mismatch.")
+                with (workspace / filename).open("xb") as output:
+                    output.write(content)
+        except Exception as exc:
+            if workspace_created:
+                shutil.rmtree(workspace, ignore_errors=True)
+            with database() as db:
+                db.execute("DELETE FROM projects WHERE id=?", (project_id,))
+            if isinstance(exc, HTTPException):
+                raise
+            raise HTTPException(status_code=400, detail="تعذر استعادة ملفات المشروع؛ لم يتم الاحتفاظ بمشروع جزئي.") from exc
+
+    audit("project.imported", f"تم استيراد أرشيف مشروع جديد #{project_id} مع {len(files_to_restore)} ملف.")
+    return {"id": project_id, "title": title, "status": "active", "restored_files": len(files_to_restore)}
 
 
 @app.post("/api/projects/{project_id}/archive")

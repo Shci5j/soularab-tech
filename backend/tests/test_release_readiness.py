@@ -161,5 +161,84 @@ class ReleaseReadinessSecurityTests(unittest.TestCase):
                     self.assertEqual(allowed.status_code, 200)
 
 
+    def test_project_archive_import_restores_safe_files_into_a_new_workspace(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr(
+                    "project.json",
+                    '{"title":"Original project","description":"Restore me","status":"active"}',
+                )
+                archive.writestr("readme.md", "# Restored safely")
+                archive.writestr("notes.txt", "second file")
+            with self.client_with_settings(data_dir):
+                with TestClient(main.app) as client:
+                    response = client.post(
+                        "/api/projects/import",
+                        files={"file": ("project.zip", archive_buffer.getvalue(), "application/zip")},
+                    )
+                    self.assertEqual(response.status_code, 201)
+                    result = response.json()
+                    self.assertEqual(result["restored_files"], 2)
+                    self.assertEqual(result["status"], "active")
+                    workspace = data_dir / "workspaces" / str(result["id"])
+                    self.assertEqual((workspace / "readme.md").read_text(encoding="utf-8"), "# Restored safely")
+                    self.assertEqual((workspace / "notes.txt").read_text(encoding="utf-8"), "second file")
+                    self.assertFalse((workspace / "project.json").exists())
+
+    def test_project_archive_import_rejects_path_traversal_without_creating_project(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("project.json", '{"title":"Malicious project"}')
+                archive.writestr("../outside.txt", "must not escape")
+            with self.client_with_settings(data_dir):
+                with TestClient(main.app) as client:
+                    response = client.post(
+                        "/api/projects/import",
+                        files={"file": ("malicious.zip", archive_buffer.getvalue(), "application/zip")},
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    self.assertFalse((data_dir / "outside.txt").exists())
+                    self.assertEqual(client.get("/api/projects").json()["items"], [])
+
+    def test_project_archive_import_rejects_symlink_entries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w") as archive:
+                archive.writestr("project.json", '{"title":"Symlink project"}')
+                link = zipfile.ZipInfo("escape.txt")
+                link.create_system = 3
+                link.external_attr = (0o120777 << 16)
+                archive.writestr(link, "../outside.txt")
+            with self.client_with_settings(data_dir):
+                with TestClient(main.app) as client:
+                    response = client.post(
+                        "/api/projects/import",
+                        files={"file": ("symlink.zip", archive_buffer.getvalue(), "application/zip")},
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(client.get("/api/projects").json()["items"], [])
+
+    def test_project_archive_import_requires_production_authentication(self):
+        with tempfile.TemporaryDirectory() as temp:
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w") as archive:
+                archive.writestr("project.json", '{"title":"Protected restore"}')
+            with self.client_with_settings(Path(temp), token="release-secret", environment="production"):
+                with TestClient(main.app) as client:
+                    payload = {"file": ("project.zip", archive_buffer.getvalue(), "application/zip")}
+                    self.assertEqual(client.post("/api/projects/import", files=payload).status_code, 401)
+                    allowed = client.post(
+                        "/api/projects/import",
+                        files=payload,
+                        headers={"Authorization": "Bearer release-secret"},
+                    )
+                    self.assertEqual(allowed.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()

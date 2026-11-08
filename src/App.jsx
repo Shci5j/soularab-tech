@@ -467,6 +467,36 @@ export default function App() {
     } catch (error) { setNotice(error.message); }
   }
 
+  async function importProjectArchive(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.zip') || file.size > 50 * 1024 * 1024) {
+      setNotice(language === 'ar' ? 'اختر ملف ZIP لا يتجاوز 50 MB.' : 'Choose a ZIP file no larger than 50 MB.');
+      return;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    setBusy(true);
+    try {
+      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/import', {
+        method: 'POST',
+        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+        body: form,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذرت استعادة المشروع.' : 'Could not restore the project.'));
+      setNotice(language === 'ar'
+        ? 'تمت استعادة المشروع: ' + result.title + ' (' + result.restored_files + ' ملف).'
+        : 'Project restored: ' + result.title + ' (' + result.restored_files + ' files).');
+      await loadProjects();
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function exportProject(project) {
     try {
       const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + project.id + '/export', {
@@ -960,6 +990,7 @@ export default function App() {
               <label>{language === 'ar' ? 'اسم المشروع' : 'Project name'}<input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required minLength="2" maxLength="100" placeholder={language === 'ar' ? 'مثال: متجر إلكتروني' : 'Example: Online store'}/></label>
               <label>{language === 'ar' ? 'وصف المشروع' : 'Project description'}<textarea rows="3" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} maxLength="1000" placeholder={language === 'ar' ? 'اكتب وصفاً مختصراً (اختياري)' : 'Short description (optional)'}/></label>
               <button className="button primary" disabled={busy || !projectForm.title.trim()}>{busy ? (language === 'ar' ? 'جارٍ الإنشاء…' : 'Creating…') : (language === 'ar' ? 'إنشاء المشروع +' : 'Create project +')}</button>
+              <label className="upload-control">{language === 'ar' ? 'استعادة مشروع من أرشيف ZIP' : 'Restore project from ZIP archive'}<input type="file" accept=".zip,application/zip" onChange={importProjectArchive} disabled={busy} /></label>
             </form>
           </div>
           <div className="panel-card project-list-panel">
