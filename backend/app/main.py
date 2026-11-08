@@ -306,6 +306,17 @@ async def image_engine_status(_: None = Depends(require_access)):
         raise
 
 
+
+@app.get("/api/media/image/models")
+async def image_engine_models(_: None = Depends(require_access)):
+    info = await media_get(COMFYUI_BASE_URL, "/object_info/CheckpointLoaderSimple")
+    node = info.get("CheckpointLoaderSimple", {}) if isinstance(info, dict) else {}
+    required = node.get("input", {}).get("required", {}) if isinstance(node, dict) else {}
+    options = required.get("ckpt_name", [[]])
+    models = options[0] if options and isinstance(options[0], list) else []
+    return {"provider": "comfyui", "models": [name for name in models if isinstance(name, str)]}
+
+
 @app.post("/api/media/image/queue")
 async def queue_image_workflow(payload: ImageWorkflowRequest, _: None = Depends(require_access)):
     if len(payload.workflow) > 250:
