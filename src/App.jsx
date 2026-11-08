@@ -473,7 +473,7 @@ export default function App() {
   }
   function downloadBrandGuide() {
     if (!brandReady) return;
-    const guide=[brandDraft.name,brandDraft.tagline,'','CONCEPT ONLY — OFFICIAL LOGO UNCHANGED','Primary: '+brandDraft.primary,'Secondary: '+brandDraft.secondary,'Accent: '+brandDraft.accent,'Monogram: '+brandDraft.initials].join('\\n');
+    const guide=[brandDraft.name,brandDraft.tagline,'','CONCEPT ONLY — OFFICIAL LOGO UNCHANGED','Primary: '+brandDraft.primary,'Secondary: '+brandDraft.secondary,'Accent: '+brandDraft.accent,'Monogram: '+brandDraft.initials].join('\n');
     const url=URL.createObjectURL(new Blob([guide],{type:'text/plain;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-brand-guide.txt'; link.click(); URL.revokeObjectURL(url);
   }
   function buildAppStarter(event) {
@@ -481,7 +481,7 @@ export default function App() {
     const esc=(v)=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const name=esc(appDraft.name.trim()||'My App'), desc=esc(appDraft.description);
     const color=/^#[0-9a-fA-F]{6}$/.test(appDraft.color)?appDraft.color:'#c49a43';
-    const cards=appDraft.features.split('\\n').map(v=>v.trim()).filter(Boolean).slice(0,8).map(v=>'<article><span>✦</span><h2>'+esc(v)+'</h2><p>Organize, review, and manage this area in one place.</p></article>').join('');
+    const cards=appDraft.features.split('\n').map(v=>v.trim()).filter(Boolean).slice(0,8).map(v=>'<article><span>✦</span><h2>'+esc(v)+'</h2><p>Organize, review, and manage this area in one place.</p></article>').join('');
     const html=`<!doctype html><html lang="und" dir="auto"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>*{box-sizing:border-box}body{margin:0;background:#111;color:#f5f1e9;font:16px system-ui}header{padding:24px 7%;display:flex;justify-content:space-between;border-bottom:1px solid #ffffff20}header b{color:${color};letter-spacing:.15em}main{max-width:1100px;margin:auto;padding:72px 7%}h1{font-size:clamp(36px,7vw,68px);margin:0 0 16px}main>p{color:#aaa;line-height:1.8;max-width:650px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:48px}article{padding:26px;border:1px solid #ffffff20;border-radius:18px;background:#1a1a1e}article span{color:${color}}article p{color:#aaa;line-height:1.6}footer{padding:30px 7%;color:#777;border-top:1px solid #ffffff20}@media(max-width:600px){main{padding-top:44px}}</style><header><b>SOULARAB APP STUDIO</b><span>WORKSPACE</span></header><main><h1>${name}</h1><p>${desc}</p><section class="grid">${cards}</section></main><footer>Starter interface · Extend with your own data and backend</footer></html>`;
     setAppHtml(html);
   }
@@ -493,13 +493,13 @@ export default function App() {
 
   async function submitAgentPlan(event) {
     event.preventDefault();
-    const steps=agentDraft.steps.split('\\n').map(v=>v.trim()).filter(Boolean);
+    const steps=agentDraft.steps.split('\n').map(v=>v.trim()).filter(Boolean);
     if(agentDraft.title.trim().length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً وثيقة وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
-    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\\n');
+    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\n');
     setAgentSubmitting(true);
     try {
       const result=await request('/api/approvals',{method:'POST',body:JSON.stringify({title:agentDraft.title.trim(),description,risk:agentDraft.risk})});
-      setVaultItems(items=>[{id:Date.now(),title:agentDraft.title.trim(),content:description+'\\n\\nApproval ID: '+result.id,category:'task',createdAt:new Date().toISOString()},...items]);
+      setVaultItems(items=>[{id:Date.now(),title:agentDraft.title.trim(),content:description+'\n\nApproval ID: '+result.id,category:'task',createdAt:new Date().toISOString()},...items]);
       setAgentDraft({title:'',steps:'',risk:'medium'});
       await refresh();
       setNotice(language==='ar'?'تم إرسال خطة الوكيل إلى قائمة الموافقات. لم يبدأ أي تنفيذ.':'Agent plan submitted for approval. No execution has started.');
@@ -509,7 +509,7 @@ export default function App() {
   function createDomainRunbook(event) {
     event.preventDefault();
     const domain=domainDraft.domain.trim().toLowerCase();
-    const valid=/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/.test(domain);
+    const valid=/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain);
     if(!valid){setNotice(language==='ar'?'اسم النطاق غير صالح.':'Invalid domain name.');setDomainReport('');return;}
     const lines=[
       'SOULARAB TECH — DOMAIN & DEPLOYMENT RUNBOOK',
@@ -528,7 +528,7 @@ export default function App() {
       '8. Run a production build and test mobile navigation.',
       '',
       'SECURITY: Never put provider API tokens in this file or the frontend.'
-    ].join('\\n');
+    ].join('\n');
     setDomainReport(lines);
     setNotice(language==='ar'?'تم إنشاء خطة النطاق والنشر. لم يتم شراء النطاق أو تغيير DNS.':'Deployment runbook created. No domain purchase or DNS change was made.');
   }
@@ -726,7 +726,7 @@ export default function App() {
         <div className="two-col">
           <div className="panel-card"><h3>{language==='ar'?'إنشاء خطة وكيل':'Create an agent plan'}</h3><form className="proposal-form" onSubmit={submitAgentPlan}>
             <label>{language==='ar'?'عنوان المهمة':'Task title'}<input value={agentDraft.title} onChange={e=>setAgentDraft({...agentDraft,title:e.target.value})} maxLength="120" minLength="3" required placeholder={language==='ar'?'مثال: تجهيز ونشر موقع الشركة':'Example: Prepare and publish company website'}/></label>
-            <label>{language==='ar'?'خطوات التنفيذ (كل خطوة في سطر)':'Execution steps (one per line)'}<textarea rows="8" value={agentDraft.steps} onChange={e=>setAgentDraft({...agentDraft,steps:e.target.value})} maxLength="1800" required placeholder={language==='ar'?'1. مراجعة الملفات\\n2. بناء نسخة الإنتاج\\n3. فحص الروابط':'1. Review project files\\n2. Build production version\\n3. Check links'}/></label>
+            <label>{language==='ar'?'خطوات التنفيذ (كل خطوة في سطر)':'Execution steps (one per line)'}<textarea rows="8" value={agentDraft.steps} onChange={e=>setAgentDraft({...agentDraft,steps:e.target.value})} maxLength="1800" required placeholder={language==='ar'?'1. مراجعة الملفات\n2. بناء نسخة الإنتاج\n3. فحص الروابط':'1. Review project files\n2. Build production version\n3. Check links'}/></label>
             <label>{language==='ar'?'مستوى المخاطر':'Risk level'}<select value={agentDraft.risk} onChange={e=>setAgentDraft({...agentDraft,risk:e.target.value})}><option value="low">{language==='ar'?'منخفض':'Low'}</option><option value="medium">{language==='ar'?'متوسط':'Medium'}</option><option value="high">{language==='ar'?'مرتفع':'High'}</option></select></label>
             <button className="button primary" disabled={agentSubmitting||!agentDraft.title.trim()||!agentDraft.steps.trim()}>{agentSubmitting?(language==='ar'?'جارٍ الإرسال…':'Submitting…'):(language==='ar'?'إرسال إلى الموافقات':'Submit for approval')}</button>
           </form></div>
