@@ -120,3 +120,9 @@
 .vault-item-head strong{font-size:13px}.vault-item>p{font-size:11px;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text)}
 .vault-item-foot small{font-size:9px;color:var(--muted)}
 @media(max-width:800px){.vault-layout{grid-template-columns:1fr}}
+
+.module-workspace-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:15px;align-items:start}
+.module-action-list{display:grid;gap:6px;margin:14px 0}
+.module-action{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--text);text-align:right}
+.module-action>span{font-size:19px;color:var(--gold)}.module-action>div{flex:1;display:grid;gap:4px}.module-action strong{font-size:11px}.module-action small{font-size:9px;color:var(--muted)}.module-action b{font-size:10px;color:var(--gold)}
+@media(max-width:750px){.module-workspace-grid{grid-template-columns:1fr}}
