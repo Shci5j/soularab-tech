@@ -178,3 +178,11 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .engine-status-card{width:100%;text-align:start;color:inherit;font:inherit;cursor:pointer;transition:border-color .18s ease,transform .18s ease}
 .engine-status-card:hover{border-color:var(--accent,#c49a43);transform:translateY(-1px)}
 .engine-open-link{color:var(--accent,#c49a43)!important}
+
+.brand-ai-brief{margin-top:16px}
+.brand-brief-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.brand-brief-grid article{padding:14px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:12px;min-width:0}
+.brand-brief-grid article strong{color:var(--accent,#c49a43)}
+.brand-brief-grid article p,.brand-brief-grid article li{color:var(--muted,#aaa);line-height:1.7;overflow-wrap:anywhere}
+.brand-brief-grid article ul{padding-inline-start:20px;margin-bottom:0}
+@media(max-width:680px){.brand-brief-grid{grid-template-columns:1fr}}
