@@ -44,6 +44,13 @@ export default function App() {
   const [approvals, setApprovals] = useState([]);
   const [events, setEvents] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
+  const [preferences, setPreferences] = useState(() => {
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false }; }
+  });
+  function updatePreference(key, value) {
+    setPreferences((current) => ({ ...current, [key]: value }));
+  }
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState({ title: '', description: '', risk: 'medium' });
@@ -68,6 +75,15 @@ export default function App() {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     localStorage.setItem('st-language', language);
   }, [language]);
+
+  useEffect(() => {
+    const fonts = { ibm: "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif", system: "system-ui, sans-serif", tahoma: "Tahoma, Arial, sans-serif", georgia: "Georgia, serif" };
+    document.documentElement.style.fontFamily = fonts[preferences.font] || fonts.ibm;
+    document.documentElement.style.fontSize = preferences.fontScale + '%';
+    document.documentElement.dataset.density = preferences.density;
+    document.documentElement.dataset.reducedMotion = String(preferences.reducedMotion);
+    localStorage.setItem('st-preferences', JSON.stringify(preferences));
+  }, [preferences]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -316,7 +332,29 @@ export default function App() {
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>الشروع بالعمل</h3><p>كل أدوات التنفيذ ضمن مساحة واحدة</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div></section>}
       {active === 'hub' && <section className="content"><div className="panel-card destination-page"><h2>سولاراب هوب</h2><p>المساحة المخصصة لإدارة المستودعات والأكواد ومتابعة الإصدارات.</p><p className="muted">سيتم ربط أدوات إدارة المستودعات والإصدارات ضمن هذا القسم.</p></div></section>}
       {active === 'root' && <section className="content"><div className="panel-card destination-page"><h2>الجذر</h2><p>مركز التعرف على الأجهزة وتشخيصها ومتابعة صيانتها.</p><p className="muted">ستظهر هنا أدوات فحص الأجهزة وإدارة الصيانة عند ربطها.</p></div></section>}
-      {active === 'settings' && <section className="content"><div className="panel-card settings-page"><h2>الإعدادات العامة</h2><p className="muted">التحكم بإعدادات الواجهة والاتصال الأساسي.</p><div className="settings-row"><div><strong>مظهر التطبيق</strong><small>التبديل بين المظهر الداكن والفاتح</small></div><button className="button secondary" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'داكن' : 'فاتح'} · تبديل</button></div><div className="settings-row"><div><strong>حالة الخادم</strong><small>{api.state === 'online' ? 'الخادم متصل' : 'بانتظار تشغيل الخلفية'}</small></div><button className="button secondary" onClick={refresh}>فحص الاتصال ↻</button></div></div></section>}
+      {active === 'settings' && <section className="content">
+        <div className="panel-card settings-page">
+          <div className="section-heading"><div><h2>الإعدادات العامة</h2><p className="muted">تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false }); setLanguage('ar'); setTheme('dark'); }}>استعادة الافتراضيات</button></div>
+          <div className="settings-group"><h3>اللغة والمنطقة</h3>
+            <div className="settings-row"><div><strong>لغة التطبيق</strong><small>تغيير اللغة واتجاه الواجهة</small></div><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية · RTL</option><option value="en">English · LTR</option></select></div>
+            <div className="settings-row"><div><strong>التاريخ</strong><small>التاريخ المعروض في الصفحة الرئيسية حسب وقت جهازك</small></div><span className="settings-value">{todayLabel}</span></div>
+          </div>
+          <div className="settings-group"><h3>المظهر والتخصيص</h3>
+            <div className="settings-row"><div><strong>سمة الألوان</strong><small>اختيار المظهر الداكن أو الفاتح</small></div><button className="button secondary" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'داكن · تبديل إلى الفاتح' : 'فاتح · تبديل إلى الداكن'}</button></div>
+            <div className="settings-row"><div><strong>نوع الخط</strong><small>تغيير عائلة الخط في التطبيق</small></div><select value={preferences.font} onChange={(e) => updatePreference('font', e.target.value)}><option value="ibm">IBM Plex Arabic</option><option value="system">خط النظام</option><option value="tahoma">Tahoma</option><option value="georgia">Georgia</option></select></div>
+            <div className="settings-row"><div><strong>حجم الخط</strong><small>تكبير أو تصغير النصوص: {preferences.fontScale}%</small></div><input aria-label="حجم الخط" type="range" min="85" max="125" step="5" value={preferences.fontScale} onChange={(e) => updatePreference('fontScale', Number(e.target.value))}/></div>
+            <div className="settings-row"><div><strong>كثافة الواجهة</strong><small>المسافات بين البطاقات والعناصر</small></div><select value={preferences.density} onChange={(e) => updatePreference('density', e.target.value)}><option value="comfortable">مريحة</option><option value="compact">مضغوطة</option></select></div>
+          </div>
+          <div className="settings-group"><h3>إمكانية الوصول</h3>
+            <div className="settings-row"><div><strong>تقليل الحركة</strong><small>إيقاف الانتقالات والحركات الزخرفية</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
+          </div>
+          <div className="settings-group"><h3>الاتصال والخدمات</h3>
+            <div className="settings-row"><div><strong>حالة الخادم</strong><small>{api.state === 'online' ? 'الخادم متصل' : 'بانتظار تشغيل الخلفية'}</small></div><button className="button secondary" onClick={refresh}>فحص الاتصال ↻</button></div>
+            <div className="settings-row"><div><strong>حالة المساعد</strong><small>{assistantStatus.connected ? 'متصل بالنموذج المحلي' : 'غير متصل حالياً'}</small></div><button className="button secondary" onClick={loadAssistant}>فحص المساعد</button></div>
+          </div>
+          <p className="chat-footnote">تُحفظ تفضيلات الواجهة على هذا الجهاز فقط. لا تغيّر إعدادات الخادم أو تمنح أي موصل صلاحيات جديدة.</p>
+        </div>
+      </section>}
       {active === 'vault' && <section className="content"><div className="panel-card destination-page"><h2>الخزنة</h2><p>مكان مخصص لحفظ الأعمال القائمة والمؤجلة، والأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة.</p><p className="muted">واجهة الخزنة قيد التجهيز؛ لن تُعرض بيانات غير محفوظة أو غير متاحة على الخادم.</p></div></section>}
       {active === 'files' && <section className="content">
         <div className="project-layout">
