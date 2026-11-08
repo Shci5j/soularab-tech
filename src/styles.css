@@ -158,3 +158,8 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .task-history-row span{font-weight:600;overflow-wrap:anywhere}
 .task-history-row small{color:var(--muted,#999);white-space:pre-wrap;overflow-wrap:anywhere}
 .task-history-row time{font-size:11px;color:var(--muted,#999)}
+
+
+.approval-filter-tools,.approval-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.approval-filter{max-width:180px;min-width:125px}
+.approval-decision-note{display:block;margin-top:10px;color:var(--muted,#999);white-space:pre-wrap;overflow-wrap:anywhere}
