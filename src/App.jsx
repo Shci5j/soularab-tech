@@ -17,7 +17,25 @@ const modules = [
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function App() {
-  const [active, setActive] = useState('overview');
+  const [active, setActiveState] = useState('overview');
+  function setActive(next) {
+    if (next === active) return;
+    window.history.pushState({ soularabPage: next }, '', window.location.pathname + window.location.search);
+    setActiveState(next);
+  }
+  useEffect(() => {
+    window.history.replaceState({ soularabPage: 'overview' }, '', window.location.pathname + window.location.search);
+    const handleBack = (event) => {
+      const page = event.state?.soularabPage;
+      if (page) setActiveState(page);
+      else {
+        setActiveState('overview');
+        window.history.pushState({ soularabPage: 'overview' }, '', window.location.pathname + window.location.search);
+      }
+    };
+    window.addEventListener('popstate', handleBack);
+    return () => window.removeEventListener('popstate', handleBack);
+  }, []);
   const [api, setApi] = useState({ state: 'checking', version: '—' });
   const [approvals, setApprovals] = useState([]);
   const [events, setEvents] = useState([]);
@@ -250,10 +268,15 @@ export default function App() {
 
   return <div className="app-shell">
     <main className="main-area">
-      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions">{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>→ رجوع</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="إغلاق">×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
+        <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label="افتح مساعد روح">
+          <span className="rooh-emblem" aria-hidden="true"><span className="rooh-orbit orbit-a"></span><span className="rooh-orbit orbit-b"></span><span className="rooh-core">روح</span></span>
+          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>روح</strong><b>مساعدك الذكي في قلب المنصة</b><span>اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد</span><i>ابدأ المحادثة ←</i></span>
+          <span className="rooh-status"><span></span> جاهزة للمساعدة</span>
+        </button>
         <div className="primary-destinations">
           <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>الشروع بالعمل</strong><span>الدخول إلى أقسام العمل المتخصصة</span><b>ابدأ الآن ←</b></button>
           <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>سولاراب هوب</strong><span>المستودعات والأكواد والإصدارات</span><b>فتح القسم ←</b></button>
