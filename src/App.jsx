@@ -290,8 +290,11 @@ export default function App() {
 
   async function loadGithubRepository(event) {
     event?.preventDefault();
-    const target = repoInput.trim().replace(/^https?:\\/\\/(www\\.)?github\\.com\\//, '').replace(/\\.git$/, '').replace(/\\/$/, '');
-    if (!/^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(target)) { setRepoError('أدخل المستودع بصيغة owner/repository.'); return; }
+    let target = repoInput.trim();
+    if (target.includes('github.com/')) target = target.split('github.com/').pop();
+    target = target.replace(/\\.git$/, '').replace(/\\/$/, '');
+    const parts = target.split('/');
+    if (parts.length !== 2 || !parts.every((part) => /^[A-Za-z0-9_.-]+$/.test(part))) { setRepoError('أدخل المستودع بصيغة owner/repository.'); return; }
     setRepoLoading(true); setRepoError('');
     try {
       const [details, contents] = await Promise.all([fetch('https://api.github.com/repos/' + target), fetch('https://api.github.com/repos/' + target + '/contents')]);
