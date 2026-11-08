@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0 — 2026-11-09
+
+- Added authenticated project restoration from ZIP archives, creating a new active workspace without overwriting existing projects.
+- Validated archive metadata, filenames, file types, duplicate entries, and compressed/unpacked size limits; rejected traversal, symlinks, special files, and encrypted entries.
+- Added safe per-file restoration with rollback cleanup, audit logging, and regression tests for valid imports and malicious archive entries.
+- Added Arabic/English project archive import controls.
+
+
 ## 0.13.0 — 2026-11-09
 
 - Added authenticated ZIP export for active and archived project workspaces, including project metadata in `project.json`.
