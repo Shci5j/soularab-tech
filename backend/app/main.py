@@ -31,6 +31,7 @@ COMFYUI_BASE_URL = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip
 WHISPER_CPP_BASE_URL = os.getenv("WHISPER_CPP_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 MEDIA_TIMEOUT = float(os.getenv("SOULARAB_MEDIA_TIMEOUT_SECONDS", "180"))
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac", ".mp4", ".mpeg", ".mpga"}
 ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if v.strip()]
 
@@ -384,6 +385,8 @@ async def view_generated_image(
         raise HTTPException(status_code=504, detail="انتهت مهلة تحميل الصورة.") from exc
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=404 if exc.response.status_code == 404 else 502, detail="تعذر جلب الصورة من ComfyUI.") from exc
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="حجم الصورة الناتجة يتجاوز 20 ميغابايت.")
     if content_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
         raise HTTPException(status_code=415, detail="أعاد محرك الصور نوع محتوى غير مدعوم.")
     return Response(content=content, media_type=content_type, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
