@@ -88,6 +88,15 @@ def init_db() -> None:
             details TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            department TEXT NOT NULL CHECK(department IN ('work','hub','jathr','files','system')),
+            status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','planning','waiting_approval','running','completed','failed','cancelled')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """)
 
 
@@ -143,6 +152,12 @@ class ApprovalCreate(BaseModel):
 class ApprovalDecision(BaseModel):
     decision: Literal["approved", "rejected"]
     note: str = Field(default="", max_length=1000)
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=140)
+    description: str = Field(default="", max_length=4000)
+    department: Literal["work", "hub", "jathr", "files", "system"]
 
 
 def validate_local_provider_url(value: str) -> str:
@@ -581,6 +596,47 @@ def decide_approval(approval_id: int, payload: ApprovalDecision, _: None = Depen
         )
     audit(f"approval.{payload.decision}", f"طلب #{approval_id}. لم يتم تنفيذ الإجراء.")
     return {"id": approval_id, "status": payload.decision, "execution": "not_started"}
+
+
+@app.get("/api/tasks")
+def list_tasks(status: Literal["queued", "planning", "waiting_approval", "running", "completed", "failed", "cancelled"] | None = None, _: None = Depends(require_access)):
+    with database() as db:
+        if status:
+            rows = db.execute("SELECT * FROM tasks WHERE status=? ORDER BY id DESC LIMIT 200", (status,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM tasks ORDER BY id DESC LIMIT 200").fetchall()
+    return {"items": [row_dict(row) for row in rows]}
+
+
+@app.post("/api/tasks", status_code=201)
+def create_task(payload: TaskCreate, _: None = Depends(require_access)):
+    title = payload.title.strip()
+    if len(title) < 3:
+        raise HTTPException(status_code=422, detail="عنوان المهمة يجب أن يحتوي على ثلاثة أحرف على الأقل.")
+    timestamp = now()
+    with database() as db:
+        cursor = db.execute(
+            "INSERT INTO tasks(title,description,department,status,created_at,updated_at) VALUES(?,?,?,'queued',?,?)",
+            (title, payload.description.strip(), payload.department, timestamp, timestamp),
+        )
+        task_id = cursor.lastrowid
+    audit("task.queued", f"مهمة #{task_id}: {title}؛ لم يبدأ التنفيذ.")
+    return {"id": task_id, "status": "queued", "execution": "not_started"}
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+def cancel_task(task_id: int, _: None = Depends(require_access)):
+    with database() as db:
+        row = db.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="المهمة غير موجودة.")
+        if row["status"] == "running":
+            raise HTTPException(status_code=409, detail="لا يمكن تأكيد إيقاف مهمة قيد التنفيذ؛ لا يدعم هذا الإصدار إيقاف عامل تنفيذ.")
+        if row["status"] in {"completed", "failed", "cancelled"}:
+            raise HTTPException(status_code=409, detail="لا يمكن إلغاء هذه المهمة في حالتها الحالية.")
+        db.execute("UPDATE tasks SET status='cancelled', updated_at=? WHERE id=?", (now(), task_id))
+    audit("task.cancelled", f"تم إلغاء المهمة #{task_id} قبل بدء التنفيذ.")
+    return {"id": task_id, "status": "cancelled", "execution": "not_started"}
 
 
 @app.get("/api/audit")

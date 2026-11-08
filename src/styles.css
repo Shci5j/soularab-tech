@@ -139,3 +139,14 @@ html[dir="ltr"] .safety-list{padding-left:19px;padding-right:0}
 html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 
 .settings-row input[type="url"]{width:min(100%,360px)}
+
+
+.queue-tools{display:flex;align-items:center;gap:8px}
+.task-queue-panel{margin-top:16px}
+.task-queue-list{display:grid;gap:0}
+.task-queue-item:last-child{border-bottom:0}
+.task-queue-item .approval-top{align-items:flex-start}
+.task-queue-item .approval-top strong{min-width:0;overflow-wrap:anywhere}
+.task-queue-item p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}
+.task-queue-item .pill{flex:none}
+@media(max-width:520px){.queue-tools{align-items:flex-end;flex-direction:column}.queue-tools .button{padding:7px 10px}.task-queue-item .approval-top{flex-direction:column}}
