@@ -60,7 +60,7 @@ npm run dev
 
 - `GET /api/tasks`: عرض آخر 200 مهمة، مع دعم التصفية عبر `?status=queued` أو إحدى الحالات المعروفة.
 - `POST /api/tasks`: إنشاء مهمة بحقول `title` و`description` و`department`. الأقسام المدعومة: `work` و`hub` و`jathr` و`files` و`system`.
-- `POST /api/tasks/{id}/cancel`: إلغاء مهمة غير منتهية.
+- `POST /api/tasks/{id}/cancel`: إلغاء مهمة لم يبدأ تنفيذها؛ تُرفض محاولة إلغاء مهمة حالتها `running` لأن هذا الإصدار لا يملك آلية إيقاف عامل تنفيذ.
 - الحالات المخزنة: `queued` و`planning` و`waiting_approval` و`running` و`completed` و`failed` و`cancelled`.
 
 إنشاء المهمة يحفظها فقط ويعيد `execution: not_started`. في واجهة الوكلاء، يُنشأ طلب الموافقة بشكل منفصل؛ لا يؤدي حفظ المهمة أو الموافقة عليها إلى تشغيل أوامر. لا يوجد عامل تنفيذ أو جدولة مهام مفعّل في هذه المرحلة.
