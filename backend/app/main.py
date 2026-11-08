@@ -140,7 +140,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -524,7 +524,7 @@ def create_project(payload: ProjectCreate, _: None = Depends(require_access)):
         project_id = cursor.lastrowid
     workspace = DATA_DIR / "workspaces" / str(project_id)
     workspace.mkdir(parents=True, exist_ok=True)
-    audit("project.created", f"تم إنشاء مساحة المشروع #${project_id}: {payload.title.strip()}")
+    audit("project.created", f"تم إنشاء مساحة المشروع #{project_id}: {payload.title.strip()}")
     return {"id": project_id, "title": payload.title.strip(), "status": "active", "workspace_ready": True}
 
 
@@ -537,7 +537,7 @@ def archive_project(project_id: int, _: None = Depends(require_access)):
         if row["status"] == "archived":
             raise HTTPException(status_code=409, detail="المشروع مؤرشف مسبقاً.")
         db.execute("UPDATE projects SET status='archived', updated_at=? WHERE id=?", (now(), project_id))
-    audit("project.archived", f"تمت أرشفة المشروع #${project_id}")
+    audit("project.archived", f"تمت أرشفة المشروع #{project_id}")
     return {"id": project_id, "status": "archived"}
 
 
@@ -609,6 +609,19 @@ def download_project_file(project_id: int, filename: str, _: None = Depends(requ
     if target.parent != root or not target.is_file() or target.is_symlink():
         raise HTTPException(status_code=404, detail="الملف غير موجود.")
     return FileResponse(target, filename=safe)
+
+
+@app.delete("/api/projects/{project_id}/files/{filename}")
+def delete_project_file(project_id: int, filename: str, _: None = Depends(require_access)):
+    root = project_workspace(project_id, require_active=True)
+    safe = safe_filename(filename)
+    target = root / safe
+    if target.parent.resolve() != root or target.is_symlink() or not target.is_file():
+        raise HTTPException(status_code=404, detail="الملف غير موجود.")
+    size = target.stat().st_size
+    target.unlink()
+    audit("project.file.deleted", f"حُذف الملف {safe} من المشروع #{project_id} ({size} bytes).")
+    return {"project_id": project_id, "name": safe, "deleted": True}
 
 
 @app.get("/api/approvals")
