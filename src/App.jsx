@@ -98,10 +98,12 @@ export default function App() {
   const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
   const [siteDraft, setSiteDraft] = useState({ title: 'SOULARAB TECH', subtitle: 'Ideas into digital reality', description: 'A clear, elegant digital experience for your next idea.', buttonText: 'Get in touch', color: '#c49a43' });
   const [siteHtml, setSiteHtml] = useState('');
+  const [siteGenerating, setSiteGenerating] = useState(false);
   const [brandDraft, setBrandDraft] = useState({ name:'SOULARAB TECH', initials:'ST', tagline:'IDEAS INTO DIGITAL REALITY', primary:'#c49a43', secondary:'#171519', accent:'#e8d9b5' });
   const [brandReady, setBrandReady] = useState(false);
   const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\nProjects\nSettings' });
   const [appHtml, setAppHtml] = useState('');
+  const [appGenerating, setAppGenerating] = useState(false);
   const [agentDraft, setAgentDraft] = useState({ title:'', steps:'', risk:'medium' });
   const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [agentGenerating, setAgentGenerating] = useState(false);
@@ -510,6 +512,40 @@ export default function App() {
     finally { setRepoLoading(false); }
   }
 
+  async function generateStudioDraft(target) {
+    const isWebsite = target === 'website';
+    const setGenerating = isWebsite ? setSiteGenerating : setAppGenerating;
+    const draft = isWebsite ? siteDraft : appDraft;
+    if (isWebsite ? siteGenerating : appGenerating) return;
+    setGenerating(true);
+    try {
+      let model = selectedModel;
+      if (!model) {
+        const available = await request('/api/assistant/models');
+        model = available.items && available.items.length ? available.items[0].name : '';
+      }
+      if (!model) throw new Error('No local model installed');
+      const prompt = isWebsite
+        ? (language === 'ar' ? 'اكتب محتوى احترافياً لصفحة هبوط عربية. أعد JSON صالحاً فقط بالمفاتيح title وsubtitle وdescription وbuttonText. اسم النشاط: ' + draft.title + '. الوصف الحالي: ' + draft.description : 'Write polished landing page copy. Return JSON only with title, subtitle, description, buttonText. Business: ' + draft.title + '. Description: ' + draft.description)
+        : (language === 'ar' ? 'اقترح بنية تطبيق عملية. أعد JSON فقط بالمفاتيح name وdescription وfeatures، واجعل features مصفوفة من 4 إلى 7 أقسام قصيرة. اسم التطبيق: ' + draft.name + '. الوصف: ' + draft.description : 'Suggest an app structure. Return JSON only with name, description, features as an array of 4 to 7 short section names. App: ' + draft.name + '. Description: ' + draft.description);
+      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: model, temperature: 0.45, messages: [{ role: 'user', content: prompt }] }) });
+      const raw = result.message && result.message.content ? result.message.content.trim() : '';
+      const parsed = JSON.parse(raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, ''));
+      if (isWebsite) {
+        if (![parsed.title, parsed.subtitle, parsed.description, parsed.buttonText].every((value) => typeof value === 'string' && value.trim())) throw new Error('Invalid website draft');
+        setSiteDraft((current) => ({ ...current, title: parsed.title.slice(0,80), subtitle: parsed.subtitle.slice(0,120), description: parsed.description.slice(0,600), buttonText: parsed.buttonText.slice(0,40) }));
+        setNotice(language === 'ar' ? 'جهّز روح محتوى الصفحة. راجعه ثم أنشئ المعاينة.' : 'Rooh drafted the page copy. Review it and generate the preview.');
+      } else {
+        if (typeof parsed.name !== 'string' || typeof parsed.description !== 'string' || !Array.isArray(parsed.features)) throw new Error('Invalid app draft');
+        const features = parsed.features.filter((value) => typeof value === 'string' && value.trim()).slice(0,8);
+        if (features.length < 3) throw new Error('Not enough app sections');
+        setAppDraft((current) => ({ ...current, name: parsed.name.slice(0,80), description: parsed.description.slice(0,500), features: features.join('\\n').slice(0,1200) }));
+        setNotice(language === 'ar' ? 'جهّز روح هيكل التطبيق. راجعه ثم أنشئ المعاينة.' : 'Rooh drafted the app structure. Review it and generate the preview.');
+      }
+    } catch (error) {
+      setNotice(language === 'ar' ? 'تعذر إنشاء المسودة. تحقق من اتصال النموذج المحلي وصيغة استجابته.' : 'Could not create the draft. Check the local model connection and response format.');
+    } finally { setGenerating(false); }
+  }
   function buildLandingPage(event) {
     event.preventDefault();
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -972,6 +1008,7 @@ export default function App() {
             <label>{language === 'ar' ? 'الأقسام (كل قسم في سطر)' : 'Sections (one per line)'}<textarea rows="6" value={appDraft.features} onChange={e=>setAppDraft({...appDraft,features:e.target.value})} maxLength="1200"/></label>
             <label>{language === 'ar' ? 'اللون الرئيسي' : 'Primary color'}<input type="color" value={appDraft.color} onChange={e=>setAppDraft({...appDraft,color:e.target.value})}/></label>
             <button className="button primary">{language === 'ar' ? 'إنشاء واجهة التطبيق' : 'Generate app interface'}</button>
+            <button type="button" className="button secondary" onClick={() => generateStudioDraft('app')} disabled={appGenerating}>{appGenerating ? (language === 'ar' ? 'روح تخطط الأقسام…' : 'Rooh is planning…') : (language === 'ar' ? 'اقتراح هيكل بواسطة روح ✦' : 'Suggest structure with Rooh ✦')}</button>
           </form></div>
           <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'المعاينة والتصدير' : 'Preview & export'}</h3><p className="muted">{language === 'ar' ? 'واجهة أولية قابلة للتطوير وربطها بقاعدة بيانات.' : 'An interface starter ready for future backend integration.'}</p></div><button className="button secondary" onClick={downloadAppStarter} disabled={!appHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>{appHtml ? <iframe title="Application preview" sandbox="" srcDoc={appHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#111'}}/> : <Empty text={language === 'ar' ? 'أدخل بيانات التطبيق ثم أنشئ المعاينة.' : 'Enter app details and generate a preview.'}/>}</div>
         </div><p className="chat-footnote">{language === 'ar' ? 'هذه واجهة ثابتة أولية؛ تسجيل الدخول وقواعد البيانات والتزامن تحتاج خادماً وربطاً إضافياً.' : 'This is a static UI starter; authentication, databases, and synchronization need additional backend integration.'}</p>
@@ -986,6 +1023,7 @@ export default function App() {
             <label>{language === 'ar' ? 'نص زر التواصل' : 'Contact button label'}<input value={siteDraft.buttonText} onChange={(e) => setSiteDraft({...siteDraft,buttonText:e.target.value})} maxLength="40"/></label>
             <label>{language === 'ar' ? 'اللون الأساسي' : 'Primary color'}<input type="color" value={siteDraft.color} onChange={(e) => setSiteDraft({...siteDraft,color:e.target.value})}/></label>
             <button className="button primary">{language === 'ar' ? 'إنشاء المعاينة' : 'Generate preview'}</button>
+            <button type="button" className="button secondary" onClick={() => generateStudioDraft('website')} disabled={siteGenerating}>{siteGenerating ? (language === 'ar' ? 'روح تكتب المحتوى…' : 'Rooh is drafting…') : (language === 'ar' ? 'كتابة المحتوى بواسطة روح ✦' : 'Draft copy with Rooh ✦')}</button>
           </form></div>
           <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'معاينة مباشرة' : 'Live preview'}</h3><p className="muted">{language === 'ar' ? 'صفحة ثابتة مستقلة دون مكتبات خارجية.' : 'Standalone static page with no external libraries.'}</p></div><button className="button secondary" onClick={downloadLandingPage} disabled={!siteHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>
             {siteHtml ? <iframe title="Website preview" sandbox="" srcDoc={siteHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#101014'}}/> : <Empty text={language === 'ar' ? 'أدخل المحتوى ثم اضغط إنشاء المعاينة.' : 'Enter your content and generate the preview.'}/>}
