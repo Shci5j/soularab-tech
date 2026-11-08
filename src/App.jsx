@@ -266,16 +266,23 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  const pageTitles = {
+  const pageTitles = language === 'ar' ? {
     overview: { title: 'الرئيسية', desc: 'مساحة سولاراب الموحدة' },
     work: { title: 'الشروع بالعمل', desc: 'الأقسام المتخصصة وأدوات التنفيذ' },
     hub: { title: 'سولاراب هوب', desc: 'إدارة المستودعات والأكواد والإصدارات' },
     root: { title: 'الجذر', desc: 'إدارة الأجهزة والتشخيص والصيانة' },
     settings: { title: 'الإعدادات العامة', desc: 'إعدادات المنصة والاتصال والمظهر' },
     vault: { title: 'الخزنة', desc: 'الأعمال المحفوظة والمؤجلة والبيانات المؤقتة' },
+  } : {
+    overview: { title: 'Home', desc: 'The unified Soularab workspace' },
+    work: { title: 'Get to work', desc: 'Specialized departments and execution tools' },
+    hub: { title: 'Soularab Hub', desc: 'Repositories, code, and releases' },
+    root: { title: 'Root', desc: 'Devices, diagnostics, and maintenance' },
+    settings: { title: 'General settings', desc: 'Workspace, connection, and appearance' },
+    vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
   const current = useMemo(() => pageTitles[active] || modules.find((item) => item.id === active) || pageTitles.overview, [active]);
-  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return <div className="app-shell">
     <main className="main-area">
@@ -385,7 +392,6 @@ export default function App() {
       <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>الملفات</button>
       <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>الأمان</button>
     </nav>
-    </main>
       {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
