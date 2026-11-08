@@ -101,6 +101,8 @@ export default function App() {
   const [siteGenerating, setSiteGenerating] = useState(false);
   const [brandDraft, setBrandDraft] = useState({ name:'SOULARAB TECH', initials:'ST', tagline:'IDEAS INTO DIGITAL REALITY', primary:'#c49a43', secondary:'#171519', accent:'#e8d9b5' });
   const [brandReady, setBrandReady] = useState(false);
+  const [brandBrief, setBrandBrief] = useState(null);
+  const [brandBriefGenerating, setBrandBriefGenerating] = useState(false);
   const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\nProjects\nSettings' });
   const [appHtml, setAppHtml] = useState('');
   const [appGenerating, setAppGenerating] = useState(false);
@@ -575,6 +577,29 @@ export default function App() {
     setBrandReady(true);
     setNotice(language === 'ar' ? 'تم إعداد مسودة الهوية. الشعار الرسمي لم يتغير.' : 'Identity draft prepared. The official logo is unchanged.');
   }
+  async function generateBrandBrief() {
+    if (brandBriefGenerating) return;
+    setBrandBriefGenerating(true);
+    try {
+      let model = selectedModel;
+      if (!model) {
+        const available = await request('/api/assistant/models');
+        model = available.items && available.items.length ? available.items[0].name : '';
+      }
+      if (!model) throw new Error('No local model installed');
+      const prompt = language === 'ar'
+        ? 'أنت مستشار هوية بصرية. أنشئ موجز علامة تجارية عملياً وأعد JSON صالحاً فقط بالمفاتيح positioning وaudience وvoice وvisualDirection وapplications (مصفوفة من 3 تطبيقات). لا تقترح تغيير الشعار أو الألوان المحددة؛ قدم توصيات نصية فقط. العلامة: ' + brandDraft.name + '. الشعار النصي: ' + brandDraft.tagline + '. الألوان الحالية: ' + brandDraft.primary + ' و' + brandDraft.secondary + ' و' + brandDraft.accent
+        : 'Act as a brand strategist. Return valid JSON only with positioning, audience, voice, visualDirection, and applications (an array of 3 applications). Do not suggest changing the existing logo or selected colors; provide text recommendations only. Brand: ' + brandDraft.name + '. Tagline: ' + brandDraft.tagline + '. Current colors: ' + brandDraft.primary + ', ' + brandDraft.secondary + ', ' + brandDraft.accent;
+      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: model, temperature: 0.4, messages: [{ role: 'user', content: prompt }] }) });
+      const raw = result.message && result.message.content ? result.message.content.trim() : '';
+      const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
+      if (![parsed.positioning, parsed.audience, parsed.voice, parsed.visualDirection].every((value) => typeof value === 'string' && value.trim()) || !Array.isArray(parsed.applications)) throw new Error('Invalid brand brief');
+      setBrandBrief({ positioning: parsed.positioning.slice(0,500), audience: parsed.audience.slice(0,500), voice: parsed.voice.slice(0,500), visualDirection: parsed.visualDirection.slice(0,700), applications: parsed.applications.filter((value) => typeof value === 'string').slice(0,3) });
+      setNotice(language === 'ar' ? 'أعدّت روح موجز الهوية دون تغيير الشعار أو الألوان.' : 'Rooh prepared a brand brief without changing the logo or colors.');
+    } catch (error) {
+      setNotice(language === 'ar' ? 'تعذر إعداد موجز الهوية. تحقق من اتصال النموذج المحلي.' : 'Could not prepare the brand brief. Check the local model connection.');
+    } finally { setBrandBriefGenerating(false); }
+  }
   function downloadBrandSvg() {
     if (!brandReady) return;
     const esc = (v) => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -998,6 +1023,8 @@ export default function App() {
             <path d="M300 55 L410 100 V215 Q410 300 300 355 Q190 300 190 215 V100 Z" fill="none" stroke={brandDraft.primary} strokeWidth="7"/><path d="M235 135 L260 105 L282 130 L300 100 L318 130 L340 105 L365 135" fill="none" stroke={brandDraft.accent} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/><text x="300" y="245" textAnchor="middle" fill={brandDraft.primary} fontSize="112" fontFamily="Georgia,serif" fontWeight="bold">{brandDraft.initials.slice(0,4).toUpperCase()}</text><path d="M160 375 H440" stroke={brandDraft.primary} strokeWidth="2"/><text x="300" y="410" textAnchor="middle" fill={brandDraft.accent} fontSize="23" letterSpacing="3">{brandDraft.name.slice(0,32)}</text><text x="300" y="438" textAnchor="middle" fill={brandDraft.primary} fontSize="11" letterSpacing="2">{brandDraft.tagline.slice(0,54)}</text>
           </svg><div className="module-action-list"><button className="button secondary" onClick={downloadBrandSvg} disabled={!brandReady}>{language === 'ar' ? 'تصدير SVG' : 'Export SVG'}</button><button className="button secondary" onClick={downloadBrandGuide} disabled={!brandReady}>{language === 'ar' ? 'تصدير دليل الهوية TXT' : 'Export brand guide TXT'}</button></div><p className="chat-footnote">{language === 'ar' ? 'هذه مسودة مفاهيمية ولا تعدّل الشعار الذهبي الرسمي لـ SOULARAB TECH.' : 'This is a concept draft and does not alter the official gold SOULARAB TECH logo.'}</p></div>
         </div>
+        <div className="panel-card brand-ai-brief"><div className="section-heading"><div><h3>{language === 'ar' ? 'موجز الهوية بمساعدة روح' : 'AI-assisted brand brief'}</h3><p className="muted">{language === 'ar' ? 'تحليل استراتيجي نصي يحافظ على الشعار والألوان المعتمدة.' : 'A text strategy brief that preserves the approved logo and colors.'}</p></div><button type="button" className="button secondary" onClick={generateBrandBrief} disabled={brandBriefGenerating}>{brandBriefGenerating ? (language === 'ar' ? 'روح تحلل العلامة…' : 'Rooh is analyzing…') : (language === 'ar' ? 'إعداد موجز الهوية ✦' : 'Generate brand brief ✦')}</button></div>
+          {brandBrief ? <div className="brand-brief-grid"><article><strong>{language === 'ar' ? 'التموضع' : 'Positioning'}</strong><p>{brandBrief.positioning}</p></article><article><strong>{language === 'ar' ? 'الجمهور' : 'Audience'}</strong><p>{brandBrief.audience}</p></article><article><strong>{language === 'ar' ? 'نبرة العلامة' : 'Brand voice'}</strong><p>{brandBrief.voice}</p></article><article><strong>{language === 'ar' ? 'الاتجاه البصري' : 'Visual direction'}</strong><p>{brandBrief.visualDirection}</p></article><article><strong>{language === 'ar' ? 'تطبيقات الهوية' : 'Identity applications'}</strong><ul>{brandBrief.applications.map((item,index)=><li key={index}>{item}</li>)}</ul></article></div> : <Empty text={language === 'ar' ? 'اطلب من روح إعداد موجز للعلامة بعد ضبط بياناتها.' : 'Ask Rooh to prepare a brand brief after entering your identity details.'}/>}</div>
       </section>}
       {active === 'apps' && <section className="content">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'منشئ التطبيقات' : 'Application starter'}</h2><p className="muted">{language === 'ar' ? 'أنشئ واجهة تطبيق متعددة الأقسام مع معاينة وتصدير ملف مستقل.' : 'Create a multi-section app interface with preview and standalone export.'}</p></div></div>
