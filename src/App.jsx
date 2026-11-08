@@ -104,6 +104,7 @@ export default function App() {
   const [appHtml, setAppHtml] = useState('');
   const [agentDraft, setAgentDraft] = useState({ title:'', steps:'', risk:'medium' });
   const [agentSubmitting, setAgentSubmitting] = useState(false);
+  const [agentGenerating, setAgentGenerating] = useState(false);
   const [queuedTasks, setQueuedTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskActionId, setTaskActionId] = useState(null);
@@ -612,6 +613,30 @@ export default function App() {
     if (active === 'agents') loadTasks();
   }, [active, apiToken]);
 
+  async function generateAgentSteps() {
+    const title = agentDraft.title.trim();
+    if (title.length < 3 || agentGenerating) return;
+    setAgentGenerating(true);
+    try {
+      let model = selectedModel;
+      if (!model) {
+        const available = await request('/api/assistant/models');
+        model = available.items?.[0]?.name || '';
+      }
+      if (!model) throw new Error(language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.');
+      const context = agentDraft.steps.trim();
+      const prompt = language === 'ar'
+        ? 'أنت مساعد تخطيط داخل SOULARAB TECH. اقترح خطوات عملية واضحة ومحددة للمهمة التالية. أعد الخطوات فقط، كل خطوة في سطر مستقل ومرقمة. لا تدّعِ تنفيذ أي إجراء، ولا تقترح تجاوز الموافقات أو تشغيل أوامر تلقائياً. عنوان المهمة: ' + title + (context ? '\nالملاحظات الحالية: ' + context : '')
+        : 'You are a planning assistant inside SOULARAB TECH. Suggest clear, practical steps for this task. Return only numbered steps, one per line. Do not claim to have performed any action, bypass approvals, or trigger automatic commands. Task: ' + title + (context ? '\nCurrent notes: ' + context : '');
+      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model, temperature: 0.35, messages: [{ role: 'user', content: prompt }] }) });
+      const suggested = result.message?.content?.trim();
+      if (!suggested) throw new Error(language === 'ar' ? 'لم يُرجع النموذج خطوات صالحة.' : 'The model returned no usable steps.');
+      setAgentDraft((current) => ({ ...current, steps: suggested.slice(0, 1800) }));
+      setNotice(language === 'ar' ? 'جهّز روح مسودة خطوات محلية. راجعها وعدّلها قبل إرسالها للموافقة.' : 'Rooh drafted local steps. Review and edit them before submitting for approval.');
+    } catch (error) { setNotice(error.message); }
+    finally { setAgentGenerating(false); }
+  }
+
   async function submitAgentPlan(event) {
     event.preventDefault();
     const steps=agentDraft.steps.split('\n').map(v=>v.trim()).filter(Boolean);
@@ -884,6 +909,7 @@ export default function App() {
           <div className="panel-card"><h3>{language==='ar'?'إنشاء خطة وكيل':'Create an agent plan'}</h3><form className="proposal-form" onSubmit={submitAgentPlan}>
             <label>{language==='ar'?'عنوان المهمة':'Task title'}<input value={agentDraft.title} onChange={e=>setAgentDraft({...agentDraft,title:e.target.value})} maxLength="120" minLength="3" required placeholder={language==='ar'?'مثال: تجهيز ونشر موقع الشركة':'Example: Prepare and publish company website'}/></label>
             <label>{language==='ar'?'خطوات التنفيذ (كل خطوة في سطر)':'Execution steps (one per line)'}<textarea rows="8" value={agentDraft.steps} onChange={e=>setAgentDraft({...agentDraft,steps:e.target.value})} maxLength="1800" required placeholder={language==='ar'?'1. مراجعة الملفات\n2. بناء نسخة الإنتاج\n3. فحص الروابط':'1. Review project files\n2. Build production version\n3. Check links'}/></label>
+            <button type="button" className="button secondary" onClick={generateAgentSteps} disabled={agentGenerating||!agentDraft.title.trim()}>{agentGenerating?(language==='ar'?'روح تكتب الخطوات…':'Rooh is drafting…'):(language==='ar'?'اقتراح خطوات بواسطة روح ✦':'Draft steps with Rooh ✦')}</button>
             <label>{language==='ar'?'مستوى المخاطر':'Risk level'}<select value={agentDraft.risk} onChange={e=>setAgentDraft({...agentDraft,risk:e.target.value})}><option value="low">{language==='ar'?'منخفض':'Low'}</option><option value="medium">{language==='ar'?'متوسط':'Medium'}</option><option value="high">{language==='ar'?'مرتفع':'High'}</option></select></label>
             <button className="button primary" disabled={agentSubmitting||!agentDraft.title.trim()||!agentDraft.steps.trim()}>{agentSubmitting?(language==='ar'?'جارٍ الإرسال…':'Submitting…'):(language==='ar'?'إرسال إلى الموافقات':'Submit for approval')}</button>
           </form></div>
