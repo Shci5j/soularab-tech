@@ -67,6 +67,13 @@ class ProjectApiTests(unittest.TestCase):
                     downloaded = client.get(f"/api/projects/{project_id}/files/notes.txt")
                     self.assertEqual(downloaded.content, b"hello world")
 
+                    deleted = client.delete(f"/api/projects/{project_id}/files/notes.txt")
+                    self.assertEqual(deleted.status_code, 200)
+                    self.assertTrue(deleted.json()["deleted"])
+                    self.assertFalse((data_dir / "workspaces" / str(project_id) / "notes.txt").exists())
+                    missing = client.delete(f"/api/projects/{project_id}/files/notes.txt")
+                    self.assertEqual(missing.status_code, 404)
+
                     traversal = client.post(f"/api/projects/{project_id}/files", files={"file": ("../escape.txt", b"x", "text/plain")})
                     self.assertEqual(traversal.status_code, 400)
                     executable = client.post(f"/api/projects/{project_id}/files", files={"file": ("payload.exe", b"x", "application/octet-stream")})

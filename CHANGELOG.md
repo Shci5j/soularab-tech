@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0 — 2026-11-09
+
+- Added explicit project file deletion through the authenticated API.
+- Restricted deletion to regular files directly inside active project workspaces; symlinks, path traversal, missing files, and archived projects are rejected.
+- Added a confirmation step and delete action in Files & Projects.
+- Added audit records and backend tests for successful deletion and missing-file behavior.
+- Corrected project create/archive audit labels and allowed DELETE in the configured CORS methods.
+
+
 ## 0.11.0 — 2026-11-08
 
 - Added an allowlisted task execution registry with the `write_project_note` action.

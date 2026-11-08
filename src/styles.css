@@ -194,3 +194,9 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .task-execution-form input,.task-execution-form textarea{width:100%;min-width:0;padding:9px 10px;border:1px solid var(--line,rgba(255,255,255,.14));border-radius:8px;background:var(--surface2);color:var(--text);font:inherit}
 .task-execution-form textarea{resize:vertical;line-height:1.7}
 .task-execution-form .button{justify-self:start}
+
+.danger-text{color:var(--danger,#d56b6b)}
+.workspace-file{gap:10px}
+.workspace-file>div{min-width:0;flex:1}
+.workspace-file>div strong{overflow-wrap:anywhere}
+.workspace-file .text-button{white-space:nowrap}

@@ -467,6 +467,19 @@ export default function App() {
     } catch (error) { setNotice(error.message); }
   }
 
+  async function deleteProjectFile(filename) {
+    if (!selectedProject) return;
+    const confirmed = window.confirm(language === 'ar' ? 'هل تريد حذف الملف "' + filename + '" نهائياً؟' : 'Permanently delete "' + filename + '"?');
+    if (!confirmed) return;
+    setUploadingFile(true);
+    try {
+      await request('/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), { method: 'DELETE' });
+      setNotice(language === 'ar' ? 'تم حذف الملف.' : 'File deleted.');
+      await openProject(selectedProject);
+    } catch (error) { setNotice(error.message); }
+    finally { setUploadingFile(false); }
+  }
+
   async function createProposal(event) {
     event.preventDefault();
     if (!proposal.title.trim() || !proposal.description.trim()) return;
@@ -943,7 +956,7 @@ export default function App() {
           <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>{language === 'ar' ? 'إدارة الملفات داخل مساحة هذا المشروع فقط' : 'Manage files only within this project workspace'}</p></div><button className="text-button" onClick={() => setSelectedProject(null)}>{language === 'ar' ? 'إغلاق' : 'Close'}</button></div>
           <label className="upload-control">{language === 'ar' ? 'رفع ملف (حد أقصى 10 MB)' : 'Upload file (10 MB maximum)'}<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
           {uploadingFile && <p className="muted">جارٍ رفع الملف…</p>}
-          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>{language === 'ar' ? 'تنزيل' : 'Download'}</button></div>)}</div> : <Empty text={language === 'ar' ? 'لا توجد ملفات في مساحة هذا المشروع بعد.' : 'No files in this project workspace yet.'}/>}
+          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>{language === 'ar' ? 'تنزيل' : 'Download'}</button><button className="text-button danger-text" disabled={uploadingFile || selectedProject.status === 'archived'} onClick={() => deleteProjectFile(file.name)}>{language === 'ar' ? 'حذف' : 'Delete'}</button></div>)}</div> : <Empty text={language === 'ar' ? 'لا توجد ملفات في مساحة هذا المشروع بعد.' : 'No files in this project workspace yet.'}/>}
           <p className="chat-footnote">{language === 'ar' ? 'الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.' : 'Files remain in the project folder on the server. Blocked executable file types cannot be uploaded.'}</p>
         </div>}
         <div className="panel-card workspace-note"><strong>{language === 'ar' ? 'حماية الملفات' : 'File protection'}</strong><p>{language === 'ar' ? 'تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.' : 'Uploads and downloads are restricted to the project folder. Path traversal is blocked. Maximum file size is 10 MB.'}</p></div>
