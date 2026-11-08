@@ -80,3 +80,11 @@
 .workspace-calendar>div{display:grid;gap:4px}.workspace-calendar small{font-size:9px;color:var(--muted);letter-spacing:.8px}.workspace-calendar strong{font-size:14px;color:var(--text);font-weight:700}
 .workspace-calendar .calendar-live{margin-inline-start:auto;font-size:9px;color:var(--green);white-space:nowrap}
 @media(max-width:600px){.top-actions{gap:6px;flex-wrap:wrap;justify-content:flex-end}.language-select{min-width:88px;min-height:36px;font-size:10px}.workspace-calendar{padding:11px 12px;gap:9px}.workspace-calendar strong{font-size:12px}.workspace-calendar .calendar-live{font-size:8px}}
+
+
+.fatal-error{min-height:100vh;display:grid;place-items:center;padding:24px;background:#0b0c0e;color:#f4f1e9}
+.fatal-error-card{width:min(100%,520px);display:grid;gap:15px;padding:30px;border:1px solid #806a3b;border-radius:18px;background:#151719;box-shadow:0 20px 70px #0008;text-align:right}
+.fatal-error-mark{width:54px;height:54px;display:grid;place-items:center;border:1px solid #d7b66b;border-radius:14px;color:#f1d99b;font:700 20px Georgia}
+.fatal-error-card h1{font-size:22px;margin:0}.fatal-error-card p{color:#aaa;font-size:13px;line-height:1.9;margin:0}
+.fatal-error-card code{padding:12px;border-radius:8px;background:#090a0b;color:#e6c987;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+.fatal-error-card button{min-height:44px}
