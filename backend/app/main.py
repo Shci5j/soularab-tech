@@ -630,11 +630,13 @@ def cancel_task(task_id: int, _: None = Depends(require_access)):
         row = db.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="المهمة غير موجودة.")
+        if row["status"] == "running":
+            raise HTTPException(status_code=409, detail="لا يمكن تأكيد إيقاف مهمة قيد التنفيذ؛ لا يدعم هذا الإصدار إيقاف عامل تنفيذ.")
         if row["status"] in {"completed", "failed", "cancelled"}:
             raise HTTPException(status_code=409, detail="لا يمكن إلغاء هذه المهمة في حالتها الحالية.")
         db.execute("UPDATE tasks SET status='cancelled', updated_at=? WHERE id=?", (now(), task_id))
-    audit("task.cancelled", f"تم إلغاء المهمة #{task_id}.")
-    return {"id": task_id, "status": "cancelled", "execution": "stopped_or_not_started"}
+    audit("task.cancelled", f"تم إلغاء المهمة #{task_id} قبل بدء التنفيذ.")
+    return {"id": task_id, "status": "cancelled", "execution": "not_started"}
 
 
 @app.get("/api/audit")
