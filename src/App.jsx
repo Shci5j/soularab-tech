@@ -193,12 +193,13 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [health, pending, log] = await Promise.all([
-        request('/api/health'), request('/api/approvals?status=pending'), request('/api/audit?limit=8'),
+      const [health, pending, log, taskQueue] = await Promise.all([
+        request('/api/health'), request('/api/approvals?status=pending'), request('/api/audit?limit=8'), request('/api/tasks'),
       ]);
       setApi({ state: 'online', version: health.version || '0.1.0', mode: health.mode || 'local' });
       setApprovals(pending.items || []);
       setEvents(log.items || []);
+      setQueuedTasks(Array.isArray(taskQueue.items) ? taskQueue.items : []);
     } catch (error) {
       setApi({ state: 'offline', version: '—' });
       setNotice(error.message.includes('Failed to fetch') ? 'الخادم غير متصل حالياً. شغّل خدمة FastAPI لربط لوحة التحكم.' : error.message);
@@ -568,7 +569,6 @@ export default function App() {
     try {
       await request('/api/tasks/' + taskId + '/cancel', { method: 'POST' });
       setNotice(language === 'ar' ? 'تم إلغاء المهمة من قائمة الانتظار.' : 'Task cancelled from the queue.');
-      await loadTasks();
       await refresh();
     } catch (error) {
       setNotice(error.message);
@@ -595,12 +595,12 @@ export default function App() {
       const approval=await request('/api/approvals',{method:'POST',body:JSON.stringify({title,description,risk:agentDraft.risk})});
       setVaultItems(items=>[{id:Date.now(),title,content:description+'\n\nTask ID: '+queuedTaskId+'\nApproval ID: '+approval.id,category:'task',createdAt:new Date().toISOString()},...items]);
       setAgentDraft({title:'',steps:'',risk:'medium'});
-      await Promise.all([loadTasks(),refresh()]);
+      await refresh();
       setNotice(language==='ar'?'أُضيفت الخطة إلى طابور المهام وأُرسلت للموافقة. لم يبدأ أي تنفيذ.':'Plan added to the task queue and submitted for approval. No execution has started.');
     } catch(error) {
       if(queuedTaskId!==null) {
         try { await request('/api/tasks/'+queuedTaskId+'/cancel',{method:'POST'}); } catch {}
-        await loadTasks();
+        await refresh();
       }
       setNotice(error.message);
     }
