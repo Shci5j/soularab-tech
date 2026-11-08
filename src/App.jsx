@@ -592,7 +592,7 @@ export default function App() {
         : 'Act as a brand strategist. Return valid JSON only with positioning, audience, voice, visualDirection, and applications (an array of 3 applications). Do not suggest changing the existing logo or selected colors; provide text recommendations only. Brand: ' + brandDraft.name + '. Tagline: ' + brandDraft.tagline + '. Current colors: ' + brandDraft.primary + ', ' + brandDraft.secondary + ', ' + brandDraft.accent;
       const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: model, temperature: 0.4, messages: [{ role: 'user', content: prompt }] }) });
       const raw = result.message && result.message.content ? result.message.content.trim() : '';
-      const parsed = JSON.parse(raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, ''));
+      const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
       if (![parsed.positioning, parsed.audience, parsed.voice, parsed.visualDirection].every((value) => typeof value === 'string' && value.trim()) || !Array.isArray(parsed.applications)) throw new Error('Invalid brand brief');
       setBrandBrief({ positioning: parsed.positioning.slice(0,500), audience: parsed.audience.slice(0,500), voice: parsed.voice.slice(0,500), visualDirection: parsed.visualDirection.slice(0,700), applications: parsed.applications.filter((value) => typeof value === 'string').slice(0,3) });
       setNotice(language === 'ar' ? 'أعدّت روح موجز الهوية دون تغيير الشعار أو الألوان.' : 'Rooh prepared a brand brief without changing the logo or colors.');
