@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0 — 2026-11-09
+
+- Added authenticated ZIP export for active and archived project workspaces, including project metadata in `project.json`.
+- Excluded symlinks and non-regular files from archives, with a 200-file and 50 MB export limit.
+- Added audit logging and regression tests for archive contents, symlink exclusion, and production authentication.
+- Added project-card export controls in Arabic and English.
+
+
 ## 0.12.0 — 2026-11-09
 
 - Added explicit project file deletion through the authenticated API.
