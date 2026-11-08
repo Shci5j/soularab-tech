@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
@@ -342,6 +342,40 @@ async def image_workflow_history(prompt_id: str, _: None = Depends(require_acces
     if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", prompt_id):
         raise HTTPException(status_code=400, detail="معرّف المهمة غير صالح.")
     return await media_get(COMFYUI_BASE_URL, "/history/" + prompt_id)
+
+
+
+@app.get("/api/media/image/view")
+async def view_generated_image(
+    filename: str = Query(min_length=1, max_length=180),
+    subfolder: str = Query(default="", max_length=240),
+    image_type: str = Query(default="output", alias="type"),
+    _: None = Depends(require_access),
+):
+    if Path(filename).name != filename or filename.startswith(".") or Path(filename).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+        raise HTTPException(status_code=400, detail="اسم ملف الصورة أو امتداده غير صالح.")
+    if image_type != "output":
+        raise HTTPException(status_code=400, detail="يُسمح بعرض صور المخرجات فقط.")
+    if subfolder and (subfolder.startswith(("/", "\\")) or "\\" in subfolder or any(part in {"", ".", ".."} for part in subfolder.split("/")) or any(not re.fullmatch(r"[A-Za-z0-9 _.-]{1,80}", part) for part in subfolder.split("/"))):
+        raise HTTPException(status_code=400, detail="مسار الصورة الفرعي غير صالح.")
+    try:
+        async with httpx.AsyncClient(timeout=MEDIA_TIMEOUT) as client:
+            response = await client.get(
+                COMFYUI_BASE_URL + "/view",
+                params={"filename": filename, "subfolder": subfolder, "type": "output"},
+            )
+            response.raise_for_status()
+            content = response.content
+            content_type = response.headers.get("content-type", "application/octet-stream").split(";")[0].lower()
+    except httpx.ConnectError as exc:
+        raise HTTPException(status_code=503, detail="ComfyUI غير متصل.") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="انتهت مهلة تحميل الصورة.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=404 if exc.response.status_code == 404 else 502, detail="تعذر جلب الصورة من ComfyUI.") from exc
+    if content_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
+        raise HTTPException(status_code=415, detail="أعاد محرك الصور نوع محتوى غير مدعوم.")
+    return Response(content=content, media_type=content_type, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/api/media/speech/status")
