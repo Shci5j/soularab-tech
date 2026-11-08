@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Upload
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("SOULARAB_DATA_DIR", ROOT / "data")).expanduser()
@@ -268,8 +268,15 @@ def capabilities():
 
 
 class ImageWorkflowRequest(BaseModel):
-    workflow: dict = Field(min_length=1)
+    workflow: dict
     client_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("workflow")
+    @classmethod
+    def require_non_empty_workflow(cls, value: dict) -> dict:
+        if not value:
+            raise ValueError("workflow must contain at least one node")
+        return value
 
 
 async def media_get(base_url: str, path: str):
