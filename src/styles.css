@@ -174,3 +174,7 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 
 .task-filter{min-width:130px;max-width:180px}
 @media(max-width:520px){.task-filter{width:100%;max-width:none}}
+
+.engine-status-card{width:100%;text-align:start;color:inherit;font:inherit;cursor:pointer;transition:border-color .18s ease,transform .18s ease}
+.engine-status-card:hover{border-color:var(--accent,#c49a43);transform:translateY(-1px)}
+.engine-open-link{color:var(--accent,#c49a43)!important}
