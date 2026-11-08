@@ -670,7 +670,7 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {!['overview','security','files','assistant','media','work','hub','root','settings','vault'].includes(active) && <section className="content">
+      {!['overview','security','files','assistant','media','web','work','hub','root','settings','vault'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
