@@ -496,26 +496,26 @@ export default function App() {
 
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
-          <div><h3>المساعد المحلي</h3><p className="muted">تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? "جارٍ الفحص…" : assistantStatus.connected ? "Ollama متصلة" : "Ollama غير متصلة"}</span><button className="button secondary" onClick={loadAssistant}>فحص الاتصال</button></div>
+          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
-          <div className="chat-heading"><div><h3>محادثة جديدة</h3><small>المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.</small></div>
-            <select aria-label="اختر النموذج" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={!models.length}>
-              {!models.length && <option value="">لا توجد نماذج متاحة</option>}
+          <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
+            <select aria-label={language === 'ar' ? 'اختر النموذج' : 'Choose model'} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={!models.length}>
+              {!models.length && <option value="">{language === 'ar' ? 'لا توجد نماذج متاحة' : 'No models available'}</option>}
               {models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}
             </select>
           </div>
           <div className="chat-transcript" aria-live="polite">
-            {!chatMessages.length && <div className="chat-empty"><span>✦</span><strong>ما الذي نعمل عليه اليوم؟</strong><p>اختر نموذجاً محلياً وابدأ محادثتك. لن يتم إرسال رسائلك إلى خدمة سحابية.</p></div>}
-            {chatMessages.map((message, index) => <article key={index} className={"chat-message " + message.role}><small>{message.role === "user" ? "أنت" : "المساعد"}</small><p>{message.content}</p></article>)}
-            {sendingChat && <div className="chat-thinking">النموذج يفكر…</div>}
+            {!chatMessages.length && <div className="chat-empty"><span>✦</span><strong>{language === 'ar' ? 'ما الذي نعمل عليه اليوم؟' : 'What are we working on today?'}</strong><p>{language === 'ar' ? 'اختر نموذجاً محلياً وابدأ محادثتك. لن يتم إرسال رسائلك إلى خدمة سحابية.' : 'Choose a local model and start chatting. Your messages are not sent to a cloud service.'}</p></div>}
+            {chatMessages.map((message, index) => <article key={index} className={"chat-message " + message.role}><small>{message.role === "user" ? (language === 'ar' ? 'أنت' : 'You') : (language === 'ar' ? 'المساعد' : 'Assistant')}</small><p>{message.content}</p></article>)}
+            {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? "اكتب رسالتك هنا…" : "شغّل Ollama وثبّت نموذجاً محلياً أولاً"} disabled={!models.length || sendingChat} />
-            <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? "جارٍ الإرسال…" : "إرسال ↑"}</button>
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
-          <p className="chat-footnote">يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.</p>
+          <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
