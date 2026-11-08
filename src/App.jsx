@@ -69,6 +69,12 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectFiles, setProjectFiles] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [repoInput, setRepoInput] = useState('Shci5j/soularab-tech');
+  const [repoInfo, setRepoInfo] = useState(null);
+  const [repoFiles, setRepoFiles] = useState([]);
+  const [repoLoading, setRepoLoading] = useState(false);
+  const [repoError, setRepoError] = useState('');
+  const [deviceInfo, setDeviceInfo] = useState(null);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -282,6 +288,31 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function loadGithubRepository(event) {
+    event?.preventDefault();
+    const target = repoInput.trim().replace(/^https?:\\/\\/(www\\.)?github\\.com\\//, '').replace(/\\.git$/, '').replace(/\\/$/, '');
+    if (!/^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(target)) { setRepoError('أدخل المستودع بصيغة owner/repository.'); return; }
+    setRepoLoading(true); setRepoError('');
+    try {
+      const [details, contents] = await Promise.all([fetch('https://api.github.com/repos/' + target), fetch('https://api.github.com/repos/' + target + '/contents')]);
+      if (!details.ok) throw new Error(details.status === 404 ? 'المستودع غير موجود أو غير متاح للعامة.' : 'تعذر قراءة بيانات المستودع (' + details.status + ').');
+      if (!contents.ok) throw new Error('تعذر قراءة الملفات (' + contents.status + ').');
+      setRepoInfo(await details.json());
+      const items = await contents.json(); setRepoFiles(Array.isArray(items) ? items : []);
+    } catch (error) { setRepoInfo(null); setRepoFiles([]); setRepoError(error.message || 'تعذر الاتصال بـ GitHub.'); }
+    finally { setRepoLoading(false); }
+  }
+
+  function inspectDevice() {
+    setDeviceInfo({
+      browser: navigator.userAgent, language: navigator.language, platform: navigator.platform || 'غير متاح',
+      online: navigator.onLine, screen: window.screen.width + ' × ' + window.screen.height,
+      viewport: window.innerWidth + ' × ' + window.innerHeight, memory: navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'غير متاح',
+      cores: navigator.hardwareConcurrency || 'غير متاح', touch: navigator.maxTouchPoints > 0 ? 'مدعوم' : 'غير مكتشف',
+      storage: navigator.storage?.estimate ? 'مدعوم' : 'غير متاح', checkedAt: new Date().toLocaleString('ar')
+    });
+  }
+
   const pageTitles = language === 'ar' ? {
     overview: { title: 'الرئيسية', desc: 'مساحة سولاراب الموحدة' },
     work: { title: 'الشروع بالعمل', desc: 'الأقسام المتخصصة وأدوات التنفيذ' },
@@ -330,8 +361,23 @@ export default function App() {
         </div>
       </section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>الشروع بالعمل</h3><p>كل أدوات التنفيذ ضمن مساحة واحدة</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div></section>}
-      {active === 'hub' && <section className="content"><div className="panel-card destination-page"><h2>سولاراب هوب</h2><p>المساحة المخصصة لإدارة المستودعات والأكواد ومتابعة الإصدارات.</p><p className="muted">سيتم ربط أدوات إدارة المستودعات والإصدارات ضمن هذا القسم.</p></div></section>}
-      {active === 'root' && <section className="content"><div className="panel-card destination-page"><h2>الجذر</h2><p>مركز التعرف على الأجهزة وتشخيصها ومتابعة صيانتها.</p><p className="muted">ستظهر هنا أدوات فحص الأجهزة وإدارة الصيانة عند ربطها.</p></div></section>}
+      {active === 'hub' && <section className="content"><div className="panel-card destination-page">
+        <div className="section-heading"><div><h2>سولاراب هوب</h2><p className="muted">مستكشف مستودعات GitHub للقراءة والمتابعة.</p></div><span className="pill">قراءة آمنة</span></div>
+        <form className="repo-search" onSubmit={loadGithubRepository}><label>رابط المستودع أو owner/repository<input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="owner/repository"/></label><button className="button primary" disabled={repoLoading || !repoInput.trim()}>{repoLoading ? 'جارٍ الفحص…' : 'استكشاف المستودع'}</button></form>
+        {repoError && <p className="notice" role="alert">{repoError}</p>}
+        {repoInfo && <div className="repo-summary"><div><strong>{repoInfo.full_name}</strong><p>{repoInfo.description || 'لا يوجد وصف للمستودع.'}</p></div><span className="pill">{repoInfo.private ? 'خاص' : 'عام'}</span><div className="repo-metrics"><span>★ {repoInfo.stargazers_count}</span><span>⑂ {repoInfo.forks_count}</span><span>{repoInfo.language || 'لغة غير محددة'}</span><span>{repoInfo.default_branch}</span></div><a className="button secondary" href={repoInfo.html_url} target="_blank" rel="noreferrer">فتح على GitHub ↗</a></div>}
+        {repoFiles.length > 0 && <div className="repo-file-list"><h3>محتويات الجذر</h3>{repoFiles.map((file) => <a className="repo-file" key={file.path} href={file.html_url} target="_blank" rel="noreferrer"><span>{file.type === 'dir' ? '▰' : '▤'}</span><strong>{file.name}</strong><small>{file.type === 'dir' ? 'مجلد' : 'ملف'}</small><b>فتح ↗</b></a>)}</div>}
+        {!repoInfo && !repoLoading && !repoError && <p className="chat-footnote">أدخل مستودعاً عاماً لاستعراض ملفاته وبياناته. لا تُنفذ هذه النسخة تعديلات أو عمليات دفع إلى GitHub.</p>}
+      </div></section>}
+      {active === 'root' && <section className="content"><div className="panel-card destination-page">
+        <div className="section-heading"><div><h2>الجذر والتشخيص</h2><p className="muted">فحص إمكانات المتصفح والجهاز الذي يعرض مساحة العمل.</p></div><button className="button primary" onClick={inspectDevice}>بدء الفحص</button></div>
+        {deviceInfo ? <><div className="diagnostic-grid">
+          <article className="stat-card"><span>حالة الشبكة</span><strong className={deviceInfo.online ? 'good' : 'warn'}>{deviceInfo.online ? 'متصل' : 'غير متصل'}</strong></article>
+          <article className="stat-card"><span>دقة الشاشة</span><strong>{deviceInfo.screen}</strong></article><article className="stat-card"><span>مساحة العرض</span><strong>{deviceInfo.viewport}</strong></article>
+          <article className="stat-card"><span>أنوية المعالج المعلنة</span><strong>{deviceInfo.cores}</strong></article><article className="stat-card"><span>ذاكرة الجهاز المقدرة</span><strong>{deviceInfo.memory}</strong></article><article className="stat-card"><span>اللمس</span><strong>{deviceInfo.touch}</strong></article>
+        </div><div className="diagnostic-details"><p><strong>المتصفح:</strong> {deviceInfo.browser}</p><p><strong>النظام:</strong> {deviceInfo.platform}</p><p><strong>اللغة:</strong> {deviceInfo.language}</p><p><strong>التخزين:</strong> {deviceInfo.storage}</p><small>آخر فحص: {deviceInfo.checkedAt}</small></div></> : <div className="empty">اضغط «بدء الفحص» لعرض المعلومات التي يسمح المتصفح بالوصول إليها.</div>}
+        <p className="chat-footnote">قيود أمان المتصفح تمنع صفحة الويب من الوصول إلى صلاحيات root أو ملفات النظام الخاصة أو التحكم الكامل بالجهاز. الفحص تشخيصي وآمن ولا يغيّر إعدادات جهازك.</p>
+      </div></section>}
       {active === 'settings' && <section className="content">
         <div className="panel-card settings-page">
           <div className="section-heading"><div><h2>الإعدادات العامة</h2><p className="muted">تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false }); setLanguage('ar'); setTheme('dark'); }}>استعادة الافتراضيات</button></div>
