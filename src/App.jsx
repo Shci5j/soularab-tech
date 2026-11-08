@@ -718,7 +718,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (active === 'agents') loadTasks();
+    if (active === 'agents') { loadTasks(); loadProjects(); }
   }, [active, apiToken]);
 
   async function generateAgentSteps() {
@@ -1035,7 +1035,7 @@ export default function App() {
             </div>
             {task.status==='queued' && <div className="task-execution-form">
               <strong>{language==='ar'?'تنفيذ إجراء آمن: حفظ ملف داخل مشروع':'Run safe action: save a file in a project'}</strong>
-              <label>{language==='ar'?'رقم المشروع':'Project ID'}<input type="number" min="1" value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))} placeholder="1"/></label>
+              <label>{language==='ar'?'مساحة المشروع':'Project workspace'}<select value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))}><option value="">{language==='ar'?'اختر مشروعاً نشطاً':'Select an active project'}</option>{projects.filter(project=>project.status==='active').map(project=><option key={project.id} value={project.id}>{project.title} · #{project.id}</option>)}</select></label>
               <label>{language==='ar'?'اسم الملف':'Filename'}<input value={executionInputs[task.id]?.filename ?? ('task-'+task.id+'.md')} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],filename:event.target.value}}))}/></label>
               <label>{language==='ar'?'محتوى الملف':'File content'}<textarea rows="3" value={executionInputs[task.id]?.content ?? task.description ?? ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],content:event.target.value}}))} placeholder={language==='ar'?'اكتب المحتوى الذي تريد حفظه…':'Write the content to save…'}/></label>
               <button className="button primary" disabled={taskActionId===task.id} onClick={()=>executeQueuedTask(task)}>{taskActionId===task.id?(language==='ar'?'جارٍ التنفيذ…':'Executing…'):(language==='ar'?'بدء الإجراء المعتمد':'Run approved action')}</button>
