@@ -623,6 +623,10 @@ async def import_project_archive(file: UploadFile = File(...), _: None = Depends
             raise HTTPException(status_code=400, detail="الأرشيف يفتقد بيانات المشروع أو يحتوي على أسماء مكررة.")
 
         metadata_info = next(item for item in infos if item.filename == "project.json")
+        metadata_mode = metadata_info.external_attr >> 16
+        metadata_type = stat.S_IFMT(metadata_mode)
+        if metadata_info.is_dir() or stat.S_ISLNK(metadata_mode) or metadata_type not in {0, stat.S_IFREG}:
+            raise HTTPException(status_code=400, detail="بيانات المشروع داخل الأرشيف ليست ملفاً عادياً.")
         if metadata_info.file_size > 64 * 1024 or metadata_info.flag_bits & 0x1:
             raise HTTPException(status_code=400, detail="بيانات المشروع داخل الأرشيف غير صالحة.")
         try:
@@ -674,8 +678,10 @@ async def import_project_archive(file: UploadFile = File(...), _: None = Depends
             )
             project_id = cursor.lastrowid
         workspace = workspace_base / str(project_id)
+        workspace_created = False
         try:
             workspace.mkdir(parents=False, exist_ok=False)
+            workspace_created = True
             for info, filename in files_to_restore:
                 content = archive.read(info)
                 if len(content) != info.file_size:
@@ -683,7 +689,8 @@ async def import_project_archive(file: UploadFile = File(...), _: None = Depends
                 with (workspace / filename).open("xb") as output:
                     output.write(content)
         except Exception as exc:
-            shutil.rmtree(workspace, ignore_errors=True)
+            if workspace_created:
+                shutil.rmtree(workspace, ignore_errors=True)
             with database() as db:
                 db.execute("DELETE FROM projects WHERE id=?", (project_id,))
             if isinstance(exc, HTTPException):
