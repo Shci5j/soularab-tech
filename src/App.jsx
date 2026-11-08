@@ -292,7 +292,8 @@ export default function App() {
     event?.preventDefault();
     let target = repoInput.trim();
     if (target.includes('github.com/')) target = target.split('github.com/').pop();
-    target = target.replace(/\\.git$/, '').replace(/\\/$/, '');
+    if (target.endsWith('.git')) target = target.slice(0, -4);
+    if (target.endsWith('/')) target = target.slice(0, -1);
     const parts = target.split('/');
     if (parts.length !== 2 || !parts.every((part) => /^[A-Za-z0-9_.-]+$/.test(part))) { setRepoError('أدخل المستودع بصيغة owner/repository.'); return; }
     setRepoLoading(true); setRepoError('');
