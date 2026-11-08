@@ -1,347 +1,178 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
-const modules = [
-  { id: 'overview', title: 'نظرة عامة', icon: '⌂', desc: 'مركز إدارة المنصة وحالة الخدمات' },
-  { id: 'assistant', title: 'المساعد الذكي', icon: '✦', desc: 'محادثة مع النماذج المحلية والوكلاء' },
-  { id: 'web', title: 'المواقع والمتاجر', icon: '▤', desc: 'إنشاء المواقع وإدارتها وفحصها' },
-  { id: 'design', title: 'التصميم والهوية', icon: '◈', desc: 'الشعارات والهوية وتجارب المستخدم' },
-  { id: 'media', title: 'الصور والفيديو', icon: '▧', desc: 'مسارات توليد الوسائط ومعالجتها' },
-  { id: 'apps', title: 'بناء التطبيقات', icon: '▦', desc: 'تطوير التطبيقات وفحص المشاريع' },
-  { id: 'files', title: 'الملفات والمشاريع', icon: '▱', desc: 'إدارة الملفات والنسخ والإصدارات' },
-  { id: 'agents', title: 'الوكلاء والأتمتة', icon: '⌘', desc: 'مهام متعددة الخطوات بموافقات صريحة' },
-  { id: 'domains', title: 'النطاقات والاستضافة', icon: '◎', desc: 'إعدادات النطاق والنشر والاستضافة' },
-  { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
+const aiSections = [
+  ['web', 'إنشاء المواقع الإلكترونية', 'تصميم وبرمجة واختبار المواقع', '⌘'],
+  ['stores', 'المتاجر الإلكترونية', 'بناء المتاجر وتجارب التسوق', '▣'],
+  ['logos', 'تصميم الشعارات', 'الشعارات والهويات البصرية', '◇'],
+  ['images', 'توليد الصور', 'إنشاء الصور وتحريرها ومعالجتها', '▧'],
+  ['video', 'إنشاء الفيديو', 'توليد الفيديو والمونتاج والمشاهد', '▷'],
+  ['apps', 'إنشاء التطبيقات', 'تطبيقات الهاتف والبرامج', '▦'],
+  ['graphic', 'التصميم الجرافيكي', 'الإعلانات والمطبوعات والتصاميم', '✳'],
+  ['docs', 'المستندات والملفات', 'إنشاء وقراءة وتحويل الملفات', '▤'],
+  ['agents', 'الوكلاء الذكيون', 'إنشاء مساعدين متخصصين', '✧'],
+  ['automation', 'الأتمتة والمهام', 'سير العمل وتنفيذ المهام المصرح بها', '⟳'],
 ];
 
-function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
+const mainSections = [
+  { id: 'work', title: 'العمل مع الذكاء', subtitle: '10 أقسام متخصصة بإدارة روح', icon: '✦', detail: 'ابدأ مهمة إبداعية أو تقنية مع الأقسام المتخصصة.' },
+  { id: 'hub', title: 'SOULARAB HUB', subtitle: 'المستودعات وإدارة المشاريع البرمجية', icon: '⌘', detail: 'مركزك الخاص للأكواد والإصدارات والاختبارات.' },
+  { id: 'jathr', title: 'الجذر · AL JATHR', subtitle: 'الأجهزة الذكية والتشخيص والصيانة', icon: '⌬', detail: 'اكتشاف الأجهزة وقراءة معلوماتها وتشخيصها.' },
+  { id: 'vault', title: 'الخزنة', subtitle: 'مستودعاتك الخاصة وبياناتك المحمية', icon: '▣', detail: 'مساحة مستقلة لحفظ أعمالك وبياناتك.' },
+];
 
-export default function App() {
-  const [active, setActive] = useState('overview');
-  const [api, setApi] = useState({ state: 'checking', version: '—' });
-  const [approvals, setApprovals] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [proposal, setProposal] = useState({ title: '', description: '', risk: 'medium' });
-  const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('st-api-token') || '');
-  const [authRequired, setAuthRequired] = useState(false);
-  const [loginToken, setLoginToken] = useState('');
-  const [models, setModels] = useState([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const [sendingChat, setSendingChat] = useState(false);
-  const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
-  const [projects, setProjects] = useState([]);
-  const [projectForm, setProjectForm] = useState({ title: '', description: '' });
-  const [loadingProjects, setLoadingProjects] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [projectFiles, setProjectFiles] = useState([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('st-theme', theme);
-  }, [theme]);
-
-  async function request(path, options = {}) {
-    const response = await fetch(API + path, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
-    });
-    if (!response.ok) {
-      if (response.status === 401) setAuthRequired(true);
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || `تعذر إكمال الطلب (${response.status})`);
-    }
-    return response.json();
+const copy = {
+  ar: {
+    home: 'الرئيسية', start: 'الشروع بالعمل', greeting: 'مرحباً بك في', intro: 'مساحة عملك الذكية، تحت سيطرتك الكاملة.',
+    assistant: 'روح · المساعد المركزي', assistantHint: 'اكتب ما تريد إنجازه أو ابحث داخل SOULARAB TECH',
+    search: 'ابحث داخل التطبيق أو اكتب أمرك هنا...', send: 'إرسال', work: 'العمل مع الذكاء', hub: 'SOULARAB HUB',
+    jathr: 'الجذر · AL JATHR', vault: 'الخزنة', back: 'رجوع', theme: 'المظهر', language: 'اللغة',
+    dark: 'غامق', light: 'فاتح', sections: 'مساحات العمل', explore: 'اختر القسم الذي تريد العمل فيه',
+    aiTitle: 'الأقسام الذكية المتخصصة', aiDesc: 'عشرة أقسام مستقلة، تدير روح التنسيق بينها ولا تنفذ أي أمر دون إذنك.',
+    hubDesc: 'مستودعات خاصة لإدارة المشاريع والأكواد والفروع والإصدارات والاختبارات.',
+    jathrDesc: 'مكتبة أجهزة مسبقة التعريف، واستكشاف وقراءة وتشخيص وصيانة بموافقتك.',
+    vaultDesc: 'الخزنة مستقلة عن روح. لا يمكن الوصول إلى محتوياتها إلا بعد مصادقتك.',
+    lockTitle: 'الخزنة محمية', lockDesc: 'أدخل رمزك المكوّن من أربعة أرقام لعرض المستودعات المحفوظة.',
+    pin: 'الرمز السري · 4 أرقام', unlock: 'فتح الخزنة', notes: 'الملاحظات', active: 'الأعمال القائمة',
+    deferred: 'الأعمال المؤجلة', savedCode: 'الأكواد المحفوظة', review: 'المراجعة والاحتفاظ المؤقت',
+    addNote: 'إضافة ملاحظة', notePlaceholder: 'اكتب الملاحظة أو الكود أو رابط المستودع...',
+    save: 'حفظ', cancel: 'إلغاء', approval: 'أوافق على تسجيل هذه الملاحظة في مساحة الملاحظات',
+    assistantBubble: 'فتح روح', translate: 'ترجمة', translateHint: 'سيتم ربط محرك الترجمة في مرحلة المحركات.',
+    coming: 'واجهة القسم الأولية جاهزة للربط بمحركه المتخصص.', status: 'تصميم أولي · بانتظار ربط المحركات',
+    noItems: 'لا توجد عناصر محفوظة في هذا القسم بعد.', close: 'إغلاق', noteOnly: 'صلاحية روح تقتصر على إيداع ملاحظة بعد موافقتك؛ لا تستطيع قراءة محتويات الخزنة.',
+    operations: 'مركز العمليات', projects: 'مشاريعي', approvals: 'الموافقات', settings: 'الإعدادات',
+  },
+  en: {
+    home: 'Home', start: 'Workspace', greeting: 'Welcome to', intro: 'Your intelligent workspace, under your control.',
+    assistant: 'ROOH · Central Assistant', assistantHint: 'Tell ROOH what to do or search SOULARAB TECH',
+    search: 'Search the app or write your command...', send: 'Send', work: 'Work with AI', hub: 'SOULARAB HUB',
+    jathr: 'AL JATHR', vault: 'Vault', back: 'Back', theme: 'Theme', language: 'Language',
+    dark: 'Dark', light: 'Light', sections: 'Workspaces', explore: 'Choose where you want to work',
+    aiTitle: 'Specialized AI departments', aiDesc: 'Ten independent departments coordinated by ROOH. No task runs without your permission.',
+    hubDesc: 'Private repositories for projects, code, branches, releases and tests.',
+    jathrDesc: 'Predefined device library, discovery, reading, diagnostics and authorized maintenance.',
+    vaultDesc: 'The vault is independent from ROOH. Its contents stay locked until you authenticate.',
+    lockTitle: 'Vault protected', lockDesc: 'Enter your four-digit PIN to view your saved repositories.',
+    pin: '4-digit PIN', unlock: 'Unlock vault', notes: 'Notes', active: 'Active work',
+    deferred: 'Deferred work', savedCode: 'Saved code', review: 'Review & temporary storage',
+    addNote: 'Add note', notePlaceholder: 'Write a note, code snippet or repository link...',
+    save: 'Save', cancel: 'Cancel', approval: 'I approve depositing this note in Notes',
+    assistantBubble: 'Open ROOH', translate: 'Translate', translateHint: 'The translation engine will be connected in the engine phase.',
+    coming: 'The initial department interface is ready for its specialized engine.', status: 'Initial design · engines not connected',
+    noItems: 'No saved items in this section yet.', close: 'Close', noteOnly: 'ROOH may deposit a note only after your approval; it cannot read vault contents.',
+    operations: 'Operations', projects: 'My projects', approvals: 'Approvals', settings: 'Settings',
   }
+};
 
-  function unlockWorkspace(event) {
-    event.preventDefault();
-    const value = loginToken.trim();
-    if (!value) return;
-    sessionStorage.setItem('st-api-token', value);
-    setApiToken(value);
-    setAuthRequired(false);
-    setLoginToken('');
-  }
-
-  async function refresh() {
-    try {
-      const [health, pending, log] = await Promise.all([
-        request('/api/health'), request('/api/approvals?status=pending'), request('/api/audit?limit=8'),
-      ]);
-      setApi({ state: 'online', version: health.version || '0.1.0', mode: health.mode || 'local' });
-      setApprovals(pending.items || []);
-      setEvents(log.items || []);
-    } catch (error) {
-      setApi({ state: 'offline', version: '—' });
-      setNotice(error.message.includes('Failed to fetch') ? 'الخادم غير متصل حالياً. شغّل خدمة FastAPI لربط لوحة التحكم.' : error.message);
-    }
-  }
-
-  useEffect(() => { refresh(); const id = window.setInterval(refresh, 15000); return () => clearInterval(id); }, [apiToken]);
-
-  async function loadAssistant() {
-    setAssistantStatus({ connected: false, loading: true });
-    try {
-      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
-      setModels(result.items || []);
-      setSelectedModel((current) => current || result.items?.[0]?.name || '');
-      if (!result.items?.length) setNotice('Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.');
-    } catch (error) {
-      setAssistantStatus({ connected: false, loading: false });
-      setModels([]);
-      setNotice(error.message);
-    }
-  }
-
-  async function sendChat(event) {
-    event.preventDefault();
-    const content = chatInput.trim();
-    if (!content || !selectedModel || sendingChat) return;
-    const next = [...chatMessages, { role: 'user', content }];
-    setChatMessages(next);
-    setChatInput('');
-    setSendingChat(true);
-    try {
-      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, messages: next }) });
-      setChatMessages([...next, result.message]);
-    } catch (error) {
-      setChatMessages([...next, { role: 'assistant', content: 'تعذر إكمال الطلب: ' + error.message }]);
-    } finally {
-      setSendingChat(false);
-    }
-  }
-
-  useEffect(() => { if (active === 'assistant') loadAssistant(); }, [active, apiToken]);
-  async function loadProjects() {
-    setLoadingProjects(true);
-    try {
-      const result = await request('/api/projects');
-      setProjects(result.items || []);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setLoadingProjects(false);
-    }
-  }
-
-  async function createProject(event) {
-    event.preventDefault();
-    if (!projectForm.title.trim()) return;
-    setBusy(true);
-    try {
-      await request('/api/projects', { method: 'POST', body: JSON.stringify(projectForm) });
-      setProjectForm({ title: '', description: '' });
-      setNotice('تم إنشاء مساحة المشروع ومجلدها المحلي.');
-      await loadProjects();
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function archiveProject(id) {
-    setBusy(true);
-    try {
-      await request('/api/projects/' + id + '/archive', { method: 'POST' });
-      setNotice('تمت أرشفة المشروع دون حذف ملفاته.');
-      await loadProjects();
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => { if (active === 'files') loadProjects(); }, [active, apiToken]);
-
-  async function openProject(project) {
-    setSelectedProject(project);
-    try {
-      const result = await request('/api/projects/' + project.id + '/files');
-      setProjectFiles(result.items || []);
-    } catch (error) { setNotice(error.message); }
-  }
-
-  async function uploadProjectFile(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !selectedProject) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setNotice('حجم الملف يتجاوز الحد المسموح (10 ميغابايت).');
-      return;
-    }
-    const form = new FormData();
-    form.append('file', file);
-    setUploadingFile(true);
-    try {
-      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files', {
-        method: 'POST',
-        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
-        body: form,
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || 'تعذر رفع الملف.');
-      setNotice('تم رفع الملف بنجاح.');
-      await openProject(selectedProject);
-    } catch (error) { setNotice(error.message); }
-    finally { setUploadingFile(false); }
-  }
-
-  async function downloadProjectFile(filename) {
-    if (!selectedProject) return;
-    try {
-      const response = await fetch(API + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
-        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
-      });
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.detail || 'تعذر تنزيل الملف.');
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) { setNotice(error.message); }
-  }
-
-  async function createProposal(event) {
-    event.preventDefault();
-    if (!proposal.title.trim() || !proposal.description.trim()) return;
-    setBusy(true);
-    try {
-      await request('/api/approvals', { method: 'POST', body: JSON.stringify(proposal) });
-      setProposal({ title: '', description: '', risk: 'medium' });
-      setNotice('تم تسجيل طلب الموافقة. لم يُنفّذ أي إجراء.');
-      await refresh();
-    } catch (error) { setNotice(error.message); }
-    finally { setBusy(false); }
-  }
-
-  async function decide(id, decision) {
-    setBusy(true);
-    try {
-      await request(`/api/approvals/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, note: 'قرار من لوحة التحكم' }) });
-      setNotice(decision === 'approved' ? 'سُجلت الموافقة فقط؛ التنفيذ يحتاج خطوة مستقلة.' : 'تم رفض الطلب وتسجيل القرار.');
-      await refresh();
-    } catch (error) { setNotice(error.message); }
-    finally { setBusy(false); }
-  }
-
-  const current = useMemo(() => modules.find((item) => item.id === active), [active]);
-
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">ST</div><div><strong>SOULARAB TECH</strong><small>IDEAS INTO DIGITAL REALITY</small></div></div>
-      <div className="side-caption">مساحة العمل</div>
-      <nav aria-label="القائمة الرئيسية">{modules.map((item) => <button key={item.id} className={active === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><span>{item.title}</span>{item.id === 'security' && approvals.length > 0 && <b className="nav-count">{approvals.length}</b>}</button>)}</nav>
-      <div className="sidebar-bottom"><span className={api.state === 'online' ? 'status-dot online' : 'status-dot'} />{api.state === 'online' ? 'الخادم متصل' : 'الخادم غير متصل'}<small>الإصدار {api.version}</small></div>
-    </aside>
-
-    <main className="main-area">
-      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
-      {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="إغلاق">×</button></div>}
-
-      {active === 'overview' && <section className="content">
-        <div className="hero"><div><span className="pill">منصة مفتوحة المصدر · نواة أولية</span><h2>كل أدواتك الإبداعية<br/><em>في مساحة واحدة.</em></h2><p>بيئة عمل موحدة للمواقع والتصميم والوسائط والتطبيقات ووكلاء الذكاء الاصطناعي، مع تحكم واضح في الصلاحيات والبيانات.</p><button className="button primary" onClick={() => setActive('assistant')}>ابدأ من المساعد الذكي <span>←</span></button></div><div className="hero-orb"><div className="orb-ring ring-one"/><div className="orb-ring ring-two"/><div className="orb-core">ST</div></div></div>
-        <div className="section-heading"><div><h3>مركز العمليات</h3><p>ملخص الاتصال والمهام التي تحتاج قرارك</p></div></div>
-        <div className="stats-grid"><article className="stat-card"><span>حالة الخادم</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصل' : 'غير متصل'}</strong><small>{api.mode || 'بانتظار تشغيل الخلفية'}</small></article><article className="stat-card"><span>طلبات الموافقة</span><strong>{approvals.length}</strong><small>تنتظر مراجعتك</small></article><article className="stat-card"><span>الأقسام</span><strong>10</strong><small>واجهة موحدة</small></article><article className="stat-card"><span>الاتصال الخارجي</span><strong className="good">مقيّد</strong><small>لا اتصال دون إعداد وموافقة</small></article></div>
-        <div className="section-heading"><div><h3>مساحات العمل</h3><p>اختر المجال الذي تريد العمل عليه</p></div></div>
-        <div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div>
-        <div className="section-heading"><div><h3>آخر العمليات</h3><p>سجل قابل للمراجعة</p></div><button className="text-button" onClick={() => setActive('security')}>عرض الكل</button></div>
-        <AuditList events={events}/>
-      </section>}
-
-      {active === 'files' && <section className="content">
-        <div className="project-layout">
-          <div className="panel-card">
-            <h3>إنشاء مساحة مشروع</h3>
-            <p className="muted">كل مشروع يحصل على سجل مستقل ومجلد محلي خاص به على جهاز الخادم.</p>
-            <form className="proposal-form" onSubmit={createProject}>
-              <label>اسم المشروع<input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required minLength="2" maxLength="100" placeholder="مثال: متجر إلكتروني"/></label>
-              <label>وصف المشروع<textarea rows="3" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} maxLength="1000" placeholder="اكتب وصفاً مختصراً (اختياري)"/></label>
-              <button className="button primary" disabled={busy || !projectForm.title.trim()}>{busy ? 'جارٍ الإنشاء…' : 'إنشاء المشروع +'}</button>
-            </form>
-          </div>
-          <div className="panel-card project-list-panel">
-            <div className="section-heading"><div><h3>مشاريعي</h3><p>المشاريع النشطة والمؤرشفة</p></div><button className="button secondary" onClick={loadProjects}>تحديث ↻</button></div>
-            {loadingProjects ? <Empty text="جارٍ تحميل المشاريع…"/> : projects.length ? <div className="project-list">
-              {projects.map((project) => <article className="project-card" key={project.id}>
-                <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? 'نشط' : 'مؤرشف'}</span></div>
-                <strong>{project.title}</strong><p>{project.description || 'لا يوجد وصف لهذا المشروع.'}</p>
-                <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
-                {project.status === 'active' && <div className="project-actions"><button className="text-button" onClick={() => openProject(project)}>إدارة الملفات</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>أرشفة</button></div>}
-              </article>)}
-            </div> : <Empty text="لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج."/>}
-          </div>
-        </div>
-        {selectedProject && <div className="panel-card workspace-files">
-          <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>إدارة الملفات داخل مساحة هذا المشروع فقط</p></div><button className="text-button" onClick={() => setSelectedProject(null)}>إغلاق</button></div>
-          <label className="upload-control">رفع ملف (حد أقصى 10 MB)<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
-          {uploadingFile && <p className="muted">جارٍ رفع الملف…</p>}
-          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>تنزيل</button></div>)}</div> : <Empty text="لا توجد ملفات في مساحة هذا المشروع بعد."/>}
-          <p className="chat-footnote">الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.</p>
-        </div>}
-        <div className="panel-card workspace-note"><strong>حماية الملفات</strong><p>تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.</p></div>
-      </section>}
-
-      {active === "assistant" && <section className="content">
-        <div className="assistant-toolbar panel-card">
-          <div><h3>المساعد المحلي</h3><p className="muted">تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? "جارٍ الفحص…" : assistantStatus.connected ? "Ollama متصلة" : "Ollama غير متصلة"}</span><button className="button secondary" onClick={loadAssistant}>فحص الاتصال</button></div>
-        </div>
-        <div className="chat-panel panel-card">
-          <div className="chat-heading"><div><h3>محادثة جديدة</h3><small>المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.</small></div>
-            <select aria-label="اختر النموذج" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={!models.length}>
-              {!models.length && <option value="">لا توجد نماذج متاحة</option>}
-              {models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}
-            </select>
-          </div>
-          <div className="chat-transcript" aria-live="polite">
-            {!chatMessages.length && <div className="chat-empty"><span>✦</span><strong>ما الذي نعمل عليه اليوم؟</strong><p>اختر نموذجاً محلياً وابدأ محادثتك. لن يتم إرسال رسائلك إلى خدمة سحابية.</p></div>}
-            {chatMessages.map((message, index) => <article key={index} className={"chat-message " + message.role}><small>{message.role === "user" ? "أنت" : "المساعد"}</small><p>{message.content}</p></article>)}
-            {sendingChat && <div className="chat-thinking">النموذج يفكر…</div>}
-          </div>
-          <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? "اكتب رسالتك هنا…" : "شغّل Ollama وثبّت نموذجاً محلياً أولاً"} disabled={!models.length || sendingChat} />
-            <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? "جارٍ الإرسال…" : "إرسال ↑"}</button>
-          </form>
-          <p className="chat-footnote">يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.</p>
-        </div>
-      </section>}
-      {active === 'security' && <section className="content two-col">
-        <div className="panel-card"><div className="section-heading"><div><h3>طلبات الموافقة</h3><p>الموافقة لا تعني التنفيذ التلقائي</p></div><span className="pill">{approvals.length} معلّق</span></div>
-          {approvals.length ? approvals.map((item) => <article className="approval" key={item.id}><div className="approval-top"><strong>{item.title}</strong><span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? 'مرتفع' : item.risk === 'low' ? 'منخفض' : 'متوسط'}</span></div><p>{item.description}</p><small>{new Date(item.created_at).toLocaleString('ar')}</small><div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>موافقة</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>رفض</button></div></article>) : <Empty text="لا توجد طلبات معلّقة حالياً."/>}
-        </div>
-        <div className="panel-card"><h3>تسجيل طلب جديد</h3><p className="muted">سجّل الإجراء المقترح ليظهر في قائمة المراجعة. لا ينفذ النظام أي تغيير من هذه الخطوة.</p><form className="proposal-form" onSubmit={createProposal}><label>عنوان الإجراء<input value={proposal.title} onChange={(e) => setProposal({...proposal, title:e.target.value})} required maxLength="120" placeholder="مثال: ربط مزود نموذج محلي"/></label><label>التفاصيل<textarea value={proposal.description} onChange={(e) => setProposal({...proposal, description:e.target.value})} required rows="4" maxLength="2000" placeholder="ما الذي سيتغير؟ ولماذا؟"/></label><label>مستوى المخاطر<select value={proposal.risk} onChange={(e) => setProposal({...proposal, risk:e.target.value})}><option value="low">منخفض</option><option value="medium">متوسط</option><option value="high">مرتفع</option></select></label><button className="button primary" disabled={busy}>إرسال للمراجعة</button></form></div>
-        <div className="panel-card"><h3>مفتاح الوصول المحلي</h3><p className="muted">أدخل رمز API الذي ضبطته في الخادم. يُحفظ في جلسة المتصفح الحالية فقط.</p><form onSubmit={(e) => {e.preventDefault();sessionStorage.setItem('st-api-token',apiToken);refresh();}}><label>رمز API<input type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder="اتركه فارغاً إذا لم تضبطه"/></label><button className="button secondary">حفظ للجلسة</button></form></div>
-        <div className="panel-card"><h3>مبادئ الحماية</h3><ul className="safety-list"><li>لا اتصال بمزود خارجي افتراضياً.</li><li>لا تعديل أو حذف أو نشر دون موافقة منفصلة.</li><li>كل قرار يُسجل في سجل التدقيق.</li><li>لا توجد كلمات مرور تجريبية مضمنة في الواجهة.</li><li>المهام الخطرة تتطلب مراجعة بشرية.</li></ul></div>
-      </section>}
-
-      {active !== 'overview' && active !== 'security' && <section className="content"><div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">تم تجهيز نقطة التكامل ضمن النواة</span></div><div className="panel-card roadmap"><h3>حالة هذا القسم</h3><p>الواجهة الأساسية جاهزة، أما محرك التنفيذ وربط الأدوات فيُضافان كوحدات مستقلة بعد فحص الترخيص والموارد المطلوبة.</p><div className="roadmap-row"><span>واجهة المستخدم</span><b className="good">جاهزة</b></div><div className="roadmap-row"><span>واجهة API الخلفية</span><b className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصلة' : 'بانتظار التشغيل'}</b></div><div className="roadmap-row"><span>الموصلات والنماذج</span><b>غير مفعّلة افتراضياً</b></div><button className="button secondary" onClick={() => setActive('security')}>إدارة الموافقات والأمان</button></div></section>}
-    </main>
-      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-        <form className="auth-card" onSubmit={unlockWorkspace}>
-          <div className="brand-mark auth-mark">ST</div>
-          <p className="eyebrow">SOULARAB TECH / SECURE ACCESS</p>
-          <h2 id="auth-title">مساحة العمل محمية</h2>
-          <p>أدخل رمز الوصول الذي ضبطته في ملف إعدادات الخادم لفتح لوحة التحكم. يُحفظ الرمز في جلسة المتصفح الحالية فقط.</p>
-          <label>رمز الوصول<input type="password" value={loginToken} onChange={(e) => setLoginToken(e.target.value)} autoComplete="current-password" required placeholder="أدخل رمز API"/></label>
-          <button className="button primary" disabled={!loginToken.trim()}>فتح مساحة العمل</button>
-        </form>
-      </div>}
+function Mark() {
+  return <div className="brand-lockup">
+    <img src="/icon.svg" alt="SOULARAB TECH emblem" />
+    <div><strong>SOULARAB TECH</strong><small>IDEAS INTO DIGITAL REALITY</small></div>
   </div>;
 }
 
-function Empty({text}) { return <div className="empty">{text}</div>; }
-function AuditList({events}) { return events.length ? <div className="audit-list">{events.map((event) => <div className="audit-row" key={event.id}><span className="audit-mark">•</span><div><strong>{event.action}</strong><small>{event.details}</small></div><time>{new Date(event.created_at).toLocaleString('ar')}</time></div>)}</div> : <Empty text="لا توجد عمليات مسجلة بعد."/>; }
+function App() {
+  const [page, setPage] = useState('home');
+  const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
+  const [lang, setLang] = useState(() => localStorage.getItem('st-lang') || 'ar');
+  const [bubble, setBubble] = useState(false);
+  const [chat, setChat] = useState('');
+  const [query, setQuery] = useState('');
+  const [pin, setPin] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const [vaultTab, setVaultTab] = useState('notes');
+  const [note, setNote] = useState('');
+  const [approved, setApproved] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [toast, setToast] = useState('');
+  const t = copy[lang];
+  const rtl = lang === 'ar';
+  const current = useMemo(() => mainSections.find(x => x.id === page), [page]);
+
+  function notify(message) {
+    setToast(message);
+    window.setTimeout(() => setToast(''), 2600);
+  }
+
+  function navigate(next) {
+    setPage(next);
+    setBubble(false);
+    if (next !== 'vault') setUnlocked(false);
+  }
+
+  function back() {
+    if (page === 'vault' && unlocked) { setUnlocked(false); return; }
+    setPage(page === 'home' ? 'home' : page === 'work' || page === 'hub' || page === 'jathr' || page === 'vault' ? 'home' : 'work');
+    setBubble(false);
+  }
+
+  function unlockVault(event) {
+    event.preventDefault();
+    if (/^\d{4}$/.test(pin)) {
+      setUnlocked(true);
+      setPin('');
+    }
+  }
+
+  function saveNote(event) {
+    event.preventDefault();
+    if (!approved || !note.trim()) return;
+    setNotes(items => [{ id: Date.now(), text: note.trim(), date: new Date().toLocaleString(rtl ? 'ar' : 'en') }, ...items]);
+    setNote('');
+    setApproved(false);
+    notify(rtl ? 'تم إيداع الملاحظة في مساحة الملاحظات.' : 'Note deposited in Notes.');
+  }
+
+  function translateAction() {
+    notify(t.translateHint);
+  }
+
+  return <div className="app-shell" data-theme={theme} dir={rtl ? 'rtl' : 'ltr'}>
+    <header className="topbar">
+      <button className="back-button" onClick={back} aria-label={t.back}><span>↩</span><span>{t.back}</span></button>
+      <Mark />
+      <div className="top-controls">
+        <button className="control-button" onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('st-theme', next); }} title={t.theme}>{theme === 'dark' ? '☼' : '☾'}<span>{theme === 'dark' ? t.light : t.dark}</span></button>
+        <button className="control-button language-button" onClick={() => { const next = lang === 'ar' ? 'en' : 'ar'; setLang(next); localStorage.setItem('st-lang', next); }} title={t.language}><span className="language-glyph">文</span><span>{lang === 'ar' ? 'EN' : 'عربي'}</span></button>
+      </div>
+    </header>
+
+    <main className="page-wrap">
+      {page === 'home' && <>
+        <section className="welcome-panel">
+          <div className="welcome-copy"><span className="eyebrow">YOUR PRIVATE CREATIVE INTELLIGENCE</span><h1>{t.greeting} <em>SOULARAB TECH</em></h1><p>{t.intro}</p></div>
+          <div className="assistant-card">
+            <div className="assistant-card-head"><div className="rooh-avatar">ر</div><div><strong>{t.assistant}</strong><small>{rtl ? 'جاهزة لتلقي توجيهاتك' : 'Ready for your instructions'}</small></div><span className="online-indicator" /></div>
+            <p>{t.assistantHint}</p>
+            <form className="assistant-input" onSubmit={e => { e.preventDefault(); if(query.trim()) { setChat(query); setQuery(''); notify(rtl ? 'واجهة المحادثة جاهزة للربط بمحرك روح.' : 'Chat interface is ready for the ROOH engine.'); } }}>
+              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} />
+              <button type="button" className="translate-button" onClick={translateAction}>{t.translate}</button>
+              <button className="send-button" type="submit" aria-label={t.send}>➤</button>
+            </form>
+            <div className="assistant-card-foot"><span>✦ {rtl ? 'تحليل وتنسيق بإذنك' : 'Analysis and coordination with your permission'}</span><button onClick={()=>setBubble(true)}>{rtl ? 'تحويل إلى فقاعة عائمة' : 'Pop out assistant'} ↗</button></div>
+          </div>
+        </section>
+
+        <section className="section-block"><div className="section-title"><div><span className="eyebrow">CONTROL CENTER</span><h2>{t.sections}</h2><p>{t.explore}</p></div><span className="section-count">04</span></div>
+          <div className="workspace-grid">{mainSections.map((item,index)=><button key={item.id} className={'workspace-card card-'+item.id} onClick={()=>navigate(item.id)}><span className="card-index">0{index+1}</span><span className="workspace-icon">{item.icon}</span><strong>{item.title}</strong><small>{item.subtitle}</small><span className="card-arrow">↗</span></button>)}</div>
+        </section>
+
+        <section className="quick-strip"><div><span className="eyebrow">SOULARAB SYSTEM</span><strong>{t.operations}</strong><small>{rtl ? 'المهام والموافقات وحالة المحركات في مكان واحد' : 'Tasks, approvals and engine status in one place'}</small></div><div className="quick-actions"><button onClick={()=>notify(t.status)}>{t.projects}</button><button onClick={()=>notify(t.status)}>{t.approvals}</button><button onClick={()=>notify(t.status)}>{t.settings}</button></div></section>
+      </>}
+
+      {page === 'work' && <section className="department-page"><div className="page-heading"><span className="eyebrow">ROOH · WORK ORCHESTRATION</span><h1>{t.aiTitle}</h1><p>{t.aiDesc}</p></div><div className="ai-grid">{aiSections.map((item,index)=><button className="ai-card" key={item[0]} onClick={()=>notify(t.coming)}><span className="ai-number">{String(index+1).padStart(2,'0')}</span><span className="ai-icon">{item[3]}</span><strong>{item[1]}</strong><small>{item[2]}</small><span className="card-arrow">↗</span></button>)}</div><div className="rooh-manager"><div className="rooh-avatar">ر</div><div><strong>{rtl ? 'روح تدير هذا القسم' : 'ROOH manages this workspace'}</strong><p>{rtl ? 'لا تظهر فقاعة عائمة هنا؛ روح هي المديرة المدمجة في هذا القسم.' : 'No floating assistant here; ROOH is embedded as the department manager.'}</p></div></div></section>}
+
+      {page === 'hub' && <section className="department-page"><div className="page-heading"><span className="eyebrow">PRIVATE DEVELOPMENT HUB · 11</span><h1>SOULARAB HUB</h1><p>{t.hubDesc}</p></div><div className="feature-grid">{[['▱',rtl?'المستودعات الخاصة':'Private repositories'],['⑂',rtl?'الفروع والإصدارات':'Branches & releases'],['✓',rtl?'الاختبارات والبناء':'Tests & builds'],['⌕',rtl?'البحث داخل الأكواد':'Code search']].map(x=><article className="feature-card" key={x[1]}><span>{x[0]}</span><strong>{x[1]}</strong><small>{t.status}</small></article>)}</div></section>}
+
+      {page === 'jathr' && <section className="department-page"><div className="page-heading"><span className="eyebrow">DEVICE INTELLIGENCE · 12</span><h1>{t.jathr}</h1><p>{t.jathrDesc}</p></div><div className="device-grid">{[['◉',rtl?'الكاميرات الحديثة':'Modern cameras'],['▣',rtl?'الشاشات':'Displays'],['⌁',rtl?'الإنترنت والاتصالات':'Internet & connectivity'],['▦',rtl?'الهواتف والأجهزة اللوحية':'Phones & tablets'],['⌂',rtl?'الأجهزة المنزلية الذكية':'Smart home devices'],['◇',rtl?'أنظمة التحكم والأمان':'Control & security systems']].map(x=><button className="device-card" key={x[1]} onClick={()=>notify(t.coming)}><span>{x[0]}</span><strong>{x[1]}</strong><small>{t.status}</small></button>)}</div></section>}
+
+      {page === 'vault' && <section className="department-page vault-page"><div className="page-heading"><span className="eyebrow">PRIVATE · ENCRYPTED SPACE</span><h1>{t.vault}</h1><p>{t.vaultDesc}</p></div>{!unlocked ? <form className="vault-lock" onSubmit={unlockVault}><div className="vault-lock-icon">▣</div><h2>{t.lockTitle}</h2><p>{t.lockDesc}</p><label>{t.pin}<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength="4" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="••••" autoComplete="off" /></label><button className="gold-button" disabled={pin.length!==4}>{t.unlock}</button><small>{rtl?'واجهة القفل في هذه النسخة للعرض فقط؛ المصادقة والتشفير الفعليان ضمن مرحلة الأمان.':'Lock screen is visual in this build; real authentication and encryption belong to the security phase.'}</small></form> : <><div className="vault-tabs">{[['notes',t.notes],['active',t.active],['deferred',t.deferred],['code',t.savedCode],['review',t.review]].map(x=><button className={vaultTab===x[0]?'selected':''} onClick={()=>setVaultTab(x[0])} key={x[0]}>{x[1]}</button>)}</div>{vaultTab==='notes' ? <div className="notes-layout"><form className="note-editor" onSubmit={saveNote}><h2>{t.addNote}</h2><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder={t.notePlaceholder} /><div className="editor-tools"><button type="button" className="translate-button" onClick={translateAction}>{t.translate}</button><label className="approval-check"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>{t.approval}</label></div><button className="gold-button" disabled={!approved||!note.trim()}>{t.save}</button><p>{t.noteOnly}</p></form><div className="notes-list">{notes.length ? notes.map(x=><article key={x.id}><p>{x.text}</p><small>{x.date}</small></article>) : <div className="empty-state">{t.noItems}</div>}</div></div> : <div className="empty-state">{t.noItems}</div>}</>}</section>}
+    </main>
+
+    {bubble && page !== 'work' && page !== 'vault' && <div className="assistant-bubble-panel"><div className="bubble-head"><div className="rooh-avatar">ر</div><strong>{t.assistant}</strong><button onClick={()=>setBubble(false)}>×</button></div><p>{t.assistantHint}</p><form onSubmit={e=>{e.preventDefault(); if(chat.trim()) notify(t.coming);}}><input value={chat} onChange={e=>setChat(e.target.value)} placeholder={t.search}/><button className="send-button">{'➤'}</button></form><small>{rtl?'روح لا تنفذ أي إجراء دون موافقتك.':'ROOH never executes an action without your approval.'}</small></div>}
+    {page !== 'home' && page !== 'work' && page !== 'vault' && !bubble && <button className="floating-rooh" onClick={()=>setBubble(true)} aria-label={t.assistantBubble}><span>ر</span></button>}
+    {toast && <div className="toast" role="status">{toast}</div>}
+    <footer className="app-footer"><span>SOULARAB TECH</span><span>IDEAS INTO DIGITAL REALITY</span><span>© {new Date().getFullYear()}</span></footer>
+  </div>;
+}
+
+export default App;
