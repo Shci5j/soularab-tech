@@ -29,6 +29,7 @@ class TaskQueueApiTests(unittest.TestCase):
                     cancelled = client.post(f"/api/tasks/{created.json()['id']}/cancel")
                     self.assertEqual(cancelled.status_code, 200)
                     self.assertEqual(cancelled.json()["status"], "cancelled")
+                    self.assertEqual(cancelled.json()["execution"], "not_started")
 
     def test_task_cannot_be_cancelled_twice_or_after_terminal_state(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -42,6 +43,21 @@ class TaskQueueApiTests(unittest.TestCase):
                     task_id = created.json()["id"]
                     self.assertEqual(client.post(f"/api/tasks/{task_id}/cancel").status_code, 200)
                     self.assertEqual(client.post(f"/api/tasks/{task_id}/cancel").status_code, 409)
+
+    def test_running_task_is_not_marked_cancelled_without_a_stop_engine(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            with patch.object(main, "DATA_DIR", data_dir), patch.object(main, "DB_PATH", data_dir / "test.sqlite3"), patch.object(main, "API_TOKEN", ""), patch.object(main, "APP_ENV", "local"):
+                with TestClient(main.app) as client:
+                    created = client.post("/api/tasks", json={"title": "Build the app", "department": "system"})
+                    task_id = created.json()["id"]
+                    with main.database() as db:
+                        db.execute("UPDATE tasks SET status='running' WHERE id=?", (task_id,))
+                    response = client.post(f"/api/tasks/{task_id}/cancel")
+                    self.assertEqual(response.status_code, 409)
+                    current = client.get("/api/tasks").json()["items"][0]
+                    self.assertEqual(current["status"], "running")
+
 
     def test_task_filters_and_invalid_departments(self):
         with tempfile.TemporaryDirectory() as temp_dir:
