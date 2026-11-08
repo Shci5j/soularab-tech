@@ -280,7 +280,7 @@ export default function App() {
     form.append('file', file);
     setUploadingFile(true);
     try {
-      const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + '/api/projects/' + selectedProject.id + '/files', {
+      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files', {
         method: 'POST',
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
         body: form,
@@ -296,7 +296,7 @@ export default function App() {
   async function downloadProjectFile(filename) {
     if (!selectedProject) return;
     try {
-      const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
+      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
       });
       if (!response.ok) {
