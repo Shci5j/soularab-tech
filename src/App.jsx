@@ -68,6 +68,11 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
+  const [mediaStatus, setMediaStatus] = useState({ image: false, speech: false, loading: false });
+  const [mediaWorkflow, setMediaWorkflow] = useState('');
+  const [mediaQueue, setMediaQueue] = useState(null);
+  const [mediaTranscript, setMediaTranscript] = useState('');
+  const [mediaBusy, setMediaBusy] = useState(false);
   const [projects, setProjects] = useState([]);
   const [projectForm, setProjectForm] = useState({ title: '', description: '' });
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -217,6 +222,61 @@ export default function App() {
   }
 
   useEffect(() => { if (active === 'assistant') loadAssistant(); }, [active, apiToken]);
+  useEffect(() => { if (active === 'media') refreshMediaEngines(); }, [active, apiToken]);
+
+  async function refreshMediaEngines() {
+    setMediaStatus((current) => ({ ...current, loading: true }));
+    try {
+      const [image, speech] = await Promise.all([
+        request('/api/media/image/status'),
+        request('/api/media/speech/status'),
+      ]);
+      setMediaStatus({ image: Boolean(image.connected), speech: Boolean(speech.connected), loading: false });
+    } catch (error) {
+      setMediaStatus({ image: false, speech: false, loading: false });
+      setNotice(error.message);
+    }
+  }
+
+  async function queueMediaWorkflow(event) {
+    event.preventDefault();
+    let workflow;
+    try { workflow = JSON.parse(mediaWorkflow); }
+    catch { setNotice(language === 'ar' ? 'صيغة JSON غير صالحة.' : 'Invalid JSON format.'); return; }
+    if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow) || !Object.keys(workflow).length) {
+      setNotice(language === 'ar' ? 'أدخل سير عمل ComfyUI بصيغة API.' : 'Enter a ComfyUI API workflow.'); return;
+    }
+    setMediaBusy(true);
+    try {
+      const result = await request('/api/media/image/queue', { method: 'POST', body: JSON.stringify({ workflow }) });
+      setMediaQueue(result);
+      setNotice(language === 'ar' ? 'تم إرسال مهمة التوليد إلى ComfyUI المحلي.' : 'Generation job queued on local ComfyUI.');
+    } catch (error) { setNotice(error.message); }
+    finally { setMediaBusy(false); }
+  }
+
+  async function transcribeAudio(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    setMediaBusy(true);
+    setMediaTranscript('');
+    try {
+      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/transcribe', {
+        method: 'POST',
+        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+        body: form,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || 'تعذر تفريغ الملف الصوتي.');
+      setMediaTranscript(result.text || '');
+      setNotice(language === 'ar' ? 'اكتمل التفريغ الصوتي محلياً.' : 'Local transcription completed.');
+    } catch (error) { setNotice(error.message); }
+    finally { setMediaBusy(false); }
+  }
+
   async function loadProjects() {
     setLoadingProjects(true);
     try {
@@ -536,7 +596,29 @@ export default function App() {
         <div className="panel-card audit-panel"><div className="section-heading"><div><h3>{language === 'ar' ? 'سجل العمليات' : 'Audit log'}</h3><p>{language === 'ar' ? 'آخر الأحداث المسجلة في الخادم' : 'Latest events recorded by the server'}</p></div><button className="button secondary" onClick={refresh}>{language === 'ar' ? 'تحديث السجل ↻' : 'Refresh log ↻'}</button></div><AuditList events={events}/></div>
       </section>}
 
-      {!['overview','security','files','assistant','work','hub','root','settings','vault'].includes(active) && <section className="content">
+
+      {active === 'media' && <section className="content">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'الصور والصوت' : 'Images & Audio'}</h2><p className="muted">{language === 'ar' ? 'اتصال محلي بمحركات الوسائط دون إرسال ملفاتك إلى خدمات سحابية.' : 'Local media engines; your files are not sent to cloud services.'}</p></div><button className="button secondary" onClick={refreshMediaEngines} disabled={mediaStatus.loading}>{language === 'ar' ? 'فحص المحركات ↻' : 'Check engines ↻'}</button></div>
+        <div className="two-col">
+          <div className="panel-card">
+            <div className="section-heading"><div><h3>{language === 'ar' ? 'توليد الصور — ComfyUI' : 'Image generation — ComfyUI'}</h3><p className="muted">{language === 'ar' ? 'أرسل سير عمل API من ComfyUI إلى المحرك المحلي.' : 'Send an API-format workflow to your local ComfyUI engine.'}</p></div><span className={mediaStatus.image ? 'pill connected' : 'pill'}>{mediaStatus.loading ? '…' : mediaStatus.image ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')}</span></div>
+            <form className="proposal-form" onSubmit={queueMediaWorkflow}>
+              <label>{language === 'ar' ? 'سير العمل بصيغة JSON (API)' : 'Workflow JSON (API format)'}<textarea rows="9" value={mediaWorkflow} onChange={(e) => setMediaWorkflow(e.target.value)} spellCheck="false" placeholder={'{\n  "3": { "class_type": "KSampler", "inputs": {} }\n}'}/></label>
+              <button className="button primary" disabled={mediaBusy || !mediaStatus.image || !mediaWorkflow.trim()}>{mediaBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال مهمة التوليد' : 'Queue generation')}</button>
+            </form>
+            {mediaQueue && <div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div>}
+            <p className="chat-footnote">{language === 'ar' ? 'يلزم تشغيل ComfyUI على جهاز الخادم وتصدير سير العمل بصيغة API. زر الإرسال ينفذ المهمة المطلوبة محلياً.' : 'Run ComfyUI on the server and export the workflow in API format. Submitting queues the requested local job.'}</p>
+          </div>
+          <div className="panel-card">
+            <div className="section-heading"><div><h3>{language === 'ar' ? 'تحويل الصوت إلى نص — whisper.cpp' : 'Speech to text — whisper.cpp'}</h3><p className="muted">{language === 'ar' ? 'تفريغ ملفات صوتية باستخدام محرك محلي.' : 'Transcribe audio files using a local engine.'}</p></div><span className={mediaStatus.speech ? 'pill connected' : 'pill'}>{mediaStatus.loading ? '…' : mediaStatus.speech ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')}</span></div>
+            <label className="upload-control">{language === 'ar' ? 'اختر ملفاً صوتياً (حد أقصى 25 MB)' : 'Choose an audio file (25 MB maximum)'}<input type="file" accept=".wav,.mp3,.m4a,.ogg,.webm,.flac,.mp4,.mpeg,.mpga,audio/*" onChange={transcribeAudio} disabled={mediaBusy || !mediaStatus.speech}/></label>
+            {mediaBusy && <p className="muted">{language === 'ar' ? 'جارٍ معالجة الملف محلياً…' : 'Processing locally…'}</p>}
+            {mediaTranscript && <div className="chat-message assistant"><small>{language === 'ar' ? 'النص المستخرج' : 'Transcript'}</small><p>{mediaTranscript}</p><button className="text-button" onClick={() => navigator.clipboard?.writeText(mediaTranscript)}>{language === 'ar' ? 'نسخ النص' : 'Copy text'}</button></div>}
+            <p className="chat-footnote">{language === 'ar' ? 'الصيغ المدعومة: WAV وMP3 وM4A وOGG وWEBM وFLAC. الملف لا يغادر خادمك المحلي.' : 'Supported formats: WAV, MP3, M4A, OGG, WEBM, and FLAC. Files stay on your local server.'}</p>
+          </div>
+        </div>
+      </section>}
+      {!['overview','security','files','assistant','media','work','hub','root','settings','vault'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
