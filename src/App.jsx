@@ -126,7 +126,7 @@ export default function App() {
   useEffect(() => {
     const fonts = { ibm: "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif", system: "system-ui, sans-serif", tahoma: "Tahoma, Arial, sans-serif", georgia: "Georgia, serif" };
     document.documentElement.style.fontFamily = fonts[preferences.font] || fonts.ibm;
-    document.documentElement.style.fontSize = preferences.fontScale + '%';
+    document.body.style.zoom = String(preferences.fontScale / 100);
     document.documentElement.dataset.density = preferences.density;
     document.documentElement.dataset.reducedMotion = String(preferences.reducedMotion);
     localStorage.setItem('st-preferences', JSON.stringify(preferences));
