@@ -14,6 +14,8 @@ const modules = [
   { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
 ];
 
+const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
+
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function App() {
@@ -357,7 +359,7 @@ export default function App() {
     settings: { title: 'General settings', desc: 'Workspace, connection, and appearance' },
     vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
-  const current = useMemo(() => pageTitles[active] || modules.find((item) => item.id === active) || pageTitles.overview, [active]);
+  const current = useMemo(() => { if (pageTitles[active]) return pageTitles[active]; const item = modules.find((entry) => entry.id === active) || pageTitles.overview; return language === 'en' && englishModules[active] ? { ...item, title: englishModules[active][0], desc: englishModules[active][1] } : item; }, [active, language]);
   const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return <div className="app-shell">
