@@ -137,3 +137,5 @@
 html[dir="ltr"] .topbar,html[dir="ltr"] .destination-card,html[dir="ltr"] .module-card,html[dir="ltr"] .rooh-hero,html[dir="ltr"] .vault-entry,html[dir="ltr"] .module-action,html[dir="ltr"] .auth-card{text-align:left}
 html[dir="ltr"] .safety-list{padding-left:19px;padding-right:0}
 html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
+
+.settings-row input[type="url"]{width:min(100%,360px)}
