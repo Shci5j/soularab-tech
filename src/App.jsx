@@ -72,6 +72,7 @@ export default function App() {
   const [mediaWorkflow, setMediaWorkflow] = useState('');
   const [mediaQueue, setMediaQueue] = useState(null);
   const [mediaHistory, setMediaHistory] = useState(null);
+  const [mediaImages, setMediaImages] = useState([]);
   const [mediaTranscript, setMediaTranscript] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -115,6 +116,8 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('st-vault', JSON.stringify(vaultItems));
   }, [vaultItems]);
+
+  useEffect(() => () => { mediaImages.forEach((item) => URL.revokeObjectURL(item.url)); }, [mediaImages]);
 
   function saveVaultItem(event) {
     event.preventDefault();
@@ -269,9 +272,24 @@ export default function App() {
   async function loadMediaHistory() {
     if (!mediaQueue?.prompt_id) return;
     setMediaBusy(true);
+    setMediaImages([]);
     try {
       const result = await request('/api/media/image/history/' + encodeURIComponent(mediaQueue.prompt_id));
       setMediaHistory(result);
+      const entry = result?.[mediaQueue.prompt_id] || Object.values(result || {})[0];
+      const outputs = Object.values(entry?.outputs || {});
+      const imageRefs = outputs.flatMap((output) => Array.isArray(output.images) ? output.images : []).slice(0, 8);
+      const images = await Promise.all(imageRefs.map(async (item) => {
+        const params = new URLSearchParams({ filename: item.filename || '', subfolder: item.subfolder || '', type: 'output' });
+        const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/image/view?' + params.toString(), {
+          headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+        });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return { url: URL.createObjectURL(blob), name: item.filename || 'generated-image' };
+      }));
+      setMediaImages(images.filter(Boolean));
+      if (imageRefs.length && !images.some(Boolean)) setNotice(language === 'ar' ? 'تم جلب سجل المهمة لكن تعذر تحميل ملفات الصور.' : 'Job history loaded, but image files could not be fetched.');
     } catch (error) { setNotice(error.message); }
     finally { setMediaBusy(false); }
   }
@@ -801,7 +819,7 @@ export default function App() {
               <label>{language === 'ar' ? 'سير العمل بصيغة JSON (API)' : 'Workflow JSON (API format)'}<textarea rows="9" value={mediaWorkflow} onChange={(e) => setMediaWorkflow(e.target.value)} spellCheck="false" placeholder={'{\n  "3": { "class_type": "KSampler", "inputs": {} }\n}'}/></label>
               <button className="button primary" disabled={mediaBusy || !mediaStatus.image || !mediaWorkflow.trim()}>{mediaBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال مهمة التوليد' : 'Queue generation')}</button>
             </form>
-            {mediaQueue && <><div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div><button className="button secondary" onClick={loadMediaHistory} disabled={mediaBusy}>{language === 'ar' ? 'فحص نتيجة المهمة' : 'Check job result'}</button>{mediaHistory && <label>{language === 'ar' ? 'بيانات النتيجة' : 'Result data'}<textarea rows="6" readOnly value={JSON.stringify(mediaHistory, null, 2)}/></label>}</>}
+            {mediaQueue && <><div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div><button className="button secondary" onClick={loadMediaHistory} disabled={mediaBusy}>{language === 'ar' ? 'فحص نتيجة المهمة' : 'Check job result'}</button>{mediaHistory && <><label>{language === 'ar' ? 'بيانات النتيجة' : 'Result data'}<textarea rows="6" readOnly value={JSON.stringify(mediaHistory, null, 2)}/></label>{mediaImages.length > 0 && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'12px',marginTop:'14px'}}>{mediaImages.map((item,index)=><figure key={item.url} style={{margin:0}}><img src={item.url} alt={item.name} style={{width:'100%',height:'auto',borderRadius:'12px',border:'1px solid var(--line)'}}/><figcaption className="chat-footnote">{item.name}</figcaption></figure>)}</div>}</>}</>}
             <p className="chat-footnote">{language === 'ar' ? 'يلزم تشغيل ComfyUI على جهاز الخادم وتصدير سير العمل بصيغة API. زر الإرسال ينفذ المهمة المطلوبة محلياً.' : 'Run ComfyUI on the server and export the workflow in API format. Submitting queues the requested local job.'}</p>
           </div>
           <div className="panel-card">
