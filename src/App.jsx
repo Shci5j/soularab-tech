@@ -69,6 +69,8 @@ export default function App() {
   const [sendingChat, setSendingChat] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
   const [mediaStatus, setMediaStatus] = useState({ image: false, speech: false, loading: false });
+  const [mediaModels, setMediaModels] = useState([]);
+  const [imageDraft, setImageDraft] = useState({ model:'', prompt:'A premium cinematic product photograph, elegant studio lighting, refined composition, ultra-detailed', negative:'blurry, low quality, distorted, watermark, text', width:1024, height:1024, steps:24 });
   const [mediaWorkflow, setMediaWorkflow] = useState('');
   const [mediaQueue, setMediaQueue] = useState(null);
   const [mediaHistory, setMediaHistory] = useState(null);
@@ -241,15 +243,45 @@ export default function App() {
   async function refreshMediaEngines() {
     setMediaStatus((current) => ({ ...current, loading: true }));
     try {
-      const [image, speech] = await Promise.all([
+      const [image, speech, models] = await Promise.all([
         request('/api/media/image/status'),
         request('/api/media/speech/status'),
+        request('/api/media/image/models'),
       ]);
+      const available = Array.isArray(models.models) ? models.models : [];
+      setMediaModels(available);
+      setImageDraft((current) => ({ ...current, model: available.includes(current.model) ? current.model : (available[0] || '') }));
       setMediaStatus({ image: Boolean(image.connected), speech: Boolean(speech.connected), loading: false });
     } catch (error) {
       setMediaStatus({ image: false, speech: false, loading: false });
+      setMediaModels([]);
       setNotice(error.message);
     }
+  }
+
+  async function queuePromptImage(event) {
+    event.preventDefault();
+    if (!imageDraft.model || !imageDraft.prompt.trim()) {
+      setNotice(language === 'ar' ? 'اختر نموذجاً واكتب وصف الصورة.' : 'Choose a checkpoint and enter an image prompt.');
+      return;
+    }
+    const dimension = (value) => Math.max(256, Math.min(1536, Math.round(Number(value || 1024) / 64) * 64));
+    const workflow = {
+      "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: imageDraft.model } },
+      "2": { class_type: "CLIPTextEncode", inputs: { text: imageDraft.prompt.trim(), clip: ["1", 1] } },
+      "3": { class_type: "CLIPTextEncode", inputs: { text: imageDraft.negative.trim(), clip: ["1", 1] } },
+      "4": { class_type: "EmptyLatentImage", inputs: { width: dimension(imageDraft.width), height: dimension(imageDraft.height), batch_size: 1 } },
+      "5": { class_type: "KSampler", inputs: { seed: Math.floor(Math.random() * 2147483647), steps: Math.max(1, Math.min(60, Number(imageDraft.steps) || 24)), cfg: 7, sampler_name: "euler", scheduler: "normal", denoise: 1, model: ["1", 0], positive: ["2", 0], negative: ["3", 0], latent_image: ["4", 0] } },
+      "6": { class_type: "VAEDecode", inputs: { samples: ["5", 0], vae: ["1", 2] } },
+      "7": { class_type: "SaveImage", inputs: { images: ["6", 0], filename_prefix: "SOULARAB" } },
+    };
+    setMediaBusy(true);
+    try {
+      const result = await request('/api/media/image/queue', { method: 'POST', body: JSON.stringify({ workflow }) });
+      setMediaQueue(result); setMediaHistory(null); setMediaImages([]);
+      setNotice(language === 'ar' ? 'تم إرسال وصف الصورة إلى محرك ComfyUI المحلي.' : 'Image prompt queued on local ComfyUI.');
+    } catch (error) { setNotice(error.message); }
+    finally { setMediaBusy(false); }
   }
 
   async function queueMediaWorkflow(event) {
@@ -814,11 +846,16 @@ export default function App() {
         <div className="section-heading"><div><h2>{language === 'ar' ? 'الصور والصوت' : 'Images & Audio'}</h2><p className="muted">{language === 'ar' ? 'اتصال محلي بمحركات الوسائط دون إرسال ملفاتك إلى خدمات سحابية.' : 'Local media engines; your files are not sent to cloud services.'}</p></div><button className="button secondary" onClick={refreshMediaEngines} disabled={mediaStatus.loading}>{language === 'ar' ? 'فحص المحركات ↻' : 'Check engines ↻'}</button></div>
         <div className="two-col">
           <div className="panel-card">
-            <div className="section-heading"><div><h3>{language === 'ar' ? 'توليد الصور — ComfyUI' : 'Image generation — ComfyUI'}</h3><p className="muted">{language === 'ar' ? 'أرسل سير عمل API من ComfyUI إلى المحرك المحلي.' : 'Send an API-format workflow to your local ComfyUI engine.'}</p></div><span className={mediaStatus.image ? 'pill connected' : 'pill'}>{mediaStatus.loading ? '…' : mediaStatus.image ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')}</span></div>
-            <form className="proposal-form" onSubmit={queueMediaWorkflow}>
-              <label>{language === 'ar' ? 'سير العمل بصيغة JSON (API)' : 'Workflow JSON (API format)'}<textarea rows="9" value={mediaWorkflow} onChange={(e) => setMediaWorkflow(e.target.value)} spellCheck="false" placeholder={'{\n  "3": { "class_type": "KSampler", "inputs": {} }\n}'}/></label>
-              <button className="button primary" disabled={mediaBusy || !mediaStatus.image || !mediaWorkflow.trim()}>{mediaBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال مهمة التوليد' : 'Queue generation')}</button>
+            <div className="section-heading"><div><h3>{language === 'ar' ? 'توليد الصور — ComfyUI' : 'Image generation — ComfyUI'}</h3><p className="muted">{language === 'ar' ? 'اكتب وصف الصورة واختر نموذجاً مثبتاً؛ تُبنى عقد ComfyUI تلقائياً. ويمكنك استخدام سير عمل API المتقدم عند الحاجة.' : 'Send an API-format workflow to your local ComfyUI engine.'}</p></div><span className={mediaStatus.image ? 'pill connected' : 'pill'}>{mediaStatus.loading ? '…' : mediaStatus.image ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')}</span></div>
+            <form className="proposal-form" onSubmit={queuePromptImage}>
+              <label>{language === 'ar' ? 'نموذج التوليد' : 'Checkpoint model'}<select value={imageDraft.model} onChange={(e) => setImageDraft({...imageDraft,model:e.target.value})} disabled={!mediaModels.length}><option value="">{language === 'ar' ? 'اختر نموذجاً مثبتاً' : 'Select an installed model'}</option>{mediaModels.map((model) => <option key={model} value={model}>{model}</option>)}</select></label>
+              <label>{language === 'ar' ? 'وصف الصورة المطلوب' : 'Image prompt'}<textarea rows="4" value={imageDraft.prompt} onChange={(e) => setImageDraft({...imageDraft,prompt:e.target.value})} maxLength="3000" required/></label>
+              <label>{language === 'ar' ? 'الوصف السلبي (اختياري)' : 'Negative prompt (optional)'}<textarea rows="2" value={imageDraft.negative} onChange={(e) => setImageDraft({...imageDraft,negative:e.target.value})} maxLength="1500"/></label>
+              <div className="two-col"><label>{language === 'ar' ? 'العرض' : 'Width'}<input type="number" min="256" max="1536" step="64" value={imageDraft.width} onChange={(e) => setImageDraft({...imageDraft,width:e.target.value})}/></label><label>{language === 'ar' ? 'الارتفاع' : 'Height'}<input type="number" min="256" max="1536" step="64" value={imageDraft.height} onChange={(e) => setImageDraft({...imageDraft,height:e.target.value})}/></label></div>
+              <label>{language === 'ar' ? 'خطوات الجودة' : 'Sampling steps'}<input type="number" min="1" max="60" value={imageDraft.steps} onChange={(e) => setImageDraft({...imageDraft,steps:e.target.value})}/></label>
+              <button className="button primary" disabled={mediaBusy || !mediaStatus.image || !mediaModels.length || !imageDraft.prompt.trim()}>{mediaBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'توليد الصورة' : 'Generate image')}</button>
             </form>
+            <details className="advanced-settings"><summary>{language === 'ar' ? 'إعداد متقدم: سير عمل ComfyUI بصيغة API' : 'Advanced: ComfyUI API workflow'}</summary><form className="proposal-form" onSubmit={queueMediaWorkflow}><label>{language === 'ar' ? 'سير العمل JSON' : 'Workflow JSON'}<textarea rows="8" value={mediaWorkflow} onChange={(e) => setMediaWorkflow(e.target.value)} spellCheck="false"/></label><button className="button secondary" disabled={mediaBusy || !mediaStatus.image || !mediaWorkflow.trim()}>{language === 'ar' ? 'إرسال سير العمل المتقدم' : 'Queue advanced workflow'}</button></form></details>
             {mediaQueue && <><div className="roadmap-row"><span>{language === 'ar' ? 'معرّف المهمة' : 'Prompt ID'}</span><b>{mediaQueue.prompt_id}</b></div><button className="button secondary" onClick={loadMediaHistory} disabled={mediaBusy}>{language === 'ar' ? 'فحص نتيجة المهمة' : 'Check job result'}</button>{mediaHistory && <><label>{language === 'ar' ? 'بيانات النتيجة' : 'Result data'}<textarea rows="6" readOnly value={JSON.stringify(mediaHistory, null, 2)}/></label>{mediaImages.length > 0 && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'12px',marginTop:'14px'}}>{mediaImages.map((item,index)=><figure key={item.url} style={{margin:0}}><img src={item.url} alt={item.name} style={{width:'100%',height:'auto',borderRadius:'12px',border:'1px solid var(--line)'}}/><figcaption className="chat-footnote">{item.name}</figcaption></figure>)}</div>}</>}</>}
             <p className="chat-footnote">{language === 'ar' ? 'يلزم تشغيل ComfyUI على جهاز الخادم وتصدير سير العمل بصيغة API. زر الإرسال ينفذ المهمة المطلوبة محلياً.' : 'Run ComfyUI on the server and export the workflow in API format. Submitting queues the requested local job.'}</p>
           </div>
