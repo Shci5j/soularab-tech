@@ -102,6 +102,18 @@ def init_db() -> None:
         if "task_id" not in approval_columns:
             db.execute("ALTER TABLE approvals ADD COLUMN task_id INTEGER REFERENCES tasks(id)")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_task_id ON approvals(task_id) WHERE task_id IS NOT NULL")
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS task_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                event_type TEXT NOT NULL,
+                from_status TEXT,
+                to_status TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id, id DESC)")
 
 
 def audit(action: str, details: str) -> None:
@@ -246,6 +258,13 @@ async def ollama_request(path: str, payload: dict | None = None):
 
 def row_dict(row: sqlite3.Row) -> dict:
     return dict(row)
+
+
+def record_task_event(db: sqlite3.Connection, task_id: int, event_type: str, from_status: str | None, to_status: str, details: str, timestamp: str) -> None:
+    db.execute(
+        "INSERT INTO task_events(task_id,event_type,from_status,to_status,details,created_at) VALUES(?,?,?,?,?,?)",
+        (task_id, event_type, from_status, to_status, details[:2000], timestamp),
+    )
 
 
 @app.get("/api/health")
@@ -610,6 +629,7 @@ def create_agent_plan(payload: AgentPlanCreate, _: None = Depends(require_access
             (title, description, payload.risk, timestamp, task_id),
         )
         approval_id = approval_cursor.lastrowid
+        record_task_event(db, task_id, "agent_plan.created", None, "waiting_approval", f"أُنشئت المهمة وربطت بطلب الموافقة #{approval_id}.", timestamp)
         db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("agent_plan.created", f"الخطة #{task_id} مرتبطة بطلب الموافقة #{approval_id}. لم يبدأ التنفيذ.", timestamp))
     return {"task_id": task_id, "task_status": "waiting_approval", "approval_id": approval_id, "approval_status": "pending", "execution": "not_started"}
 
@@ -634,6 +654,7 @@ def decide_approval(approval_id: int, payload: ApprovalDecision, _: None = Depen
                 raise HTTPException(status_code=409, detail="حالة المهمة المرتبطة لا تسمح بتغيير قرار الموافقة.")
             task_status = "queued" if payload.decision == "approved" else "cancelled"
             db.execute("UPDATE tasks SET status=?, updated_at=? WHERE id=?", (task_status, timestamp, row["task_id"]))
+            record_task_event(db, row["task_id"], f"approval.{payload.decision}", "waiting_approval", task_status, f"تم {('اعتماد' if payload.decision == 'approved' else 'رفض')} طلب الموافقة #{approval_id}. لم يبدأ التنفيذ.", timestamp)
         db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", (f"approval.{payload.decision}", f"طلب #{approval_id}. لم يتم تنفيذ الإجراء.", timestamp))
         if task_status:
             db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("task.approval_transition", f"المهمة #{row['task_id']} أصبحت {task_status} بعد قرار الموافقة؛ لم يبدأ التنفيذ.", timestamp))
@@ -650,6 +671,16 @@ def list_tasks(status: Literal["queued", "planning", "waiting_approval", "runnin
     return {"items": [row_dict(row) for row in rows]}
 
 
+@app.get("/api/tasks/{task_id}/events")
+def list_task_events(task_id: int, _: None = Depends(require_access)):
+    with database() as db:
+        exists = db.execute("SELECT id FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="المهمة غير موجودة.")
+        rows = db.execute("SELECT * FROM task_events WHERE task_id=? ORDER BY id DESC LIMIT 100", (task_id,)).fetchall()
+    return {"items": [row_dict(row) for row in rows]}
+
+
 @app.post("/api/tasks", status_code=201)
 def create_task(payload: TaskCreate, _: None = Depends(require_access)):
     title = payload.title.strip()
@@ -662,6 +693,7 @@ def create_task(payload: TaskCreate, _: None = Depends(require_access)):
             (title, payload.description.strip(), payload.department, timestamp, timestamp),
         )
         task_id = cursor.lastrowid
+        record_task_event(db, task_id, "task.created", None, "queued", "تم إنشاء المهمة؛ لم يبدأ التنفيذ.", timestamp)
     audit("task.queued", f"مهمة #{task_id}: {title}؛ لم يبدأ التنفيذ.")
     return {"id": task_id, "status": "queued", "execution": "not_started"}
 
@@ -683,6 +715,7 @@ def cancel_task(task_id: int, _: None = Depends(require_access)):
             linked_approval_id = approval["id"]
             db.execute("UPDATE approvals SET status='rejected', decided_at=?, decision_note='ألغى المستخدم المهمة قبل الموافقة.' WHERE id=?", (timestamp, linked_approval_id))
         db.execute("UPDATE tasks SET status='cancelled', updated_at=? WHERE id=?", (timestamp, task_id))
+        record_task_event(db, task_id, "task.cancelled", row["status"], "cancelled", "ألغى المستخدم المهمة قبل بدء التنفيذ.", timestamp)
         db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("task.cancelled", f"تم إلغاء المهمة #{task_id} قبل بدء التنفيذ.", timestamp))
         if linked_approval_id:
             db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("approval.rejected", f"أُغلق طلب الموافقة #{linked_approval_id} بسبب إلغاء المهمة #{task_id}.", timestamp))

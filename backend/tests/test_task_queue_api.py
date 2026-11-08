@@ -139,5 +139,35 @@ class TaskQueueApiTests(unittest.TestCase):
 
 
 
+    def test_task_event_history_tracks_creation_and_approval_transition(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            with patch.object(main, "DATA_DIR", data_dir), patch.object(main, "DB_PATH", data_dir / "test.sqlite3"), patch.object(main, "API_TOKEN", ""), patch.object(main, "APP_ENV", "local"):
+                with TestClient(main.app) as client:
+                    created = client.post("/api/agent-plans", json={
+                        "title": "Prepare onboarding",
+                        "description": "Create a checklist for new team members",
+                    }).json()
+                    first_history = client.get(f"/api/tasks/{created['task_id']}/events")
+                    self.assertEqual(first_history.status_code, 200)
+                    self.assertEqual(first_history.json()["items"][0]["to_status"], "waiting_approval")
+
+                    client.post(f"/api/approvals/{created['approval_id']}/decision", json={
+                        "decision": "approved",
+                        "note": "Approved",
+                    })
+                    history = client.get(f"/api/tasks/{created['task_id']}/events").json()["items"]
+                    self.assertEqual([item["to_status"] for item in history], ["queued", "waiting_approval"])
+                    self.assertEqual(history[0]["event_type"], "approval.approved")
+
+    def test_task_event_history_returns_not_found_for_unknown_task(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            with patch.object(main, "DATA_DIR", data_dir), patch.object(main, "DB_PATH", data_dir / "test.sqlite3"), patch.object(main, "API_TOKEN", ""), patch.object(main, "APP_ENV", "local"):
+                with TestClient(main.app) as client:
+                    self.assertEqual(client.get("/api/tasks/999/events").status_code, 404)
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -105,6 +105,9 @@ export default function App() {
   const [queuedTasks, setQueuedTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskActionId, setTaskActionId] = useState(null);
+  const [taskHistoryId, setTaskHistoryId] = useState(null);
+  const [taskHistory, setTaskHistory] = useState([]);
+  const [loadingTaskHistory, setLoadingTaskHistory] = useState(false);
   const [domainDraft, setDomainDraft] = useState({ domain:'', provider:'Cloudflare Pages', project:'soularab-site' });
   const [domainReport, setDomainReport] = useState('');
 
@@ -570,6 +573,25 @@ export default function App() {
     }
   }
 
+  async function toggleTaskHistory(taskId) {
+    if (taskHistoryId === taskId) {
+      setTaskHistoryId(null);
+      setTaskHistory([]);
+      return;
+    }
+    setTaskHistoryId(taskId);
+    setLoadingTaskHistory(true);
+    try {
+      const result = await request('/api/tasks/' + taskId + '/events');
+      setTaskHistory(Array.isArray(result.items) ? result.items : []);
+    } catch (error) {
+      setTaskHistory([]);
+      setNotice(error.message);
+    } finally {
+      setLoadingTaskHistory(false);
+    }
+  }
+
   async function cancelQueuedTask(taskId) {
     setTaskActionId(taskId);
     try {
@@ -835,7 +857,14 @@ export default function App() {
             <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
             {task.description && <p>{task.description}</p>}
             <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
-            {['queued','planning','waiting_approval'].includes(task.status) && <div className="approval-actions"><button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button></div>}
+            <div className="approval-actions">
+              <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
+              {['queued','planning','waiting_approval'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
+            </div>
+            {taskHistoryId===task.id && <div className="task-history">
+              <strong>{language==='ar'?'تسلسل الحالة':'Status timeline'}</strong>
+              {loadingTaskHistory ? <small>{language==='ar'?'جارٍ تحميل السجل…':'Loading history…'}</small> : taskHistory.length ? taskHistory.map((event)=><div className="task-history-row" key={event.id}><span>{event.from_status ? event.from_status+' → ' : ''}{event.to_status}</span><small>{event.details}</small><time>{new Date(event.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</time></div>) : <small>{language==='ar'?'لا توجد أحداث مسجلة لهذه المهمة بعد.':'No recorded events for this task yet.'}</small>}
+            </div>}
           </article>)}</div> : <Empty text={language==='ar'?'لا توجد مهام في الطابور بعد. أرسل أول خطة من النموذج أعلاه.':'The queue is empty. Submit your first plan using the form above.'}/>}
           <p className="chat-footnote">{language==='ar'?'الحالة «في الانتظار» تعني أن المهمة محفوظة فقط؛ لا يوجد تنفيذ تلقائي في هذه النسخة.':'Queued means saved only; no automatic execution engine is enabled in this build.'}</p>
         </div>
