@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'soularab-tech-v8';
+const CACHE_NAME = 'soularab-tech-v9';
 const BASE_URL = new URL('./', self.location.href);
 const PRECACHE_URLS = [
   BASE_URL.href,
