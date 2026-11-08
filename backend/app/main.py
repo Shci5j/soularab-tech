@@ -642,8 +642,9 @@ async def import_project_archive(file: UploadFile = File(...), _: None = Depends
             if info.filename == "project.json":
                 continue
             mode = info.external_attr >> 16
-            if info.is_dir() or stat.S_ISLNK(mode) or info.flag_bits & 0x1:
-                raise HTTPException(status_code=400, detail="الأرشيف يحتوي على مجلدات أو روابط أو ملفات مشفرة غير مسموح بها.")
+            file_type = stat.S_IFMT(mode)
+            if info.is_dir() or stat.S_ISLNK(mode) or file_type not in {0, stat.S_IFREG} or info.flag_bits & 0x1:
+                raise HTTPException(status_code=400, detail="الأرشيف يحتوي على مجلدات أو روابط أو ملفات غير عادية أو مشفرة غير مسموح بها.")
             if "/" in info.filename or "\\" in info.filename:
                 raise HTTPException(status_code=400, detail="مسارات الملفات داخل الأرشيف غير مسموح بها.")
             try:
