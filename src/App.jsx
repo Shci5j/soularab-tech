@@ -533,13 +533,14 @@ export default function App() {
         </div>
       </section>}
     </main>
-    <nav className="utility-dock" aria-label="أدوات مساندة">
-      <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>{language === 'ar' ? 'الرئيسية' : 'Home'}</button>
-      <button className={active === 'assistant' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('assistant')}><span>✦</span>{language === 'ar' ? 'المساعد' : 'Assistant'}</button>
-      <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>{language === 'ar' ? 'الملفات' : 'Files'}</button>
-      <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>{language === 'ar' ? 'الأمان' : 'Security'}</button>
-    </nav>
-      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <nav className="utility-dock" aria-label="التنقل الرئيسي">
+      <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>{language === 'ar' ? 'البداية' : 'Home'}</button>
+      <button className={active === 'assistant' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('assistant')}><span>✦</span>{language === 'ar' ? 'روح' : 'Rooh'}</button>
+      <button className={active === 'work' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('work')}><span>✧</span>{language === 'ar' ? 'العمل' : 'Work'}</button>
+      <button className={active === 'hub' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('hub')}><span>⌘</span>{language === 'ar' ? 'هوب' : 'Hub'}</button>
+      <button className={active === 'root' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('root')}><span>⬡</span>{language === 'ar' ? 'الجذر' : 'Root'}</button>
+      <button className={active === 'settings' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('settings')}><span>⚙</span>{language === 'ar' ? 'الإعدادات' : 'Settings'}</button>
+    </nav>      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
           <p className="eyebrow">SOULARAB TECH / SECURE ACCESS</p>
