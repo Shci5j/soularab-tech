@@ -109,6 +109,20 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function importVault(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item.title !== 'string' || typeof item.content !== 'string')) {
+        throw new Error('صيغة النسخة الاحتياطية غير صالحة.');
+      }
+      setVaultItems(parsed.map((item, index) => ({ id: item.id || Date.now() + index, title: item.title, content: item.content, category: item.category || 'note', createdAt: item.createdAt || new Date().toISOString() })));
+      setNotice('تم استيراد عناصر الخزنة بنجاح.');
+    } catch (error) { setNotice(error.message || 'تعذر قراءة ملف النسخة الاحتياطية.'); }
+  }
+
   useEffect(() => {
     const fonts = { ibm: "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif", system: "system-ui, sans-serif", tahoma: "Tahoma, Arial, sans-serif", georgia: "Georgia, serif" };
     document.documentElement.style.fontFamily = fonts[preferences.font] || fonts.ibm;
@@ -433,7 +447,7 @@ export default function App() {
         </div>
       </section>}
       {active === 'vault' && <section className="content">
-        <div className="section-heading"><div><h2>الخزنة</h2><p className="muted">ملاحظاتك وأفكارك ومقتطفات العمل محفوظة محلياً على هذا الجهاز.</p></div><button className="button secondary" onClick={exportVault} disabled={!vaultItems.length}>تصدير نسخة JSON</button></div>
+        <div className="section-heading"><div><h2>الخزنة</h2><p className="muted">ملاحظاتك وأفكارك ومقتطفات العمل محفوظة محلياً على هذا الجهاز.</p></div><div className="vault-transfer"><label className="button secondary">استيراد JSON<input type="file" accept="application/json,.json" onChange={importVault} hidden/></label><button className="button secondary" onClick={exportVault} disabled={!vaultItems.length}>تصدير نسخة JSON</button></div></div>
         <div className="vault-layout">
           <div className="panel-card"><h3>حفظ عنصر جديد</h3><form className="proposal-form" onSubmit={saveVaultItem}>
             <label>عنوان العنصر<input value={vaultDraft.title} onChange={(e) => setVaultDraft({...vaultDraft,title:e.target.value})} required maxLength="120" placeholder="عنوان الفكرة أو الملاحظة"/></label>
