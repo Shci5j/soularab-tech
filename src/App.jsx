@@ -600,6 +600,26 @@ export default function App() {
       setNotice(language === 'ar' ? 'تعذر إعداد موجز الهوية. تحقق من اتصال النموذج المحلي.' : 'Could not prepare the brand brief. Check the local model connection.');
     } finally { setBrandBriefGenerating(false); }
   }
+  function downloadBrandBrief() {
+    if (!brandBrief) return;
+    const lines = [
+      brandDraft.name + ' — ' + brandDraft.tagline,
+      '',
+      (language === 'ar' ? 'التموضع' : 'Positioning') + ': ' + brandBrief.positioning,
+      (language === 'ar' ? 'الجمهور المستهدف' : 'Target audience') + ': ' + brandBrief.audience,
+      (language === 'ar' ? 'نبرة العلامة' : 'Brand voice') + ': ' + brandBrief.voice,
+      (language === 'ar' ? 'الاتجاه البصري' : 'Visual direction') + ': ' + brandBrief.visualDirection,
+      (language === 'ar' ? 'تطبيقات الهوية' : 'Identity applications') + ':',
+      ...brandBrief.applications.map((item, index) => (index + 1) + '. ' + item),
+      '',
+      (language === 'ar' ? 'الألوان المعتمدة' : 'Approved colors') + ': ' + [brandDraft.primary, brandDraft.secondary, brandDraft.accent].join(' / '),
+      language === 'ar' ? 'تم إعداد هذا الموجز محلياً بمساعدة SOULARAB TECH.' : 'Prepared locally with SOULARAB TECH.'
+    ];
+    const url = URL.createObjectURL(new Blob([lines.join('\\n')], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'soularab-brand-strategy-brief.txt'; link.click();
+    URL.revokeObjectURL(url);
+  }
   function downloadBrandSvg() {
     if (!brandReady) return;
     const esc = (v) => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1023,7 +1043,7 @@ export default function App() {
             <path d="M300 55 L410 100 V215 Q410 300 300 355 Q190 300 190 215 V100 Z" fill="none" stroke={brandDraft.primary} strokeWidth="7"/><path d="M235 135 L260 105 L282 130 L300 100 L318 130 L340 105 L365 135" fill="none" stroke={brandDraft.accent} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/><text x="300" y="245" textAnchor="middle" fill={brandDraft.primary} fontSize="112" fontFamily="Georgia,serif" fontWeight="bold">{brandDraft.initials.slice(0,4).toUpperCase()}</text><path d="M160 375 H440" stroke={brandDraft.primary} strokeWidth="2"/><text x="300" y="410" textAnchor="middle" fill={brandDraft.accent} fontSize="23" letterSpacing="3">{brandDraft.name.slice(0,32)}</text><text x="300" y="438" textAnchor="middle" fill={brandDraft.primary} fontSize="11" letterSpacing="2">{brandDraft.tagline.slice(0,54)}</text>
           </svg><div className="module-action-list"><button className="button secondary" onClick={downloadBrandSvg} disabled={!brandReady}>{language === 'ar' ? 'تصدير SVG' : 'Export SVG'}</button><button className="button secondary" onClick={downloadBrandGuide} disabled={!brandReady}>{language === 'ar' ? 'تصدير دليل الهوية TXT' : 'Export brand guide TXT'}</button></div><p className="chat-footnote">{language === 'ar' ? 'هذه مسودة مفاهيمية ولا تعدّل الشعار الذهبي الرسمي لـ SOULARAB TECH.' : 'This is a concept draft and does not alter the official gold SOULARAB TECH logo.'}</p></div>
         </div>
-        <div className="panel-card brand-ai-brief"><div className="section-heading"><div><h3>{language === 'ar' ? 'موجز الهوية بمساعدة روح' : 'AI-assisted brand brief'}</h3><p className="muted">{language === 'ar' ? 'تحليل استراتيجي نصي يحافظ على الشعار والألوان المعتمدة.' : 'A text strategy brief that preserves the approved logo and colors.'}</p></div><button type="button" className="button secondary" onClick={generateBrandBrief} disabled={brandBriefGenerating}>{brandBriefGenerating ? (language === 'ar' ? 'روح تحلل العلامة…' : 'Rooh is analyzing…') : (language === 'ar' ? 'إعداد موجز الهوية ✦' : 'Generate brand brief ✦')}</button></div>
+        <div className="panel-card brand-ai-brief"><div className="section-heading"><div><h3>{language === 'ar' ? 'موجز الهوية بمساعدة روح' : 'AI-assisted brand brief'}</h3><p className="muted">{language === 'ar' ? 'تحليل استراتيجي نصي يحافظ على الشعار والألوان المعتمدة.' : 'A text strategy brief that preserves the approved logo and colors.'}</p></div><div className="module-action-list"><button type="button" className="button secondary" onClick={generateBrandBrief} disabled={brandBriefGenerating}>{brandBriefGenerating ? (language === 'ar' ? 'روح تحلل العلامة…' : 'Rooh is analyzing…') : (language === 'ar' ? 'إعداد موجز الهوية ✦' : 'Generate brand brief ✦')}</button><button type="button" className="button secondary" onClick={downloadBrandBrief} disabled={!brandBrief}>{language === 'ar' ? 'تصدير الموجز TXT' : 'Export brief TXT'}</button></div></div>
           {brandBrief ? <div className="brand-brief-grid"><article><strong>{language === 'ar' ? 'التموضع' : 'Positioning'}</strong><p>{brandBrief.positioning}</p></article><article><strong>{language === 'ar' ? 'الجمهور' : 'Audience'}</strong><p>{brandBrief.audience}</p></article><article><strong>{language === 'ar' ? 'نبرة العلامة' : 'Brand voice'}</strong><p>{brandBrief.voice}</p></article><article><strong>{language === 'ar' ? 'الاتجاه البصري' : 'Visual direction'}</strong><p>{brandBrief.visualDirection}</p></article><article><strong>{language === 'ar' ? 'تطبيقات الهوية' : 'Identity applications'}</strong><ul>{brandBrief.applications.map((item,index)=><li key={index}>{item}</li>)}</ul></article></div> : <Empty text={language === 'ar' ? 'اطلب من روح إعداد موجز للعلامة بعد ضبط بياناتها.' : 'Ask Rooh to prepare a brand brief after entering your identity details.'}/>}</div>
       </section>}
       {active === 'apps' && <section className="content">
