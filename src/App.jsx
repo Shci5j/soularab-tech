@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const aiSections = [
   ['web', 'إنشاء المواقع الإلكترونية', 'تصميم وبرمجة واختبار المواقع', '⌘'],
@@ -86,6 +86,7 @@ function App() {
   const [toast, setToast] = useState('');
   const t = copy[lang];
   const rtl = lang === 'ar';
+  useEffect(() => { document.documentElement.dataset.theme = theme; document.documentElement.lang = lang; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; }, [theme, lang, rtl]);
   const current = useMemo(() => mainSections.find(x => x.id === page), [page]);
 
   function notify(message) {
