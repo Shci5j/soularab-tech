@@ -589,14 +589,14 @@ export default function App() {
 
   async function submitAgentPlan(event) {
     event.preventDefault();
-    const steps=agentDraft.steps.split('\\n').map(v=>v.trim()).filter(Boolean);
+    const steps=agentDraft.steps.split('\n').map(v=>v.trim()).filter(Boolean);
     const title=agentDraft.title.trim();
     if(title.length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً واضحاً وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
-    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\\n');
+    const description=steps.map((step,index)=>(index+1)+'. '+step).join('\n');
     setAgentSubmitting(true);
     try {
       const result=await request('/api/agent-plans',{method:'POST',body:JSON.stringify({title,description,risk:agentDraft.risk,department:'system'})});
-      setVaultItems(items=>[{id:Date.now(),title,content:description+'\\n\\nTask ID: '+result.task_id+'\\nApproval ID: '+result.approval_id,category:'task',createdAt:new Date().toISOString()},...items]);
+      setVaultItems(items=>[{id:Date.now(),title,content:description+'\n\nTask ID: '+result.task_id+'\nApproval ID: '+result.approval_id,category:'task',createdAt:new Date().toISOString()},...items]);
       setAgentDraft({title:'',steps:'',risk:'medium'});
       await refresh();
       setNotice(language==='ar'?'أُنشئت الخطة والمهمة وطلب الموافقة بعملية واحدة. المهمة بانتظار الموافقة ولن يبدأ التنفيذ تلقائياً.':'Plan, task, and approval request created atomically. The task is awaiting approval; execution will not start automatically.');
