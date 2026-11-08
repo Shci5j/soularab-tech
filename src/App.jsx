@@ -391,7 +391,7 @@ export default function App() {
           <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>الخزنة</strong><small>الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة</small></span><b>فتح الخزنة ←</b></button>
         </div>
       </section>}
-      {active === 'work' && <section className="content"><div className="section-heading"><div><h3>الشروع بالعمل</h3><p>كل أدوات التنفيذ ضمن مساحة واحدة</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div></section>}
+      {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
       {active === 'hub' && <section className="content"><div className="panel-card destination-page">
         <div className="section-heading"><div><h2>سولاراب هوب</h2><p className="muted">مستكشف مستودعات GitHub للقراءة والمتابعة.</p></div><span className="pill">قراءة آمنة</span></div>
         <form className="repo-search" onSubmit={loadGithubRepository}><label>رابط المستودع أو owner/repository<input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="owner/repository"/></label><button className="button primary" disabled={repoLoading || !repoInput.trim()}>{repoLoading ? 'جارٍ الفحص…' : 'استكشاف المستودع'}</button></form>
@@ -534,10 +534,10 @@ export default function App() {
       </section>}
     </main>
     <nav className="utility-dock" aria-label="أدوات مساندة">
-      <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>الرئيسية</button>
-      <button className={active === 'assistant' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('assistant')}><span>✦</span>المساعد</button>
-      <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>الملفات</button>
-      <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>الأمان</button>
+      <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>{language === 'ar' ? 'الرئيسية' : 'Home'}</button>
+      <button className={active === 'assistant' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('assistant')}><span>✦</span>{language === 'ar' ? 'المساعد' : 'Assistant'}</button>
+      <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>{language === 'ar' ? 'الملفات' : 'Files'}</button>
+      <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>{language === 'ar' ? 'الأمان' : 'Security'}</button>
     </nav>
       {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
