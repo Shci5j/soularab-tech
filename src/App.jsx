@@ -238,30 +238,44 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  const current = useMemo(() => modules.find((item) => item.id === active), [active]);
+  const pageTitles = {
+    overview: { title: 'الرئيسية', desc: 'مساحة سولاراب الموحدة' },
+    work: { title: 'الشروع بالعمل', desc: 'الأقسام المتخصصة وأدوات التنفيذ' },
+    hub: { title: 'سولاراب هوب', desc: 'إدارة المستودعات والأكواد والإصدارات' },
+    root: { title: 'الجذر', desc: 'إدارة الأجهزة والتشخيص والصيانة' },
+    settings: { title: 'الإعدادات العامة', desc: 'إعدادات المنصة والاتصال والمظهر' },
+    vault: { title: 'الخزنة', desc: 'الأعمال المحفوظة والمؤجلة والبيانات المؤقتة' },
+  };
+  const current = useMemo(() => pageTitles[active] || modules.find((item) => item.id === active) || pageTitles.overview, [active]);
 
   return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">ST</div><div><strong>SOULARAB TECH</strong><small>IDEAS INTO DIGITAL REALITY</small></div></div>
-      <div className="side-caption">مساحة العمل</div>
-      <nav aria-label="القائمة الرئيسية">{modules.map((item) => <button key={item.id} className={active === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><span>{item.title}</span>{item.id === 'security' && approvals.length > 0 && <b className="nav-count">{approvals.length}</b>}</button>)}</nav>
-      <div className="sidebar-bottom"><span className={api.state === 'online' ? 'status-dot online' : 'status-dot'} />{api.state === 'online' ? 'الخادم متصل' : 'الخادم غير متصل'}<small>الإصدار {api.version}</small></div>
-    </aside>
-
     <main className="main-area">
       <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="إغلاق">×</button></div>}
 
-      {active === 'overview' && <section className="content">
-        <div className="hero"><div><span className="pill">منصة مفتوحة المصدر · نواة أولية</span><h2>كل أدواتك الإبداعية<br/><em>في مساحة واحدة.</em></h2><p>بيئة عمل موحدة للمواقع والتصميم والوسائط والتطبيقات ووكلاء الذكاء الاصطناعي، مع تحكم واضح في الصلاحيات والبيانات.</p><button className="button primary" onClick={() => setActive('assistant')}>ابدأ من المساعد الذكي <span>←</span></button></div><div className="hero-orb"><div className="orb-ring ring-one"/><div className="orb-ring ring-two"/><div className="orb-core">ST</div></div></div>
-        <div className="section-heading"><div><h3>مركز العمليات</h3><p>ملخص الاتصال والمهام التي تحتاج قرارك</p></div></div>
-        <div className="stats-grid"><article className="stat-card"><span>حالة الخادم</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصل' : 'غير متصل'}</strong><small>{api.mode || 'بانتظار تشغيل الخلفية'}</small></article><article className="stat-card"><span>طلبات الموافقة</span><strong>{approvals.length}</strong><small>تنتظر مراجعتك</small></article><article className="stat-card"><span>الأقسام</span><strong>10</strong><small>واجهة موحدة</small></article><article className="stat-card"><span>الاتصال الخارجي</span><strong className="good">مقيّد</strong><small>لا اتصال دون إعداد وموافقة</small></article></div>
-        <div className="section-heading"><div><h3>مساحات العمل</h3><p>اختر المجال الذي تريد العمل عليه</p></div></div>
-        <div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div>
-        <div className="section-heading"><div><h3>آخر العمليات</h3><p>سجل قابل للمراجعة</p></div><button className="text-button" onClick={() => setActive('security')}>عرض الكل</button></div>
-        <AuditList events={events}/>
+      {active === 'overview' && <section className="content home-content">
+        <div className="primary-destinations">
+          <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>الشروع بالعمل</strong><span>الدخول إلى أقسام العمل المتخصصة</span><b>ابدأ الآن ←</b></button>
+          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>سولاراب هوب</strong><span>المستودعات والأكواد والإصدارات</span><b>فتح القسم ←</b></button>
+          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>الجذر</strong><span>الأجهزة والتشخيص والصيانة</span><b>فتح القسم ←</b></button>
+          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>الإعدادات العامة</strong><span>إعدادات المنصة والاتصال والمظهر</span><b>فتح الإعدادات ←</b></button>
+        </div>
+        <div className="operations-center">
+          <div className="section-heading"><div><h3>مركز العمليات</h3><p>ملخص الاتصال والمهام التي تحتاج قرارك</p></div></div>
+          <div className="stats-grid">
+            <article className="stat-card"><span>حالة الخادم</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصل' : 'غير متصل'}</strong><small>{api.mode || 'بانتظار تشغيل الخلفية'}</small></article>
+            <article className="stat-card"><span>طلبات الموافقة</span><strong>{approvals.length}</strong><small>تنتظر مراجعتك</small></article>
+            <article className="stat-card"><span>الأقسام</span><strong>10</strong><small>واجهة موحدة</small></article>
+            <article className="stat-card"><span>الاتصال الخارجي</span><strong className="good">مقيّد</strong><small>لا اتصال دون إعداد وموافقة</small></article>
+          </div>
+          <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>الخزنة</strong><small>الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة</small></span><b>فتح الخزنة ←</b></button>
+        </div>
       </section>}
-
+      {active === 'work' && <section className="content"><div className="section-heading"><div><h3>الشروع بالعمل</h3><p>كل أدوات التنفيذ ضمن مساحة واحدة</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{item.title}</strong><span>{item.desc}</span><b>فتح القسم ↗</b></button>)}</div></section>}
+      {active === 'hub' && <section className="content"><div className="panel-card destination-page"><h2>سولاراب هوب</h2><p>المساحة المخصصة لإدارة المستودعات والأكواد ومتابعة الإصدارات.</p><p className="muted">سيتم ربط أدوات إدارة المستودعات والإصدارات ضمن هذا القسم.</p></div></section>}
+      {active === 'root' && <section className="content"><div className="panel-card destination-page"><h2>الجذر</h2><p>مركز التعرف على الأجهزة وتشخيصها ومتابعة صيانتها.</p><p className="muted">ستظهر هنا أدوات فحص الأجهزة وإدارة الصيانة عند ربطها.</p></div></section>}
+      {active === 'settings' && <section className="content"><div className="panel-card settings-page"><h2>الإعدادات العامة</h2><p className="muted">التحكم بإعدادات الواجهة والاتصال الأساسي.</p><div className="settings-row"><div><strong>مظهر التطبيق</strong><small>التبديل بين المظهر الداكن والفاتح</small></div><button className="button secondary" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'داكن' : 'فاتح'} · تبديل</button></div><div className="settings-row"><div><strong>حالة الخادم</strong><small>{api.state === 'online' ? 'الخادم متصل' : 'بانتظار تشغيل الخلفية'}</small></div><button className="button secondary" onClick={refresh}>فحص الاتصال ↻</button></div></div></section>}
+      {active === 'vault' && <section className="content"><div className="panel-card destination-page"><h2>الخزنة</h2><p>مكان مخصص لحفظ الأعمال القائمة والمؤجلة، والأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة.</p><p className="muted">واجهة الخزنة قيد التجهيز؛ لن تُعرض بيانات غير محفوظة أو غير متاحة على الخادم.</p></div></section>}
       {active === 'files' && <section className="content">
         <div className="project-layout">
           <div className="panel-card">
@@ -329,7 +343,14 @@ export default function App() {
       </section>}
 
       {active !== 'overview' && active !== 'security' && <section className="content"><div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">تم تجهيز نقطة التكامل ضمن النواة</span></div><div className="panel-card roadmap"><h3>حالة هذا القسم</h3><p>الواجهة الأساسية جاهزة، أما محرك التنفيذ وربط الأدوات فيُضافان كوحدات مستقلة بعد فحص الترخيص والموارد المطلوبة.</p><div className="roadmap-row"><span>واجهة المستخدم</span><b className="good">جاهزة</b></div><div className="roadmap-row"><span>واجهة API الخلفية</span><b className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? 'متصلة' : 'بانتظار التشغيل'}</b></div><div className="roadmap-row"><span>الموصلات والنماذج</span><b>غير مفعّلة افتراضياً</b></div><button className="button secondary" onClick={() => setActive('security')}>إدارة الموافقات والأمان</button></div></section>}
-    </main>
+    </m
+    <nav className="utility-dock" aria-label="أدوات مساندة">
+      <button className={active === 'overview' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('overview')}><span>⌂</span>الرئيسية</button>
+      <button className={active === 'assistant' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('assistant')}><span>✦</span>المساعد</button>
+      <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>الملفات</button>
+      <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>الأمان</button>
+    </nav>
+ain>
       {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
