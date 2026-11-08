@@ -102,6 +102,9 @@ export default function App() {
   const [appHtml, setAppHtml] = useState('');
   const [agentDraft, setAgentDraft] = useState({ title:'', steps:'', risk:'medium' });
   const [agentSubmitting, setAgentSubmitting] = useState(false);
+  const [queuedTasks, setQueuedTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [taskActionId, setTaskActionId] = useState(null);
   const [domainDraft, setDomainDraft] = useState({ domain:'', provider:'Cloudflare Pages', project:'soularab-site' });
   const [domainReport, setDomainReport] = useState('');
 
@@ -547,19 +550,60 @@ export default function App() {
   }
 
 
+  async function loadTasks() {
+    setLoadingTasks(true);
+    try {
+      const result = await request('/api/tasks');
+      setQueuedTasks(Array.isArray(result.items) ? result.items : []);
+    } catch (error) {
+      setQueuedTasks([]);
+      setNotice(error.message);
+    } finally {
+      setLoadingTasks(false);
+    }
+  }
+
+  async function cancelQueuedTask(taskId) {
+    setTaskActionId(taskId);
+    try {
+      await request('/api/tasks/' + taskId + '/cancel', { method: 'POST' });
+      setNotice(language === 'ar' ? 'تم إلغاء المهمة من قائمة الانتظار.' : 'Task cancelled from the queue.');
+      await loadTasks();
+      await refresh();
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setTaskActionId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (active === 'agents') loadTasks();
+  }, [active, apiToken]);
+
   async function submitAgentPlan(event) {
     event.preventDefault();
     const steps=agentDraft.steps.split('\n').map(v=>v.trim()).filter(Boolean);
-    if(agentDraft.title.trim().length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً وثيقة وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
+    const title=agentDraft.title.trim();
+    if(title.length<3 || steps.length<1){setNotice(language==='ar'?'أدخل عنواناً واضحاً وخطوة واحدة على الأقل.':'Enter a clear title and at least one step.');return;}
     const description=steps.map((step,index)=>(index+1)+'. '+step).join('\n');
     setAgentSubmitting(true);
+    let queuedTaskId=null;
     try {
-      const result=await request('/api/approvals',{method:'POST',body:JSON.stringify({title:agentDraft.title.trim(),description,risk:agentDraft.risk})});
-      setVaultItems(items=>[{id:Date.now(),title:agentDraft.title.trim(),content:description+'\n\nApproval ID: '+result.id,category:'task',createdAt:new Date().toISOString()},...items]);
+      const queued=await request('/api/tasks',{method:'POST',body:JSON.stringify({title,description,department:'system'})});
+      queuedTaskId=queued.id;
+      const approval=await request('/api/approvals',{method:'POST',body:JSON.stringify({title,description,risk:agentDraft.risk})});
+      setVaultItems(items=>[{id:Date.now(),title,content:description+'\n\nTask ID: '+queuedTaskId+'\nApproval ID: '+approval.id,category:'task',createdAt:new Date().toISOString()},...items]);
       setAgentDraft({title:'',steps:'',risk:'medium'});
-      await refresh();
-      setNotice(language==='ar'?'تم إرسال خطة الوكيل إلى قائمة الموافقات. لم يبدأ أي تنفيذ.':'Agent plan submitted for approval. No execution has started.');
-    } catch(error){setNotice(error.message);}
+      await Promise.all([loadTasks(),refresh()]);
+      setNotice(language==='ar'?'أُضيفت الخطة إلى طابور المهام وأُرسلت للموافقة. لم يبدأ أي تنفيذ.':'Plan added to the task queue and submitted for approval. No execution has started.');
+    } catch(error) {
+      if(queuedTaskId!==null) {
+        try { await request('/api/tasks/'+queuedTaskId+'/cancel',{method:'POST'}); } catch {}
+        await loadTasks();
+      }
+      setNotice(error.message);
+    }
     finally{setAgentSubmitting(false);}
   }
   function createDomainRunbook(event) {
@@ -786,7 +830,17 @@ export default function App() {
             <label>{language==='ar'?'مستوى المخاطر':'Risk level'}<select value={agentDraft.risk} onChange={e=>setAgentDraft({...agentDraft,risk:e.target.value})}><option value="low">{language==='ar'?'منخفض':'Low'}</option><option value="medium">{language==='ar'?'متوسط':'Medium'}</option><option value="high">{language==='ar'?'مرتفع':'High'}</option></select></label>
             <button className="button primary" disabled={agentSubmitting||!agentDraft.title.trim()||!agentDraft.steps.trim()}>{agentSubmitting?(language==='ar'?'جارٍ الإرسال…':'Submitting…'):(language==='ar'?'إرسال إلى الموافقات':'Submit for approval')}</button>
           </form></div>
-          <div className="panel-card"><h3>{language==='ar'?'ضوابط التنفيذ':'Execution safeguards'}</h3><div className="roadmap-row"><span>{language==='ar'?'حفظ الخطة':'Plan storage'}</span><b className="good">{language==='ar'?'الخزنة المحلية':'Local vault'}</b></div><div className="roadmap-row"><span>{language==='ar'?'مراجعة بشرية':'Human review'}</span><b className="good">{language==='ar'?'مطلوبة':'Required'}</b></div><div className="roadmap-row"><span>{language==='ar'?'التنفيذ التلقائي':'Automatic execution'}</span><b>{language==='ar'?'معطل':'Disabled'}</b></div><p className="chat-footnote">{language==='ar'?'إرسال الخطة ينشئ طلب موافقة وسجلاً تدقيقياً فقط. حتى الموافقة لا تشغّل الأوامر؛ يلزم محرك تنفيذ منفصل ومراجعة أمان.':'Submitting creates an approval request and audit entry only. Even approval does not run commands; a separate execution engine and safety review are required.'}</p><button className="button secondary" onClick={()=>setActive('security')}>{language==='ar'?'فتح قائمة الموافقات':'Open approvals'}</button></div>
+          <div className="panel-card"><h3>{language==='ar'?'ضوابط التنفيذ':'Execution safeguards'}</h3><div className="roadmap-row"><span>{language==='ar'?'حفظ الخطة':'Plan storage'}</span><b className="good">{language==='ar'?'الخزنة المحلية':'Local vault'}</b></div><div className="roadmap-row"><span>{language==='ar'?'مراجعة بشرية':'Human review'}</span><b className="good">{language==='ar'?'مطلوبة':'Required'}</b></div><div className="roadmap-row"><span>{language==='ar'?'التنفيذ التلقائي':'Automatic execution'}</span><b>{language==='ar'?'معطل':'Disabled'}</b></div><p className="chat-footnote">{language==='ar'?'كل خطة تُسجل في طابور المهام وتُرسل أيضاً للموافقة البشرية. إنشاء المهمة أو الموافقة عليها لا يشغّل الأوامر؛ يلزم محرك تنفيذ مستقل ومراجعة أمان.':'Each plan is recorded in the task queue and separately submitted for human approval. Queueing or approving a task never executes commands; a separate execution engine and safety review are required.'}</p><button className="button secondary" onClick={()=>setActive('security')}>{language==='ar'?'فتح قائمة الموافقات':'Open approvals'}</button></div>
+        </div>
+        <div className="panel-card task-queue-panel">
+          <div className="section-heading"><div><h3>{language==='ar'?'طابور المهام':'Task queue'}</h3><p className="muted">{language==='ar'?'المهام المحفوظة على الخادم. الإلغاء متاح قبل بدء أي تنفيذ.':'Tasks persisted on the server. Cancellation is available before execution starts.'}</p></div><div className="queue-tools"><span className="pill">{queuedTasks.length} {language==='ar'?'مهمة':'tasks'}</span><button className="button secondary" onClick={loadTasks} disabled={loadingTasks}>{loadingTasks?(language==='ar'?'جارٍ التحديث…':'Refreshing…'):(language==='ar'?'تحديث ↻':'Refresh ↻')}</button></div></div>
+          {loadingTasks && !queuedTasks.length ? <Empty text={language==='ar'?'جارٍ تحميل المهام…':'Loading tasks…'}/> : queuedTasks.length ? <div className="task-queue-list">{queuedTasks.map((task)=> <article className="approval task-queue-item" key={task.id}>
+            <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
+            {task.description && <p>{task.description}</p>}
+            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
+            {['queued','planning','waiting_approval','running'].includes(task.status) && <div className="approval-actions"><button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button></div>}
+          </article>)}</div> : <Empty text={language==='ar'?'لا توجد مهام في الطابور بعد. أرسل أول خطة من النموذج أعلاه.':'The queue is empty. Submit your first plan using the form above.'}/>}
+          <p className="chat-footnote">{language==='ar'?'الحالة «في الانتظار» تعني أن المهمة محفوظة فقط؛ لا يوجد تنفيذ تلقائي في هذه النسخة.':'Queued means saved only; no automatic execution engine is enabled in this build.'}</p>
         </div>
       </section>}
       {active === 'domains' && <section className="content">
