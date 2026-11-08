@@ -91,6 +91,8 @@ export default function App() {
   });
   const [vaultDraft, setVaultDraft] = useState({ title: '', content: '', category: 'note' });
   const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
+  const [siteDraft, setSiteDraft] = useState({ title: 'SOULARAB TECH', subtitle: 'Ideas into digital reality', description: 'A clear, elegant digital experience for your next idea.', buttonText: 'Get in touch', color: '#c49a43' });
+  const [siteHtml, setSiteHtml] = useState('');
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -426,6 +428,28 @@ export default function App() {
     finally { setRepoLoading(false); }
   }
 
+  function buildLandingPage(event) {
+    event.preventDefault();
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const title = escapeHtml(siteDraft.title.trim() || 'My new website');
+    const subtitle = escapeHtml(siteDraft.subtitle);
+    const description = escapeHtml(siteDraft.description);
+    const buttonText = escapeHtml(siteDraft.buttonText);
+    const color = /^#[0-9a-fA-F]{6}$/.test(siteDraft.color) ? siteDraft.color : '#c49a43';
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#101014;color:#f7f4ed;min-height:100vh;display:grid;place-items:center;padding:32px}.site{width:min(100%,900px);padding:clamp(32px,8vw,88px);border:1px solid #ffffff20;border-radius:28px;background:linear-gradient(145deg,#1d1b20,#111114);box-shadow:0 24px 90px #0008}.mark{color:${color};letter-spacing:.24em;font-size:12px;font-weight:700}.line{width:64px;height:2px;background:${color};margin:28px 0}h1{font-size:clamp(38px,7vw,76px);line-height:1.02;margin:0 0 18px;letter-spacing:-.05em}h2{font-size:clamp(17px,2vw,22px);font-weight:400;color:#c8c3ba;margin:0 0 24px}p{max-width:620px;color:#a9a4a0;line-height:1.8;font-size:17px}.cta{display:inline-block;margin-top:26px;padding:15px 24px;border-radius:999px;background:${color};color:#15120c;text-decoration:none;font-weight:700}.foot{margin-top:72px;color:#777;font-size:11px;letter-spacing:.16em}</style></head><body><main class="site"><div class="mark">SOULARAB STUDIO</div><div class="line"></div><h1>${title}</h1><h2>${subtitle}</h2><p>${description}</p><a class="cta" href="mailto:hello@example.com">${buttonText}</a><div class="foot">DESIGNED WITH SOULARAB TECH</div></main></body></html>`;
+    setSiteHtml(html);
+  }
+
+  function downloadLandingPage() {
+    if (!siteHtml) return;
+    const url = URL.createObjectURL(new Blob([siteHtml], { type: 'text/html;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'soularab-landing-page.html';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   function inspectDevice() {
     setDeviceInfo({
       browser: navigator.userAgent, language: navigator.language, platform: navigator.platform || (language === 'ar' ? 'غير متاح' : 'Unavailable'),
@@ -608,6 +632,23 @@ export default function App() {
       </section>}
 
 
+      {active === 'web' && <section className="content">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'منشئ المواقع' : 'Website builder'}</h2><p className="muted">{language === 'ar' ? 'أنشئ صفحة هبوط أولية، شاهد معاينتها مباشرة، ثم نزّل ملف HTML مستقلاً.' : 'Create a starter landing page, preview it live, and download a standalone HTML file.'}</p></div></div>
+        <div className="two-col">
+          <div className="panel-card"><h3>{language === 'ar' ? 'محتوى الصفحة' : 'Page content'}</h3><form className="proposal-form" onSubmit={buildLandingPage}>
+            <label>{language === 'ar' ? 'اسم الموقع' : 'Website name'}<input value={siteDraft.title} onChange={(e) => setSiteDraft({...siteDraft,title:e.target.value})} maxLength="80" required/></label>
+            <label>{language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}<input value={siteDraft.subtitle} onChange={(e) => setSiteDraft({...siteDraft,subtitle:e.target.value})} maxLength="120"/></label>
+            <label>{language === 'ar' ? 'وصف مختصر' : 'Short description'}<textarea rows="4" value={siteDraft.description} onChange={(e) => setSiteDraft({...siteDraft,description:e.target.value})} maxLength="600"/></label>
+            <label>{language === 'ar' ? 'نص زر التواصل' : 'Contact button label'}<input value={siteDraft.buttonText} onChange={(e) => setSiteDraft({...siteDraft,buttonText:e.target.value})} maxLength="40"/></label>
+            <label>{language === 'ar' ? 'اللون الأساسي' : 'Primary color'}<input type="color" value={siteDraft.color} onChange={(e) => setSiteDraft({...siteDraft,color:e.target.value})}/></label>
+            <button className="button primary">{language === 'ar' ? 'إنشاء المعاينة' : 'Generate preview'}</button>
+          </form></div>
+          <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'معاينة مباشرة' : 'Live preview'}</h3><p className="muted">{language === 'ar' ? 'صفحة ثابتة مستقلة دون مكتبات خارجية.' : 'Standalone static page with no external libraries.'}</p></div><button className="button secondary" onClick={downloadLandingPage} disabled={!siteHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>
+            {siteHtml ? <iframe title="Website preview" sandbox="" srcDoc={siteHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#101014'}}/> : <Empty text={language === 'ar' ? 'أدخل المحتوى ثم اضغط إنشاء المعاينة.' : 'Enter your content and generate the preview.'}/>}
+          </div>
+        </div>
+        <p className="chat-footnote">{language === 'ar' ? 'هذه نسخة أولية ثابتة تعمل محلياً داخل المتصفح. ربط النطاقات والاستضافة والنشر يحتاج مزوداً وإعدادات وصول فعلية.' : 'This is a static starter page generated in your browser. Domains, hosting, and publishing require a real provider and credentials.'}</p>
+      </section>}
       {active === 'media' && <section className="content">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'الصور والصوت' : 'Images & Audio'}</h2><p className="muted">{language === 'ar' ? 'اتصال محلي بمحركات الوسائط دون إرسال ملفاتك إلى خدمات سحابية.' : 'Local media engines; your files are not sent to cloud services.'}</p></div><button className="button secondary" onClick={refreshMediaEngines} disabled={mediaStatus.loading}>{language === 'ar' ? 'فحص المحركات ↻' : 'Check engines ↻'}</button></div>
         <div className="two-col">
