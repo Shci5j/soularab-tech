@@ -666,7 +666,7 @@ export default function App() {
             <label className="upload-control">{language === 'ar' ? 'اختر ملفاً صوتياً (حد أقصى 25 MB)' : 'Choose an audio file (25 MB maximum)'}<input type="file" accept=".wav,.mp3,.m4a,.ogg,.webm,.flac,.mp4,.mpeg,.mpga,audio/*" onChange={transcribeAudio} disabled={mediaBusy || !mediaStatus.speech}/></label>
             {mediaBusy && <p className="muted">{language === 'ar' ? 'جارٍ معالجة الملف محلياً…' : 'Processing locally…'}</p>}
             {mediaTranscript && <div className="chat-message assistant"><small>{language === 'ar' ? 'النص المستخرج' : 'Transcript'}</small><p>{mediaTranscript}</p><button className="text-button" onClick={() => navigator.clipboard?.writeText(mediaTranscript)}>{language === 'ar' ? 'نسخ النص' : 'Copy text'}</button></div>}
-            <p className="chat-footnote">{language === 'ar' ? 'الصيغ المدعومة: WAV وMP3 وM4A وOGG وWEBM وFLAC. الملف لا يغادر خادمك المحلي.' : 'Supported formats: WAV, MP3, M4A, OGG, WEBM, and FLAC. Files stay on your local server.'}</p>
+            <p className="chat-footnote">{language === 'ar' ? 'يدعم WAV مباشرة. تتطلب الصيغ الأخرى تشغيل whisper-server بخيار --convert وتثبيت FFmpeg. الملف لا يغادر خادمك المحلي.' : 'WAV works natively. Other formats require whisper-server with --convert and FFmpeg installed. Files stay on your local server.'}</p>
           </div>
         </div>
       </section>}
