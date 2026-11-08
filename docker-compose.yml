@@ -51,4 +51,5 @@ volumes:
 
 networks:
   soularab_internal:
+    name: soularab_internal
     driver: bridge
