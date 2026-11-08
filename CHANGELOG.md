@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.2 — 2026-11-09
+
+- Completed English translations for the workspace access dialog and primary navigation accessibility label.
+- Localized audit-log empty state and timestamps to the selected interface language.
+
+
 ## 0.14.1 — 2026-11-09
 
 - Improved safe task execution: if writing a project note fails after creating a partial file, the executor removes that incomplete artifact before marking the task failed.
