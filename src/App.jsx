@@ -16,6 +16,8 @@ const modules = [
 
 const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
 
+function cleanApiBase(value) { let result = value.trim(); while (result.endsWith('/')) result = result.slice(0, -1); return result; }
+
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function App() {
@@ -85,7 +87,7 @@ export default function App() {
   const [moduleDraft, setModuleDraft] = useState({ title: '', details: '' });
 
   useEffect(() => {
-    localStorage.setItem('st-api-base-url', apiBaseUrl.trim().replace(/\\/+$/, ''));
+    localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
   }, [apiBaseUrl]);
 
   useEffect(() => {
@@ -143,7 +145,7 @@ export default function App() {
   }, [theme]);
 
   async function request(path, options = {}) {
-    const response = await fetch(apiBaseUrl.replace(/\\/+$/, '') + path, {
+    const response = await fetch(cleanApiBase(apiBaseUrl) + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
