@@ -1,16 +1,16 @@
 {
   "id": "./",
-  "name": "SOULARAB TECH - Royal Dashboard",
+  "name": "SOULARAB TECH",
   "short_name": "SOULARAB",
-  "description": "لوحة تحكم SOULARAB TECH",
+  "description": "مساحة العمل الذكية المستقلة",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#101010",
-  "theme_color": "#111111",
+  "background_color": "#090909",
+  "theme_color": "#090909",
   "icons": [
     {
       "src": "./icon.svg",
