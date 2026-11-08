@@ -169,5 +169,37 @@ class TaskQueueApiTests(unittest.TestCase):
 
 
 
+    def test_local_engine_status_reports_each_local_provider(self):
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+        class FakeClient:
+            def __init__(self, timeout):
+                self.timeout = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+            async def get(self, url):
+                return FakeResponse()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            with patch.object(main, "DATA_DIR", data_dir), patch.object(main, "DB_PATH", data_dir / "test.sqlite3"), patch.object(main, "API_TOKEN", ""), patch.object(main, "APP_ENV", "local"), patch.object(main.httpx, "AsyncClient", FakeClient):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/engines/status")
+                    self.assertEqual(response.status_code, 200)
+                    result = response.json()
+                    self.assertTrue(result["providers"]["ollama"]["connected"])
+                    self.assertTrue(result["providers"]["comfyui"]["connected"])
+                    self.assertTrue(result["providers"]["whisper_cpp"]["connected"])
+                    self.assertEqual(result["network_scope"], "local_only")
+
+
+
 if __name__ == "__main__":
     unittest.main()

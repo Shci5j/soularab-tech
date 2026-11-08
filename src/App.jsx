@@ -49,6 +49,7 @@ export default function App() {
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
+  const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
     try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
@@ -197,11 +198,12 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [health, approvalData, log, taskQueue] = await Promise.all([
-        request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'),
+      const [health, approvalData, log, taskQueue, engineData] = await Promise.all([
+        request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'), request('/api/engines/status').catch(() => null),
       ]);
       setApi({ state: 'online', version: health.version || '0.1.0', mode: health.mode || 'local' });
       setApprovals(approvalData.items || []);
+      setEngineStatuses(engineData?.providers || {});
       setEvents(log.items || []);
       setQueuedTasks(Array.isArray(taskQueue.items) ? taskQueue.items : []);
     } catch (error) {
@@ -710,6 +712,16 @@ export default function App() {
             <article className="stat-card"><span>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</span><strong>{approvals.filter((item) => item.status === 'pending').length}</strong><small>{language === 'ar' ? 'تنتظر مراجعتك' : 'Awaiting your review'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'المهام النشطة' : 'Active tasks'}</span><strong>{queuedTasks.filter((task) => ['queued','planning','waiting_approval','running'].includes(task.status)).length}</strong><small>{language === 'ar' ? 'في مسار العمل' : 'In the workflow'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
+          </div>
+          <div className="engine-status-grid">
+            {[
+              { id: 'ollama', label: 'Ollama', description: language === 'ar' ? 'نماذج المحادثة المحلية' : 'Local language models' },
+              { id: 'comfyui', label: 'ComfyUI', description: language === 'ar' ? 'توليد الصور محلياً' : 'Local image generation' },
+              { id: 'whisper_cpp', label: 'whisper.cpp', description: language === 'ar' ? 'تحويل الصوت إلى نص' : 'Speech transcription' },
+            ].map((engine) => {
+              const status = engineStatuses[engine.id];
+              return <article className="engine-status-card" key={engine.id}><div><strong>{engine.label}</strong><small>{engine.description}</small></div><span className={status?.connected ? 'good' : 'warn'}>{status ? (status.connected ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')) : (api.state === 'offline' ? (language === 'ar' ? 'الخادم غير متصل' : 'Backend offline') : (language === 'ar' ? 'لم يُفحص بعد' : 'Not checked'))}</span></article>;
+            })}
           </div>
           <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>{language === 'ar' ? 'الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة' : 'Active and deferred work, saved code, and items under review'}</small></span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
         </div>
