@@ -467,6 +467,28 @@ export default function App() {
     } catch (error) { setNotice(error.message); }
   }
 
+  async function exportProject(project) {
+    try {
+      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + project.id + '/export', {
+        headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.detail || (language === 'ar' ? 'تعذر تصدير المشروع.' : 'Could not export the project.'));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'soularab-project-' + project.id + '.zip';
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice(language === 'ar' ? 'تم تجهيز أرشيف المشروع للتنزيل.' : 'Project archive is ready to download.');
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
+
   async function deleteProjectFile(filename) {
     if (!selectedProject) return;
     const confirmed = window.confirm(language === 'ar' ? 'هل تريد حذف الملف "' + filename + '" نهائياً؟' : 'Permanently delete "' + filename + '"?');
@@ -947,7 +969,10 @@ export default function App() {
                 <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'مؤرشف' : 'Archived')}</span></div>
                 <strong>{project.title}</strong><p>{project.description || (language === 'ar' ? 'لا يوجد وصف لهذا المشروع.' : 'No project description.')}</p>
                 <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
-                {project.status === 'active' && <div className="project-actions"><button className="text-button" onClick={() => openProject(project)}>{language === 'ar' ? 'إدارة الملفات' : 'Manage files'}</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>{language === 'ar' ? 'أرشفة' : 'Archive'}</button></div>}
+                <div className="project-actions">
+                  {project.status === 'active' && <><button className="text-button" onClick={() => openProject(project)}>{language === 'ar' ? 'إدارة الملفات' : 'Manage files'}</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>{language === 'ar' ? 'أرشفة' : 'Archive'}</button></>}
+                  <button className="text-button" onClick={() => exportProject(project)}>{language === 'ar' ? 'تصدير ZIP' : 'Export ZIP'}</button>
+                </div>
               </article>)}
             </div> : <Empty text={language === 'ar' ? 'لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج.' : 'No projects yet. Create your first workspace using the form.'}/>}
           </div>

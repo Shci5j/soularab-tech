@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json
 import os
 import re
+import stat
+import zipfile
+import io
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager, contextmanager
@@ -21,7 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("SOULARAB_DATA_DIR", ROOT / "data")).expanduser()
 DB_PATH = DATA_DIR / "soularab.sqlite3"
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -511,6 +515,71 @@ def list_projects(status: Literal["active", "archived"] | None = None, _: None =
         else:
             rows = db.execute("SELECT * FROM projects ORDER BY updated_at DESC LIMIT 200").fetchall()
     return {"items": [row_dict(row) for row in rows]}
+
+
+MAX_PROJECT_ARCHIVE_BYTES = 50 * 1024 * 1024
+MAX_PROJECT_ARCHIVE_FILES = 200
+
+
+@app.get("/api/projects/{project_id}/export")
+def export_project_archive(project_id: int, _: None = Depends(require_access)):
+    workspace_base = (DATA_DIR / "workspaces").resolve()
+    workspace_path = workspace_base / str(project_id)
+    if workspace_path.is_symlink():
+        raise HTTPException(status_code=409, detail="مساحة المشروع تشير إلى مسار غير آمن.")
+    root = project_workspace(project_id)
+    if root.parent != workspace_base:
+        raise HTTPException(status_code=409, detail="مساحة المشروع خارج مجلد التخزين المسموح.")
+
+    with database() as db:
+        project = db.execute("SELECT id, title, description, status, created_at, updated_at FROM projects WHERE id=?", (project_id,)).fetchone()
+    if project is None:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود.")
+
+    entries = []
+    for entry in sorted(root.iterdir(), key=lambda item: item.name.lower()):
+        try:
+            info = entry.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            continue
+        if stat.S_ISREG(info.st_mode):
+            entries.append((entry, info.st_size))
+    if len(entries) > MAX_PROJECT_ARCHIVE_FILES:
+        raise HTTPException(status_code=413, detail="عدد ملفات المشروع يتجاوز حد التصدير (200 ملف).")
+
+    buffer = io.BytesIO()
+    total_bytes = 0
+    try:
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project.json", json.dumps(dict(project), ensure_ascii=False, indent=2))
+            for entry, _ in entries:
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                descriptor = os.open(entry, flags)
+                with os.fdopen(descriptor, "rb") as source:
+                    info = os.fstat(source.fileno())
+                    if not stat.S_ISREG(info.st_mode):
+                        continue
+                    remaining = MAX_PROJECT_ARCHIVE_BYTES - total_bytes
+                    content = source.read(remaining + 1)
+                    if len(content) > remaining:
+                        raise HTTPException(status_code=413, detail="حجم ملفات المشروع يتجاوز حد التصدير (50 MB).")
+                    total_bytes += len(content)
+                    archive.writestr(entry.name, content)
+    except OSError as exc:
+        raise HTTPException(status_code=409, detail="تغيرت ملفات المشروع أثناء التصدير؛ أعد المحاولة.") from exc
+
+    audit("project.exported", f"تم تصدير المشروع #{project_id} كأرشيف ZIP ({len(entries)} ملف).")
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="soularab-project-{project_id}.zip"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @app.post("/api/projects", status_code=201)

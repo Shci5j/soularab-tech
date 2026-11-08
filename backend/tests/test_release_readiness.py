@@ -1,5 +1,7 @@
+import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -97,6 +99,66 @@ class ReleaseReadinessSecurityTests(unittest.TestCase):
                     self.assertEqual(outside.read_text(encoding="utf-8"), "must remain unchanged")
                     current = client.get("/api/tasks").json()["items"][0]
                     self.assertEqual(current["status"], "queued")
+
+
+    def test_project_export_contains_files_and_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            with self.client_with_settings(data_dir):
+                with TestClient(main.app) as client:
+                    project = client.post(
+                        "/api/projects",
+                        json={"title": "Export project", "description": "Archive test"},
+                    ).json()
+                    workspace = data_dir / "workspaces" / str(project["id"])
+                    (workspace / "readme.md").write_text("# Exported", encoding="utf-8")
+
+                    response = client.get(f"/api/projects/{project['id']}/export")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.headers["content-type"], "application/zip")
+                    self.assertIn(f'soularab-project-{project["id"]}.zip', response.headers["content-disposition"])
+                    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                        self.assertEqual(set(archive.namelist()), {"project.json", "readme.md"})
+                        self.assertEqual(archive.read("readme.md").decode("utf-8"), "# Exported")
+                        metadata = archive.read("project.json").decode("utf-8")
+                        self.assertIn("Export project", metadata)
+                        self.assertIn('"status": "active"', metadata)
+
+    def test_project_export_skips_symlinks_and_does_not_read_outside_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            outside = data_dir / "outside.txt"
+            outside.write_text("private external data", encoding="utf-8")
+            with self.client_with_settings(data_dir):
+                with TestClient(main.app) as client:
+                    project = client.post("/api/projects", json={"title": "Symlink export"}).json()
+                    workspace = data_dir / "workspaces" / str(project["id"])
+                    (workspace / "inside.txt").write_text("safe", encoding="utf-8")
+                    (workspace / "outside-link.txt").symlink_to(outside)
+
+                    response = client.get(f"/api/projects/{project['id']}/export")
+                    self.assertEqual(response.status_code, 200)
+                    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                        self.assertEqual(set(archive.namelist()), {"project.json", "inside.txt"})
+                        self.assertNotIn("private external data", archive.read("inside.txt").decode("utf-8"))
+                    self.assertEqual(outside.read_text(encoding="utf-8"), "private external data")
+
+    def test_project_export_requires_authentication_in_production(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            with self.client_with_settings(data_dir, token="release-secret", environment="production"):
+                with TestClient(main.app) as client:
+                    project = client.post(
+                        "/api/projects",
+                        json={"title": "Protected export"},
+                        headers={"Authorization": "Bearer release-secret"},
+                    ).json()
+                    self.assertEqual(client.get(f"/api/projects/{project['id']}/export").status_code, 401)
+                    allowed = client.get(
+                        f"/api/projects/{project['id']}/export",
+                        headers={"Authorization": "Bearer release-secret"},
+                    )
+                    self.assertEqual(allowed.status_code, 200)
 
 
 if __name__ == "__main__":
