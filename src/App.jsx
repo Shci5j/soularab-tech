@@ -112,6 +112,7 @@ export default function App() {
   const [queuedTasks, setQueuedTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskActionId, setTaskActionId] = useState(null);
+  const [executionInputs, setExecutionInputs] = useState({});
   const [taskFilter, setTaskFilter] = useState('all');
   const [taskHistoryId, setTaskHistoryId] = useState(null);
   const [taskHistory, setTaskHistory] = useState([]);
@@ -691,6 +692,31 @@ export default function App() {
     }
   }
 
+  async function executeQueuedTask(task) {
+    const draft = executionInputs[task.id] || {};
+    const projectId = Number(draft.projectId);
+    const filename = (draft.filename || ('task-' + task.id + '.md')).trim();
+    const text = (draft.content ?? task.description ?? '').trim();
+    if (!Number.isInteger(projectId) || projectId < 1 || !filename || !text) {
+      setNotice(language === 'ar' ? 'أدخل رقم مشروع صالحاً واسم ملف ومحتوى قبل التنفيذ.' : 'Enter a valid project ID, filename, and content before execution.');
+      return;
+    }
+    setTaskActionId(task.id);
+    try {
+      const result = await request('/api/tasks/' + task.id + '/execute', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'write_project_note', project_id: projectId, filename, content: text }),
+      });
+      setNotice(language === 'ar' ? 'اكتمل التنفيذ وحُفظ الملف: ' + result.artifact : 'Execution completed. Saved: ' + result.artifact);
+      await refresh();
+      if (taskHistoryId === task.id) await toggleTaskHistory(task.id);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setTaskActionId(null);
+    }
+  }
+
   useEffect(() => {
     if (active === 'agents') loadTasks();
   }, [active, apiToken]);
@@ -1007,6 +1033,13 @@ export default function App() {
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
               {['queued','planning','waiting_approval'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
             </div>
+            {task.status==='queued' && <div className="task-execution-form">
+              <strong>{language==='ar'?'تنفيذ إجراء آمن: حفظ ملف داخل مشروع':'Run safe action: save a file in a project'}</strong>
+              <label>{language==='ar'?'رقم المشروع':'Project ID'}<input type="number" min="1" value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))} placeholder="1"/></label>
+              <label>{language==='ar'?'اسم الملف':'Filename'}<input value={executionInputs[task.id]?.filename ?? ('task-'+task.id+'.md')} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],filename:event.target.value}}))}/></label>
+              <label>{language==='ar'?'محتوى الملف':'File content'}<textarea rows="3" value={executionInputs[task.id]?.content ?? task.description ?? ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],content:event.target.value}}))} placeholder={language==='ar'?'اكتب المحتوى الذي تريد حفظه…':'Write the content to save…'}/></label>
+              <button className="button primary" disabled={taskActionId===task.id} onClick={()=>executeQueuedTask(task)}>{taskActionId===task.id?(language==='ar'?'جارٍ التنفيذ…':'Executing…'):(language==='ar'?'بدء الإجراء المعتمد':'Run approved action')}</button>
+            </div>}
             {taskHistoryId===task.id && <div className="task-history">
               <strong>{language==='ar'?'تسلسل الحالة':'Status timeline'}</strong>
               {loadingTaskHistory ? <small>{language==='ar'?'جارٍ تحميل السجل…':'Loading history…'}</small> : taskHistory.length ? taskHistory.map((event)=><div className="task-history-row" key={event.id}><span>{event.from_status ? event.from_status+' → ' : ''}{event.to_status}</span><small>{event.details}</small><time>{new Date(event.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</time></div>) : <small>{language==='ar'?'لا توجد أحداث مسجلة لهذه المهمة بعد.':'No recorded events for this task yet.'}</small>}
