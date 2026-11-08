@@ -17,6 +17,7 @@ const modules = [
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function App() {
+  const [language, setLanguage] = useState(() => localStorage.getItem('st-language') || 'ar');
   const [active, setActiveState] = useState('overview');
   function setActive(next) {
     if (next === active) return;
@@ -61,6 +62,12 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectFiles, setProjectFiles] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+    localStorage.setItem('st-language', language);
+  }, [language]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -268,23 +275,25 @@ export default function App() {
     vault: { title: 'الخزنة', desc: 'الأعمال المحفوظة والمؤجلة والبيانات المؤقتة' },
   };
   const current = useMemo(() => pageTitles[active] || modules.find((item) => item.id === active) || pageTitles.overview, [active]);
+  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return <div className="app-shell">
     <main className="main-area">
-      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions">{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>→ رجوع</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="تبديل المظهر">{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>تحديث الحالة ↻</button></div></header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="إغلاق">×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
+        <div className="workspace-calendar" aria-label={todayLabel}><span className="calendar-mark">▦</span><div><small>{language === 'ar' ? 'التاريخ اليوم' : 'TODAY'}</small><strong>{todayLabel}</strong></div><span className="calendar-live">{language === 'ar' ? 'محدّث تلقائياً' : 'LIVE DATE'}</span></div>
         <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label="افتح مساعد روح">
           <span className="rooh-emblem" aria-hidden="true"><span className="rooh-orbit orbit-a"></span><span className="rooh-orbit orbit-b"></span><span className="rooh-core">روح</span></span>
-          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>روح</strong><b>مساعدك الذكي في قلب المنصة</b><span>اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد</span><i>ابدأ المحادثة ←</i></span>
-          <span className="rooh-status"><span></span> جاهزة للمساعدة</span>
+          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'مساعدك الذكي في قلب المنصة' : 'Your intelligent assistant at the heart of the workspace'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
+          <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
         </button>
         <div className="primary-destinations">
-          <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>الشروع بالعمل</strong><span>الدخول إلى أقسام العمل المتخصصة</span><b>ابدأ الآن ←</b></button>
-          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>سولاراب هوب</strong><span>المستودعات والأكواد والإصدارات</span><b>فتح القسم ←</b></button>
-          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>الجذر</strong><span>الأجهزة والتشخيص والصيانة</span><b>فتح القسم ←</b></button>
-          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>الإعدادات العامة</strong><span>إعدادات المنصة والاتصال والمظهر</span><b>فتح الإعدادات ←</b></button>
+          <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</strong><span>{language === 'ar' ? 'الدخول إلى أقسام العمل المتخصصة' : 'Explore specialized work areas'}</span><b>{language === 'ar' ? 'ابدأ الآن ←' : 'Start now ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>Soularab Hub</strong><span>{language === 'ar' ? 'المستودعات والأكواد والإصدارات' : 'Repositories, code, and releases'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'Root'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'Open settings ←' : 'فتح الإعدادات ←'}</b></button>
         </div>
         <div className="operations-center">
           <div className="section-heading"><div><h3>مركز العمليات</h3><p>ملخص الاتصال والمهام التي تحتاج قرارك</p></div></div>
@@ -376,7 +385,7 @@ export default function App() {
       <button className={active === 'files' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('files')}><span>▱</span>الملفات</button>
       <button className={active === 'security' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('security')}><span>⬡</span>الأمان</button>
     </nav>
-ain>
+    </main>
       {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
