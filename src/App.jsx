@@ -243,15 +243,19 @@ export default function App() {
   async function refreshMediaEngines() {
     setMediaStatus((current) => ({ ...current, loading: true }));
     try {
-      const [image, speech, models] = await Promise.all([
+      const results = await Promise.allSettled([
         request('/api/media/image/status'),
         request('/api/media/speech/status'),
         request('/api/media/image/models'),
       ]);
-      const available = Array.isArray(models.models) ? models.models : [];
+      const image = results[0].status === 'fulfilled' ? results[0].value : null;
+      const speech = results[1].status === 'fulfilled' ? results[1].value : null;
+      const models = results[2].status === 'fulfilled' ? results[2].value : null;
+      const available = Array.isArray(models?.models) ? models.models : [];
       setMediaModels(available);
       setImageDraft((current) => ({ ...current, model: available.includes(current.model) ? current.model : (available[0] || '') }));
-      setMediaStatus({ image: Boolean(image.connected), speech: Boolean(speech.connected), loading: false });
+      setMediaStatus({ image: Boolean(image?.connected), speech: Boolean(speech?.connected), loading: false });
+      if (results.every((result) => result.status === 'rejected')) setNotice(results[0].reason?.message || 'تعذر فحص محركات الوسائط.');
     } catch (error) {
       setMediaStatus({ image: false, speech: false, loading: false });
       setMediaModels([]);
@@ -847,7 +851,8 @@ export default function App() {
         <div className="two-col">
           <div className="panel-card">
             <div className="section-heading"><div><h3>{language === 'ar' ? 'توليد الصور — ComfyUI' : 'Image generation — ComfyUI'}</h3><p className="muted">{language === 'ar' ? 'اكتب وصف الصورة واختر نموذجاً مثبتاً؛ تُبنى عقد ComfyUI تلقائياً. ويمكنك استخدام سير عمل API المتقدم عند الحاجة.' : 'Send an API-format workflow to your local ComfyUI engine.'}</p></div><span className={mediaStatus.image ? 'pill connected' : 'pill'}>{mediaStatus.loading ? '…' : mediaStatus.image ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')}</span></div>
-            <form className="proposal-form" onSubmit={queuePromptImage}>
+<p className="chat-footnote">{mediaStatus.image && mediaModels.length === 0 ? (language === 'ar' ? 'المحرك متصل، لكن لم يُعثر على نماذج Checkpoint مثبتة. أضف نموذجاً إلى مجلد models/checkpoints في ComfyUI ثم أعد الفحص.' : 'Engine connected, but no checkpoint models were found. Add a model to ComfyUI models/checkpoints and check again.') : (language === 'ar' ? 'تُعرض النماذج المثبتة تلقائياً بعد فحص المحرك.' : 'Installed checkpoints appear automatically after checking the engine.')}</p>
+                        <form className="proposal-form" onSubmit={queuePromptImage}>
               <label>{language === 'ar' ? 'نموذج التوليد' : 'Checkpoint model'}<select value={imageDraft.model} onChange={(e) => setImageDraft({...imageDraft,model:e.target.value})} disabled={!mediaModels.length}><option value="">{language === 'ar' ? 'اختر نموذجاً مثبتاً' : 'Select an installed model'}</option>{mediaModels.map((model) => <option key={model} value={model}>{model}</option>)}</select></label>
               <label>{language === 'ar' ? 'وصف الصورة المطلوب' : 'Image prompt'}<textarea rows="4" value={imageDraft.prompt} onChange={(e) => setImageDraft({...imageDraft,prompt:e.target.value})} maxLength="3000" required/></label>
               <label>{language === 'ar' ? 'الوصف السلبي (اختياري)' : 'Negative prompt (optional)'}<textarea rows="2" value={imageDraft.negative} onChange={(e) => setImageDraft({...imageDraft,negative:e.target.value})} maxLength="1500"/></label>
