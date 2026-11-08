@@ -133,3 +133,7 @@
 
 .top-actions .language-select{width:auto;flex:0 0 auto;max-width:112px}.top-actions .icon-button{flex:0 0 40px}
 @media(max-width:600px){.top-actions .language-select{max-width:92px}}
+
+html[dir="ltr"] .topbar,html[dir="ltr"] .destination-card,html[dir="ltr"] .module-card,html[dir="ltr"] .rooh-hero,html[dir="ltr"] .vault-entry,html[dir="ltr"] .module-action,html[dir="ltr"] .auth-card{text-align:left}
+html[dir="ltr"] .safety-list{padding-left:19px;padding-right:0}
+html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
