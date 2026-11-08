@@ -56,6 +56,42 @@ class SafeTaskExecutionTests(unittest.TestCase):
                     current = client.get("/api/tasks").json()["items"][0]
                     self.assertEqual(current["status"], "queued")
 
+    def test_partial_artifact_is_removed_when_write_fails(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with self.isolated_client(data):
+                with TestClient(main.app) as client:
+                    project = client.post("/api/projects", json={"title": "Docs"}).json()
+                    task = client.post("/api/tasks", json={"title": "Write a note", "department": "files"}).json()
+                    target = data / "workspaces" / str(project["id"]) / "partial.txt"
+                    original_open = Path.open
+
+                    class FailingWriter:
+                        def __init__(self, handle):
+                            self.handle = handle
+                        def __enter__(self):
+                            return self
+                        def __exit__(self, *args):
+                            self.handle.close()
+                        def write(self, _content):
+                            self.handle.write("partial")
+                            self.handle.flush()
+                            raise OSError("simulated disk write failure")
+
+                    def failing_open(path, *args, **kwargs):
+                        handle = original_open(path, *args, **kwargs)
+                        if path == target:
+                            return FailingWriter(handle)
+                        return handle
+
+                    payload = {"action": "write_project_note", "project_id": project["id"], "filename": "partial.txt", "content": "complete"}
+                    with patch.object(Path, "open", autospec=True, side_effect=failing_open):
+                        response = client.post(f"/api/tasks/{task['id']}/execute", json=payload)
+                    self.assertEqual(response.status_code, 500)
+                    self.assertFalse(target.exists())
+                    current = client.get("/api/tasks").json()["items"][0]
+                    self.assertEqual(current["status"], "failed")
+
     def test_completed_task_cannot_execute_twice(self):
         with tempfile.TemporaryDirectory() as temp:
             data = Path(temp)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1 — 2026-11-09
+
+- Improved safe task execution: if writing a project note fails after creating a partial file, the executor removes that incomplete artifact before marking the task failed.
+- Added a regression test proving partial output is removed and the task failure is recorded.
+
+
 ## 0.14.0 — 2026-11-09
 
 - Added authenticated project restoration from ZIP archives, creating a new active workspace without overwriting existing projects.
