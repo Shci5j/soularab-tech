@@ -464,34 +464,34 @@ export default function App() {
       {active === 'files' && <section className="content">
         <div className="project-layout">
           <div className="panel-card">
-            <h3>إنشاء مساحة مشروع</h3>
-            <p className="muted">كل مشروع يحصل على سجل مستقل ومجلد محلي خاص به على جهاز الخادم.</p>
+            <h3>{language === 'ar' ? 'إنشاء مساحة مشروع' : 'Create project workspace'}</h3>
+            <p className="muted">{language === 'ar' ? 'كل مشروع يحصل على سجل مستقل ومجلد محلي خاص به على جهاز الخادم.' : 'Each project gets its own record and dedicated folder on the server.'}</p>
             <form className="proposal-form" onSubmit={createProject}>
-              <label>اسم المشروع<input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required minLength="2" maxLength="100" placeholder="مثال: متجر إلكتروني"/></label>
-              <label>وصف المشروع<textarea rows="3" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} maxLength="1000" placeholder="اكتب وصفاً مختصراً (اختياري)"/></label>
-              <button className="button primary" disabled={busy || !projectForm.title.trim()}>{busy ? 'جارٍ الإنشاء…' : 'إنشاء المشروع +'}</button>
+              <label>{language === 'ar' ? 'اسم المشروع' : 'Project name'}<input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required minLength="2" maxLength="100" placeholder="مثال: متجر إلكتروني"/></label>
+              <label>{language === 'ar' ? 'وصف المشروع' : 'Project description'}<textarea rows="3" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} maxLength="1000" placeholder="اكتب وصفاً مختصراً (اختياري)"/></label>
+              <button className="button primary" disabled={busy || !projectForm.title.trim()}>{busy ? (language === 'ar' ? 'جارٍ الإنشاء…' : 'Creating…') : (language === 'ar' ? 'إنشاء المشروع +' : 'Create project +')}</button>
             </form>
           </div>
           <div className="panel-card project-list-panel">
-            <div className="section-heading"><div><h3>مشاريعي</h3><p>المشاريع النشطة والمؤرشفة</p></div><button className="button secondary" onClick={loadProjects}>تحديث ↻</button></div>
+            <div className="section-heading"><div><h3>{language === 'ar' ? 'مشاريعي' : 'My projects'}</h3><p>{language === 'ar' ? 'المشاريع النشطة والمؤرشفة' : 'Active and archived projects'}</p></div><button className="button secondary" onClick={loadProjects}{language === 'ar' ? 'تحديث ↻' : 'Refresh ↻'}</button></div>
             {loadingProjects ? <Empty text="جارٍ تحميل المشاريع…"/> : projects.length ? <div className="project-list">
               {projects.map((project) => <article className="project-card" key={project.id}>
-                <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? 'نشط' : 'مؤرشف'}</span></div>
-                <strong>{project.title}</strong><p>{project.description || 'لا يوجد وصف لهذا المشروع.'}</p>
+                <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'مؤرشف' : 'Archived')}</span></div>
+                <strong>{project.title}</strong><p>{project.description || (language === 'ar' ? 'لا يوجد وصف لهذا المشروع.' : 'No project description.')}</p>
                 <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
-                {project.status === 'active' && <div className="project-actions"><button className="text-button" onClick={() => openProject(project)}>إدارة الملفات</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>أرشفة</button></div>}
+                {project.status === 'active' && <div className="project-actions"><button className="text-button" onClick={() => openProject(project)}>إدارة الملفات</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}{language === 'ar' ? 'أرشفة' : 'Archive'}</button></div>}
               </article>)}
-            </div> : <Empty text="لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج."/>}
+            </div> : <Empty text="{language === 'ar' ? 'لا توجد مشاريع بعد. أنشئ أول مساحة عمل من النموذج.' : 'No projects yet. Create your first workspace using the form.'}"/>}
           </div>
         </div>
         {selectedProject && <div className="panel-card workspace-files">
-          <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>إدارة الملفات داخل مساحة هذا المشروع فقط</p></div><button className="text-button" onClick={() => setSelectedProject(null)}>إغلاق</button></div>
-          <label className="upload-control">رفع ملف (حد أقصى 10 MB)<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
+          <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>{language === 'ar' ? 'إدارة الملفات داخل مساحة هذا المشروع فقط' : 'Manage files only within this project workspace'}</p></div><button className="text-button" onClick={() => setSelectedProject(null)}{language === 'ar' ? 'إغلاق' : 'Close'}</button></div>
+          <label className="upload-control">{language === 'ar' ? 'رفع ملف (حد أقصى 10 MB)' : 'Upload file (10 MB maximum)'}<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
           {uploadingFile && <p className="muted">جارٍ رفع الملف…</p>}
-          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>تنزيل</button></div>)}</div> : <Empty text="لا توجد ملفات في مساحة هذا المشروع بعد."/>}
-          <p className="chat-footnote">الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.</p>
+          {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}{language === 'ar' ? 'تنزيل' : 'Download'}</button></div>)}</div> : <Empty text="{language === 'ar' ? 'لا توجد ملفات في مساحة هذا المشروع بعد.' : 'No files in this project workspace yet.'}"/>}
+          <p className="chat-footnote">{language === 'ar' ? 'الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.' : 'Files remain in the project folder on the server. Blocked executable file types cannot be uploaded.'}</p>
         </div>}
-        <div className="panel-card workspace-note"><strong>حماية الملفات</strong><p>تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.</p></div>
+        <div className="panel-card workspace-note"><strong>{language === 'ar' ? 'حماية الملفات' : 'File protection'}</strong><p>{language === 'ar' ? 'تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.' : 'Uploads and downloads are restricted to the project folder. Path traversal is blocked. Maximum file size is 10 MB.'}</p></div>
       </section>}
 
       {active === "assistant" && <section className="content">
