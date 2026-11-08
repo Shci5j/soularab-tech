@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import os
 import re
@@ -338,6 +339,27 @@ async def media_get(base_url: str, path: str):
         raise HTTPException(status_code=502, detail=f"رفض محرك الوسائط الطلب ({exc.response.status_code}).") from exc
     except (ValueError, httpx.DecodingError) as exc:
         raise HTTPException(status_code=502, detail="أعاد محرك الوسائط استجابة غير صالحة.") from exc
+
+
+@app.get("/api/engines/status")
+async def local_engines_status(_: None = Depends(require_access)):
+    probes = (
+        ("ollama", OLLAMA_BASE_URL, "/api/version"),
+        ("comfyui", COMFYUI_BASE_URL, "/system_stats"),
+        ("whisper_cpp", WHISPER_CPP_BASE_URL, "/health"),
+    )
+
+    async def probe(provider: str, base_url: str, path: str) -> tuple[str, dict]:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.get(base_url + path)
+                response.raise_for_status()
+            return provider, {"connected": True}
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+            return provider, {"connected": False}
+
+    results = await asyncio.gather(*(probe(provider, base_url, path) for provider, base_url, path in probes))
+    return {"providers": dict(results), "checked_at": now(), "network_scope": "local_only"}
 
 
 @app.get("/api/media/image/status")
