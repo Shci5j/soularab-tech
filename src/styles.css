@@ -88,3 +88,13 @@
 .fatal-error-card h1{font-size:22px;margin:0}.fatal-error-card p{color:#aaa;font-size:13px;line-height:1.9;margin:0}
 .fatal-error-card code{padding:12px;border-radius:8px;background:#090a0b;color:#e6c987;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
 .fatal-error-card button{min-height:44px}
+
+
+.settings-group{padding:17px 0;border-bottom:1px solid var(--line)}
+.settings-group:last-of-type{border-bottom:0}.settings-group>h3{margin:0 0 8px;color:var(--gold);font-size:13px}
+.settings-row select,.settings-row input[type="range"]{min-width:160px;max-width:260px}
+.settings-row input[type="checkbox"]{width:20px;height:20px;accent-color:var(--gold)}
+.settings-value{max-width:55%;font-size:11px;color:var(--gold);text-align:left}
+:root[data-density="compact"] .panel-card,:root[data-density="compact"] .destination-card{padding-top:12px;padding-bottom:12px}
+:root[data-density="compact"] .settings-row{padding:9px 0}
+:root[data-reduced-motion="true"] *, :root[data-reduced-motion="true"] *:before, :root[data-reduced-motion="true"] *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
