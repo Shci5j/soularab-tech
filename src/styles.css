@@ -126,3 +126,5 @@
 .module-action{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--text);text-align:right}
 .module-action>span{font-size:19px;color:var(--gold)}.module-action>div{flex:1;display:grid;gap:4px}.module-action strong{font-size:11px}.module-action small{font-size:9px;color:var(--muted)}.module-action b{font-size:10px;color:var(--gold)}
 @media(max-width:750px){.module-workspace-grid{grid-template-columns:1fr}}
+
+@media(max-width:600px){.utility-dock{max-width:440px}.dock-item{font-size:8px;gap:2px;padding:6px 2px}.dock-item span{font-size:17px}}
