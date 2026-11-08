@@ -130,3 +130,6 @@
 @media(max-width:600px){.utility-dock{max-width:440px}.dock-item{font-size:8px;gap:2px;padding:6px 2px}.dock-item span{font-size:17px}}
 
 .vault-transfer{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.vault-transfer label{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+
+.top-actions .language-select{width:auto;flex:0 0 auto;max-width:112px}.top-actions .icon-button{flex:0 0 40px}
+@media(max-width:600px){.top-actions .language-select{max-width:92px}}
