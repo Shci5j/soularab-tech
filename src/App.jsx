@@ -95,7 +95,7 @@ export default function App() {
   const [siteHtml, setSiteHtml] = useState('');
   const [brandDraft, setBrandDraft] = useState({ name:'SOULARAB TECH', initials:'ST', tagline:'IDEAS INTO DIGITAL REALITY', primary:'#c49a43', secondary:'#171519', accent:'#e8d9b5' });
   const [brandReady, setBrandReady] = useState(false);
-  const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\\nProjects\\nSettings' });
+  const [appDraft, setAppDraft] = useState({ name:'My Workspace App', description:'A focused space to organize work and ideas.', color:'#c49a43', features:'Dashboard\nProjects\nSettings' });
   const [appHtml, setAppHtml] = useState('');
   const [agentDraft, setAgentDraft] = useState({ title:'', steps:'', risk:'medium' });
   const [agentSubmitting, setAgentSubmitting] = useState(false);
