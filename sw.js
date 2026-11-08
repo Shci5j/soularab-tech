@@ -1,18 +1,16 @@
 'use strict';
 
-const CACHE_NAME = 'soularab-tech-v3';
+const CACHE_NAME = 'soularab-tech-v4';
 const BASE_URL = new URL('./', self.location.href);
 const PRECACHE_URLS = [
   BASE_URL.href,
   new URL('index.html', BASE_URL).href,
-  new URL('manifest.json', BASE_URL).href,
-  new URL('icon.svg', BASE_URL).href
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => undefined))
       .then(() => self.skipWaiting())
   );
 });
