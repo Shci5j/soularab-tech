@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager, contextmanager
@@ -25,6 +26,12 @@ APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
 ALLOW_DOCKER_OLLAMA = os.getenv("SOULARAB_ALLOW_DOCKER_OLLAMA", "").lower() == "true"
+ALLOW_DOCKER_MEDIA = os.getenv("SOULARAB_ALLOW_DOCKER_MEDIA", "").lower() == "true"
+COMFYUI_BASE_URL = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/")
+WHISPER_CPP_BASE_URL = os.getenv("WHISPER_CPP_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
+MEDIA_TIMEOUT = float(os.getenv("SOULARAB_MEDIA_TIMEOUT_SECONDS", "180"))
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac", ".mp4", ".mpeg", ".mpga"}
 ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if v.strip()]
 
 
@@ -158,6 +165,30 @@ try:
 except ValueError as exc:
     raise RuntimeError(str(exc)) from exc
 
+
+def validate_local_media_url(value: str, variable: str) -> str:
+    """Media engines are local-only unless a Docker service alias is explicitly enabled."""
+    parsed = urlparse(value)
+    if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError(f"{variable} must be a plain HTTP local URL.")
+    host = parsed.hostname.lower()
+    if host == "localhost" or (host in {"comfyui", "whisper"} and ALLOW_DOCKER_MEDIA):
+        return value.rstrip("/")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as exc:
+        raise ValueError(f"{variable} must point to localhost or a loopback IP.") from exc
+    if not address.is_loopback:
+        raise ValueError(f"{variable} must point to localhost or a loopback IP.")
+    return value.rstrip("/")
+
+
+try:
+    COMFYUI_BASE_URL = validate_local_media_url(COMFYUI_BASE_URL, "COMFYUI_BASE_URL")
+    WHISPER_CPP_BASE_URL = validate_local_media_url(WHISPER_CPP_BASE_URL, "WHISPER_CPP_BASE_URL")
+except ValueError as exc:
+    raise RuntimeError(str(exc)) from exc
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=12000)
@@ -230,9 +261,125 @@ async def assistant_chat(payload: ChatRequest, _: None = Depends(require_access)
 def capabilities():
     return {
         "modules": ["assistant", "web", "design", "media", "apps", "files", "agents", "domains", "security"],
-        "providers": {"ollama": "local_loopback_opt_in", "llama_cpp": "not_connected", "comfyui": "not_connected", "whisper_cpp": "not_connected"},
+        "providers": {"ollama": "local_loopback_opt_in", "llama_cpp": "not_connected", "comfyui": "local_loopback_opt_in", "whisper_cpp": "local_loopback_opt_in"},
         "policy": {"external_network": "opt_in", "mutations": "explicit_approval", "execution_after_approval": "separate_action"},
     }
+
+
+
+class ImageWorkflowRequest(BaseModel):
+    workflow: dict = Field(min_length=1)
+    client_id: str | None = Field(default=None, max_length=100)
+
+
+async def media_get(base_url: str, path: str):
+    try:
+        async with httpx.AsyncClient(timeout=MEDIA_TIMEOUT) as client:
+            response = await client.get(base_url + path)
+            response.raise_for_status()
+            return response.json()
+    except httpx.ConnectError as exc:
+        raise HTTPException(status_code=503, detail="محرك الوسائط المحلي غير متصل. تحقق من تشغيل الخدمة على جهاز الخادم.") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="انتهت مهلة انتظار محرك الوسائط المحلي.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"رفض محرك الوسائط الطلب ({exc.response.status_code}).") from exc
+    except (ValueError, httpx.DecodingError) as exc:
+        raise HTTPException(status_code=502, detail="أعاد محرك الوسائط استجابة غير صالحة.") from exc
+
+
+@app.get("/api/media/image/status")
+async def image_engine_status(_: None = Depends(require_access)):
+    try:
+        stats = await media_get(COMFYUI_BASE_URL, "/system_stats")
+        return {"provider": "comfyui", "connected": True, "system": stats}
+    except HTTPException as exc:
+        if exc.status_code == 503:
+            return {"provider": "comfyui", "connected": False, "message": exc.detail}
+        raise
+
+
+@app.post("/api/media/image/queue")
+async def queue_image_workflow(payload: ImageWorkflowRequest, _: None = Depends(require_access)):
+    if len(payload.workflow) > 250:
+        raise HTTPException(status_code=413, detail="سير العمل يحتوي على عدد عقد يتجاوز الحد المسموح.")
+    for node_id, node in payload.workflow.items():
+        if not isinstance(node_id, str) or not node_id.isdigit() or not isinstance(node, dict) or not node.get("class_type"):
+            raise HTTPException(status_code=422, detail="صيغة سير عمل ComfyUI غير صالحة.")
+    body = {"prompt": payload.workflow}
+    if payload.client_id:
+        body["client_id"] = payload.client_id
+    try:
+        async with httpx.AsyncClient(timeout=MEDIA_TIMEOUT) as client:
+            response = await client.post(COMFYUI_BASE_URL + "/prompt", json=body)
+            response.raise_for_status()
+            result = response.json()
+    except httpx.ConnectError as exc:
+        raise HTTPException(status_code=503, detail="ComfyUI غير متصل. شغّل المحرك المحلي أولاً.") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="انتهت مهلة إرسال مهمة التوليد إلى ComfyUI.") from exc
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json()
+        except Exception:
+            detail = "رفض ComfyUI سير العمل المرسل."
+        raise HTTPException(status_code=502, detail=str(detail)[:1000]) from exc
+    if not result.get("prompt_id"):
+        raise HTTPException(status_code=502, detail="لم يُرجع ComfyUI معرّف مهمة صالحاً.")
+    audit("media.image.queued", f"تم إرسال سير عمل إلى ComfyUI: {result['prompt_id']}")
+    return {"provider": "comfyui", "prompt_id": result["prompt_id"], "number": result.get("number"), "status": "queued"}
+
+
+@app.get("/api/media/image/history/{prompt_id}")
+async def image_workflow_history(prompt_id: str, _: None = Depends(require_access)):
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", prompt_id):
+        raise HTTPException(status_code=400, detail="معرّف المهمة غير صالح.")
+    return await media_get(COMFYUI_BASE_URL, "/history/" + prompt_id)
+
+
+@app.get("/api/media/speech/status")
+async def speech_engine_status(_: None = Depends(require_access)):
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            response = await client.get(WHISPER_CPP_BASE_URL + "/health")
+            response.raise_for_status()
+        return {"provider": "whisper.cpp", "connected": True}
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
+        return {"provider": "whisper.cpp", "connected": False, "message": "خدمة whisper.cpp المحلية غير متاحة حالياً."}
+
+
+@app.post("/api/media/transcribe")
+async def transcribe_audio(file: UploadFile = File(...), _: None = Depends(require_access)):
+    filename = safe_filename(file.filename)
+    if Path(filename).suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
+        raise HTTPException(status_code=415, detail="صيغة الصوت غير مدعومة. استخدم WAV أو MP3 أو M4A أو OGG أو WEBM أو FLAC.")
+    content = await file.read(MAX_AUDIO_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="الملف الصوتي فارغ.")
+    if len(content) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="الحد الأقصى للملف الصوتي 25 ميغابايت.")
+    try:
+        async with httpx.AsyncClient(timeout=MEDIA_TIMEOUT) as client:
+            response = await client.post(
+                WHISPER_CPP_BASE_URL + "/inference",
+                files={"file": (filename, content, file.content_type or "application/octet-stream")},
+                data={"response_format": "json"},
+            )
+            response.raise_for_status()
+            result = response.json()
+    except httpx.ConnectError as exc:
+        raise HTTPException(status_code=503, detail="whisper.cpp غير متصل. شغّل خادم التفريغ الصوتي المحلي أولاً.") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="انتهت مهلة تفريغ الملف الصوتي.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"فشل التفريغ الصوتي ({exc.response.status_code}).") from exc
+    except (ValueError, httpx.DecodingError) as exc:
+        raise HTTPException(status_code=502, detail="أعاد محرك التفريغ استجابة غير صالحة.") from exc
+    transcript = result.get("text") or result.get("transcription")
+    if not transcript:
+        raise HTTPException(status_code=502, detail="لم يُرجع محرك التفريغ نصاً.")
+    audit("media.audio.transcribed", f"تم تفريغ ملف صوتي محلي: {filename} ({len(content)} bytes)")
+    return {"provider": "whisper.cpp", "text": transcript, "language": result.get("language")}
 
 
 @app.get("/api/projects")
