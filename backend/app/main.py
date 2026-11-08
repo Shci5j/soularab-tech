@@ -352,7 +352,7 @@ async def view_generated_image(
     image_type: str = Query(default="output", alias="type"),
     _: None = Depends(require_access),
 ):
-    if Path(filename).name != filename or filename.startswith(".") or Path(filename).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+    if Path(filename).name != filename or "\\" in filename or filename.startswith(".") or Path(filename).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         raise HTTPException(status_code=400, detail="اسم ملف الصورة أو امتداده غير صالح.")
     if image_type != "output":
         raise HTTPException(status_code=400, detail="يُسمح بعرض صور المخرجات فقط.")
