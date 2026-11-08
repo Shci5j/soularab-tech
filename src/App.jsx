@@ -47,6 +47,7 @@ export default function App() {
   }, []);
   const [api, setApi] = useState({ state: 'checking', version: '—' });
   const [approvals, setApprovals] = useState([]);
+  const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
@@ -196,11 +197,11 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [health, pending, log, taskQueue] = await Promise.all([
-        request('/api/health'), request('/api/approvals?status=pending'), request('/api/audit?limit=8'), request('/api/tasks'),
+      const [health, approvalData, log, taskQueue] = await Promise.all([
+        request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'),
       ]);
       setApi({ state: 'online', version: health.version || '0.1.0', mode: health.mode || 'local' });
-      setApprovals(pending.items || []);
+      setApprovals(approvalData.items || []);
       setEvents(log.items || []);
       setQueuedTasks(Array.isArray(taskQueue.items) ? taskQueue.items : []);
     } catch (error) {
@@ -828,8 +829,33 @@ export default function App() {
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
-        <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</h3><p>{language === 'ar' ? 'الموافقة لا تعني التنفيذ التلقائي' : 'Approval does not trigger execution' }</p></div><span className="pill">{approvals.length} {language === 'ar' ? 'معلّق' : 'pending'}</span></div>
-          {approvals.length ? approvals.map((item) => <article className="approval" key={item.id}><div className="approval-top"><strong>{item.title}</strong><span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? (language === 'ar' ? 'مرتفع' : 'High') : item.risk === 'low' ? (language === 'ar' ? 'منخفض' : 'Low') : (language === 'ar' ? 'متوسط' : 'Medium')}</span></div><p>{item.description}</p><small>{new Date(item.created_at).toLocaleString(language === 'ar' ? 'ar' : 'en-US')}</small>{item.task_id && <small className="approval-task-link">{language === 'ar' ? 'المهمة المرتبطة' : 'Linked task'} #{item.task_id}</small>}<div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>{language === 'ar' ? 'موافقة' : 'Approve'}</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>{language === 'ar' ? 'رفض' : 'Reject'}</button></div></article>) : <Empty text={language === 'ar' ? 'لا توجد طلبات معلّقة حالياً.' : 'No pending requests.'}/>}
+        <div className="panel-card">
+          <div className="section-heading">
+            <div><h3>{language === 'ar' ? 'مركز الموافقات' : 'Approval center'}</h3><p>{language === 'ar' ? 'راجع الطلبات الحالية والقرارات السابقة' : 'Review pending requests and past decisions'}</p></div>
+            <div className="approval-filter-tools">
+              <span className="pill">{approvals.filter((item) => item.status === 'pending').length} {language === 'ar' ? 'معلّق' : 'pending'}</span>
+              <select className="approval-filter" value={approvalFilter} onChange={(event) => setApprovalFilter(event.target.value)} aria-label={language === 'ar' ? 'تصفية طلبات الموافقة' : 'Filter approvals'}>
+                <option value="pending">{language === 'ar' ? 'المعلّقة' : 'Pending'}</option>
+                <option value="approved">{language === 'ar' ? 'الموافق عليها' : 'Approved'}</option>
+                <option value="rejected">{language === 'ar' ? 'المرفوضة' : 'Rejected'}</option>
+                <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
+              </select>
+            </div>
+          </div>
+          {approvals.filter((item) => approvalFilter === 'all' || item.status === approvalFilter).length
+            ? approvals.filter((item) => approvalFilter === 'all' || item.status === approvalFilter).map((item) => <article className="approval" key={item.id}>
+              <div className="approval-top"><strong>{item.title}</strong><div className="approval-meta">
+                <span className={`risk risk-${item.risk}`}>{item.risk === 'high' ? (language === 'ar' ? 'مرتفع' : 'High') : item.risk === 'low' ? (language === 'ar' ? 'منخفض' : 'Low') : (language === 'ar' ? 'متوسط' : 'Medium')}</span>
+                <span className="pill">{item.status === 'pending' ? (language === 'ar' ? 'معلّق' : 'Pending') : item.status === 'approved' ? (language === 'ar' ? 'موافق عليه' : 'Approved') : (language === 'ar' ? 'مرفوض' : 'Rejected')}</span>
+              </div></div>
+              <p>{item.description}</p>
+              <small>{new Date(item.created_at).toLocaleString(language === 'ar' ? 'ar' : 'en-US')}</small>
+              {item.task_id && <small className="approval-task-link">{language === 'ar' ? 'المهمة المرتبطة' : 'Linked task'} #{item.task_id}</small>}
+              {item.status === 'pending'
+                ? <div className="approval-actions"><button className="button primary" disabled={busy} onClick={() => decide(item.id, 'approved')}>{language === 'ar' ? 'موافقة' : 'Approve'}</button><button className="button danger" disabled={busy} onClick={() => decide(item.id, 'rejected')}>{language === 'ar' ? 'رفض' : 'Reject'}</button></div>
+                : item.decision_note && <small className="approval-decision-note">{language === 'ar' ? 'ملاحظة القرار: ' : 'Decision note: '}{item.decision_note}</small>}
+            </article>)
+            : <Empty text={approvalFilter === 'pending' ? (language === 'ar' ? 'لا توجد طلبات معلّقة حالياً.' : 'No pending requests.') : (language === 'ar' ? 'لا توجد طلبات ضمن هذا التصنيف.' : 'No requests in this filter.')}/>}
         </div>
         <div className="panel-card"><h3>{language === 'ar' ? 'تسجيل طلب جديد' : 'Create a request'}</h3><p className="muted">{language === 'ar' ? 'سجّل الإجراء المقترح ليظهر في قائمة المراجعة. لا ينفذ النظام أي تغيير من هذه الخطوة.' : 'Submit a proposed action for review. This step does not execute any change.'}</p><form className="proposal-form" onSubmit={createProposal}><label>{language === 'ar' ? 'عنوان الإجراء' : 'Action title'}<input value={proposal.title} onChange={(e) => setProposal({...proposal, title:e.target.value})} required maxLength="120" placeholder="مثال: ربط مزود نموذج محلي"/></label><label>{language === 'ar' ? 'التفاصيل' : 'Details'}<textarea value={proposal.description} onChange={(e) => setProposal({...proposal, description:e.target.value})} required rows="4" maxLength="2000" placeholder={language === 'ar' ? 'ما الذي سيتغير؟ ولماذا؟' : 'What will change, and why?'} /></label><label>{language === 'ar' ? 'مستوى المخاطر' : 'Risk level'}<select value={proposal.risk} onChange={(e) => setProposal({...proposal, risk:e.target.value})}><option value="low">{language === 'ar' ? 'منخفض' : 'Low'}</option><option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option><option value="high">{language === 'ar' ? 'مرتفع' : 'High'}</option></select></label><button className="button primary" disabled={busy}>{language === 'ar' ? 'إرسال للمراجعة' : 'Submit for review'}</button></form></div>
         <div className="panel-card"><h3>{language === 'ar' ? 'مفتاح الوصول المحلي' : 'Local access token'}</h3><p className="muted">{language === 'ar' ? 'أدخل رمز API الذي ضبطته في الخادم. يُحفظ في جلسة المتصفح الحالية فقط.' : 'Enter the API token configured on the server. It is stored only for this browser session.'}</p><form onSubmit={(e) => {e.preventDefault();sessionStorage.setItem('st-api-token',apiToken);refresh();}}><label>{language === 'ar' ? 'رمز API' : 'API token'}<input type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder={language === 'ar' ? 'اتركه فارغاً إذا لم تضبطه' : 'Leave blank if not configured'}/></label><button className="button secondary">{language === 'ar' ? 'حفظ للجلسة' : 'Save for session'}</button></form></div>
