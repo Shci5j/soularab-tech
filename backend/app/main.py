@@ -754,3 +754,8 @@ def get_audit(limit: int = Query(default=30, ge=1, le=100), _: None = Depends(re
 @app.get("/")
 def root():
     return {"service": "SOULARAB TECH API", "docs": "/docs", "health": "/api/health"}
+
+
+from .execution import register_execution_routes
+
+register_execution_routes(app)
