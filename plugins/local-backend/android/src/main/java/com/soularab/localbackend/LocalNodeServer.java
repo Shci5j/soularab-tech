@@ -9,7 +9,13 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import fi.iki.elonen.NanoHTTPD;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -63,6 +69,9 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
             return json(Response.Status.OK, result);
+        }
+        if ("A".equals(nodeId) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
+            return chatWithRooh(readBody(session));
         }
         if ("/metrics".equals(path) && Method.GET.equals(session.getMethod())) {
             SQLiteDatabase db = helper.getReadableDatabase();
@@ -145,6 +154,79 @@ final class LocalNodeServer extends NanoHTTPD {
             return json(Response.Status.OK, result);
         }
         return json(Response.Status.NOT_FOUND, error("route_not_found"));
+    }
+
+    private Response chatWithRooh(JSONObject request) {
+        String model = request.optString("model", "").trim();
+        JSONArray incoming = request.optJSONArray("messages");
+        if (model.isEmpty() || incoming == null || incoming.length() < 1 || incoming.length() > 30) {
+            return json(Response.Status.BAD_REQUEST, error("model_and_messages_required"));
+        }
+        HttpURLConnection connection = null;
+        try {
+            JSONObject body = new JSONObject();
+            body.put("model", model);
+            body.put("temperature", Math.max(0, Math.min(2, request.optDouble("temperature", 0.7))));
+            body.put("stream", false);
+            JSONArray messages = new JSONArray();
+            JSONObject system = new JSONObject();
+            system.put("role", "system");
+            system.put("content", "أنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعي تنفيذ إجراء قبل تأكيد نجاحه، ولا تنفذ تغييرات أو إجراءات خارجية دون موافقة صريحة، ولا تحاول الوصول إلى الخزنة.");
+            messages.put(system);
+            for (int i = 0; i < incoming.length(); i++) {
+                JSONObject item = incoming.optJSONObject(i);
+                if (item == null) return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
+                String role = item.optString("role", "");
+                String content = item.optString("content", "");
+                if (!("user".equals(role) || "assistant".equals(role)) || content.trim().isEmpty() || content.length() > 12000) {
+                    return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
+                }
+                JSONObject safe = new JSONObject();
+                safe.put("role", role);
+                safe.put("content", content);
+                messages.put(safe);
+            }
+            body.put("messages", messages);
+
+            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/chat/completions").openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(90000);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = body.toString().getBytes("UTF-8");
+            connection.setFixedLengthStreamingMode(bytes.length);
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(bytes);
+            }
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            if (stream == null) return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_response"));
+            StringBuilder text = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) text.append(line);
+            }
+            if (status < 200 || status >= 300) {
+                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_request_failed"));
+            }
+            JSONObject upstream = new JSONObject(text.toString());
+            JSONArray choices = upstream.optJSONArray("choices");
+            JSONObject message = choices != null && choices.length() > 0 ? choices.optJSONObject(0).optJSONObject("message") : null;
+            if (message == null || message.optString("content", "").trim().isEmpty()) {
+                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_message"));
+            }
+            JSONObject result = new JSONObject();
+            result.put("provider", "llama_cpp");
+            result.put("model", model);
+            result.put("message", message);
+            result.put("done", true);
+            return json(Response.Status.OK, result);
+        } catch (Exception exception) {
+            return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_unavailable"));
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
     }
 
     private long insertTask(String target, String type, JSONObject payload) {
