@@ -121,6 +121,14 @@ def init_db() -> None:
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id, id DESC)")
         db.execute("""
+            CREATE TABLE IF NOT EXISTS vault_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL CHECK(source IN ('owner','rooh')),
+                created_at TEXT NOT NULL
+            )
+        """)
+        db.execute("""
             CREATE TABLE IF NOT EXISTS mesh_nodes (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -191,6 +199,12 @@ class TaskCreate(BaseModel):
     title: str = Field(min_length=3, max_length=140)
     description: str = Field(default="", max_length=4000)
     department: Literal["work", "hub", "jathr", "files", "system"]
+
+class VaultNoteCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=12000)
+    source: Literal["owner", "rooh"] = "owner"
+    owner_approved: bool = False
+
 
 class AgentPlanCreate(BaseModel):
     title: str = Field(min_length=3, max_length=140)
@@ -1163,6 +1177,30 @@ def cancel_task(task_id: int, _: None = Depends(require_access)):
         if linked_approval_id:
             db.execute("INSERT INTO audit(action,details,created_at) VALUES(?,?,?)", ("approval.rejected", f"أُغلق طلب الموافقة #{linked_approval_id} بسبب إلغاء المهمة #{task_id}.", timestamp))
     return {"id": task_id, "status": "cancelled", "approval_id": linked_approval_id, "execution": "not_started"}
+
+
+@app.get("/api/vault/notes")
+def list_vault_notes(_: None = Depends(require_access)):
+    with database() as db:
+        rows = db.execute("SELECT * FROM vault_notes ORDER BY id DESC LIMIT 500").fetchall()
+    return {"items": [row_dict(row) for row in rows], "scope": "notes_only"}
+
+
+@app.post("/api/vault/notes", status_code=201)
+def create_vault_note(payload: VaultNoteCreate, _: None = Depends(require_access)):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="محتوى الملاحظة لا يمكن أن يكون فارغاً.")
+    if payload.source == "rooh" and not payload.owner_approved:
+        raise HTTPException(status_code=403, detail="تحتاج روح إلى موافقتك الصريحة قبل إيداع أي ملاحظة.")
+    with database() as db:
+        cursor = db.execute(
+            "INSERT INTO vault_notes(content,source,created_at) VALUES(?,?,?)",
+            (content, payload.source, now()),
+        )
+        note_id = cursor.lastrowid
+    audit("vault.note.created", f"ملاحظة #{note_id}؛ المصدر: {payload.source}.")
+    return {"id": note_id, "source": payload.source, "saved": True}
 
 
 @app.get("/api/audit")
