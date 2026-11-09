@@ -39,7 +39,7 @@ MEDIA_TIMEOUT = float(os.getenv("SOULARAB_MEDIA_TIMEOUT_SECONDS", "180"))
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac", ".mp4", ".mpeg", ".mpga"}
-ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if v.strip()]
+ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost").split(",") if v.strip()]
 
 
 def now() -> str:
