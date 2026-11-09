@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1 — 2026-11-09
+
+- Make the backend execution registry the source of truth for available manual actions in the Agents interface.
+- Load localized Arabic/English action names and descriptions dynamically and disable execution until the registry is available.
+- Add registry contract tests to keep frontend and backend action metadata synchronized.
+
 ## 0.16.0 — 2026-11-09
 
 - Add a safe project inventory Markdown export that reports file metadata only and excludes hidden files, symlinks, and common credentials.
