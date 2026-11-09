@@ -888,7 +888,7 @@ export default function App() {
   async function executeQueuedTask(task) {
     const draft = executionInputs[task.id] || {};
     const projectId = Number(draft.projectId);
-    const action = draft.action || 'write_project_note';
+    const action = draft.action || executionActions[0]?.id || 'write_project_note';
     const filename = (draft.filename || (action === 'export_project_inventory' ? 'inventory.md' : 'task-' + task.id + '.md')).trim();
     const text = (draft.content ?? task.description ?? '').trim();
     if (!Number.isInteger(projectId) || projectId < 1 || !filename || (action === 'write_project_note' && !text)) {
