@@ -236,10 +236,11 @@ export default function App() {
   useEffect(() => {
     const minutes = Number(preferences.sessionTimeoutMinutes || 0);
     if (!apiToken || ![15, 30, 60].includes(minutes)) {
-      window.clearTimeout(window.__stSessionTimeout);
+      window.clearTimeout(timeoutId);
       return;
     }
     const timeoutMs = minutes * 60 * 1000;
+    let timeoutId = null;
     const expireSession = () => {
       sessionStorage.removeItem('st-api-token');
       sessionStorage.removeItem('st-last-activity');
@@ -253,7 +254,7 @@ export default function App() {
       const remaining = timeoutMs - (Date.now() - last);
       window.clearTimeout(window.__stSessionTimeout);
       if (remaining <= 0) expireSession();
-      else window.__stSessionTimeout = window.setTimeout(expireSession, remaining);
+      else timeoutId = window.setTimeout(expireSession, remaining);
     };
     const recordActivity = () => {
       sessionStorage.setItem('st-last-activity', String(Date.now()));
