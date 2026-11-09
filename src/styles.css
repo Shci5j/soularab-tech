@@ -200,3 +200,15 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .workspace-file>div{min-width:0;flex:1}
 .workspace-file>div strong{overflow-wrap:anywhere}
 .workspace-file .text-button{white-space:nowrap}
+
+
+:root[data-high-contrast="true"]{--muted:#dedede;--line:#858585}
+:root[data-theme="light"][data-high-contrast="true"]{--muted:#33332e;--line:#77736a}
+:root[data-high-contrast="true"] button:focus-visible,
+:root[data-high-contrast="true"] input:focus-visible,
+:root[data-high-contrast="true"] textarea:focus-visible,
+:root[data-high-contrast="true"] select:focus-visible,
+:root[data-high-contrast="true"] a:focus-visible{outline:3px solid var(--gold2);outline-offset:3px}
+:root[data-high-contrast="true"] .settings-row,
+:root[data-high-contrast="true"] .panel-card,
+:root[data-high-contrast="true"] .destination-card{border-color:var(--line)}
