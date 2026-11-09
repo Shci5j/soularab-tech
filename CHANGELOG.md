@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0 — 2026-11-09
+
+- Add a safe project inventory Markdown export that reports file metadata only and excludes hidden files, symlinks, and common credentials.
+- Connect the inventory export to the manual agent execution interface and task audit trail.
+- Restrict ComfyUI requests to a bounded seven-node image-generation workflow with validated node references and parameter limits.
+- Localize common interface feedback, upload/download progress, and repository errors in English mode.
+- Add an authenticated security posture endpoint and a Security center panel that accurately identifies the shared-token model and missing individual-account features without exposing secrets.
+
 # Changelog
 
 ## 0.15.0 — 2026-11-09
