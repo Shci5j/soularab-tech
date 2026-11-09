@@ -928,7 +928,9 @@ export default function App() {
     vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
   const current = useMemo(() => { if (pageTitles[active]) return pageTitles[active]; const item = modules.find((entry) => entry.id === active) || pageTitles.overview; return language === 'en' && englishModules[active] ? { ...item, title: englishModules[active][0], desc: englishModules[active][1] } : item; }, [active, language]);
-  const dateOptions = preferences.dateFormat === 'short' ? { year: 'numeric', month: '2-digit', day: '2-digit' } : preferences.dateFormat === 'medium' ? { year: 'numeric', month: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };\n  if (preferences.dateFormat === 'long') dateOptions.weekday = 'long';\n  if (preferences.timeZone === 'UTC') dateOptions.timeZone = 'UTC';\n  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', dateOptions).format(new Date());
+  const dateOptions = preferences.dateFormat === 'short' ? { year: 'numeric', month: '2-digit', day: '2-digit' } : preferences.dateFormat === 'medium' ? { year: 'numeric', month: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+  if (preferences.dateFormat === 'long') dateOptions.weekday = 'long';
+  if (preferences.timeZone === 'UTC') dateOptions.timeZone = 'UTC';\n  const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', dateOptions).format(new Date());
 
   return <div className="app-shell">
     <main className="main-area">
