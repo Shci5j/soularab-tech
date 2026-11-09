@@ -21,6 +21,11 @@ python -m pip install -r backend/requirements.txt
 export PYTHONPATH="$PWD/backend"
 export SOULARAB_ENV=local
 export SOULARAB_DATA_DIR="$HOME/.soularab/data"
+export ROOH_PROVIDER=llama_cpp
+export LLAMA_CPP_BASE_URL="http://127.0.0.1:8081"
+
+# Prepare and start the on-device local language model before starting the API.
+bash scripts/start-rooh-llama-termux.sh
 export SOULARAB_CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost"
 mkdir -p "$SOULARAB_DATA_DIR"
 
