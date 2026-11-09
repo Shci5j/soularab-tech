@@ -104,5 +104,43 @@ class SafeTaskExecutionTests(unittest.TestCase):
                     self.assertEqual(client.post(f"/api/tasks/{task['id']}/execute", json=payload).status_code, 409)
 
 
+    def test_inventory_export_lists_metadata_without_reading_sensitive_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with self.isolated_client(data):
+                with TestClient(main.app) as client:
+                    project = client.post("/api/projects", json={"title": "Inventory", "description": "Project files"}).json()
+                    workspace = data / "workspaces" / str(project["id"])
+                    workspace.mkdir(parents=True, exist_ok=True)
+                    (workspace / "README.md").write_text("PRIVATE DOCUMENT BODY", encoding="utf-8")
+                    (workspace / ".env").write_text("API_SECRET=do-not-report", encoding="utf-8")
+                    (workspace / "identity.pem").write_text("PRIVATE KEY MATERIAL", encoding="utf-8")
+                    outside = data / "outside.txt"
+                    outside.write_text("OUTSIDE CONTENT", encoding="utf-8")
+                    try:
+                        (workspace / "linked.txt").symlink_to(outside)
+                    except OSError:
+                        pass
+                    task = client.post("/api/tasks", json={"title": "Export inventory", "department": "files"}).json()
+                    response = client.post(f"/api/tasks/{task['id']}/execute", json={
+                        "action": "export_project_inventory",
+                        "project_id": project["id"],
+                        "filename": "inventory.md",
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["status"], "completed")
+                    report = (workspace / "inventory.md").read_text(encoding="utf-8")
+                    self.assertIn("README.md", report)
+                    self.assertNotIn(".env", report)
+                    self.assertNotIn("identity.pem", report)
+                    self.assertNotIn("PRIVATE DOCUMENT BODY", report)
+                    self.assertNotIn("API_SECRET", report)
+                    self.assertNotIn("PRIVATE KEY MATERIAL", report)
+                    self.assertNotIn("OUTSIDE CONTENT", report)
+                    self.assertIn("لا يتضمن هذا التقرير محتويات الملفات", report)
+                    events = client.get(f"/api/tasks/{task['id']}/events").json()["items"]
+                    self.assertEqual([event["to_status"] for event in events], ["completed", "running", "queued"])
+
+
 if __name__ == "__main__":
     unittest.main()
