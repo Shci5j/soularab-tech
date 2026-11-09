@@ -10,7 +10,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import org.nanohttpd.protocols.http.NanoHTTPD;
+import fi.iki.elonen.NanoHTTPD;
 
 import java.io.IOException;
 import java.security.SecureRandom;
