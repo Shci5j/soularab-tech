@@ -1124,6 +1124,7 @@ export default function App() {
           <article className="stat-card"><span>{language === 'ar' ? 'أنوية المعالج المعلنة' : 'Reported CPU cores'}</span><strong>{deviceInfo.cores}</strong></article><article className="stat-card"><span>{language === 'ar' ? 'ذاكرة الجهاز المقدرة' : 'Estimated device memory'}</span><strong>{deviceInfo.memory}</strong></article><article className="stat-card"><span>{language === 'ar' ? 'اللمس' : 'Touch support'}</span><strong>{deviceInfo.touch}</strong></article>
         </div><div className="diagnostic-details"><p><strong>{language === 'ar' ? 'المتصفح:' : 'Browser:'}</strong> {deviceInfo.browser}</p><p><strong>{language === 'ar' ? 'النظام:' : 'Platform:'}</strong> {deviceInfo.platform}</p><p><strong>{language === 'ar' ? 'اللغة:' : 'Language:'}</strong> {deviceInfo.language}</p><p><strong>{language === 'ar' ? 'التخزين:' : 'Storage:'}</strong> {deviceInfo.storage}</p><small>آخر فحص: {deviceInfo.checkedAt}</small></div></> : <div className="empty">{language === 'ar' ? 'اضغط «بدء الفحص» لعرض المعلومات التي يسمح المتصفح بالوصول إليها.' : 'Run diagnostics to view the device information available to this browser.'}</div>}
         <p className="chat-footnote">{language === 'ar' ? 'قيود أمان المتصفح تمنع صفحة الويب من الوصول إلى صلاحيات root أو ملفات النظام الخاصة أو التحكم الكامل بالجهاز. الفحص تشخيصي وآمن ولا يغيّر إعدادات جهازك.' : 'Browser security prevents this page from accessing OS root privileges, private system files, or full device control. Diagnostics are read-only and do not change your device.'}</p>
+        <MeshManager request={request} language={language} />
       </div></section>}
       {active === 'settings' && <section className="content">
         <div className="panel-card settings-page">
@@ -1461,6 +1462,81 @@ export default function App() {
           <button className="button primary" disabled={!loginToken.trim()}>{language === 'ar' ? 'فتح مساحة العمل' : 'Unlock workspace'}</button>
         </form>
       </div>}
+  </div>;
+}
+
+
+function MeshManager({ request, language }) {
+  const [mesh, setMesh] = useState(null);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('A');
+  const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:8000');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const ar = language === 'ar';
+  const roleNames = {
+    A: ar ? 'النصوص والمحادثة' : 'Text & chat',
+    B: ar ? 'الصور والتصميم' : 'Images & design',
+    C: ar ? 'الصوت والفيديو' : 'Audio & video',
+    D: ar ? 'البرمجة والتطبيقات' : 'Code & apps',
+    E: ar ? 'الاحتياطي وتوزيع المهام' : 'Fallback & routing',
+  };
+  async function loadMesh() {
+    setBusy(true); setError('');
+    try { setMesh(await request('/api/mesh/status')); }
+    catch (e) { setError(e.message || (ar ? 'تعذر تحميل حالة شبكة الخوادم.' : 'Could not load mesh status.')); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { loadMesh(); }, []);
+  async function discover(event) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
+    try {
+      await request('/api/mesh/discover', { method: 'POST', body: JSON.stringify({ name: name.trim(), role, base_url: baseUrl.trim() }) });
+      setMessage(ar ? 'تم اكتشاف العقدة والتحقق من توافقها.' : 'Node discovered and compatibility verified.');
+      setName(''); await loadMesh();
+    } catch (e) { setError(e.message || (ar ? 'فشل اكتشاف الخادم.' : 'Node discovery failed.')); }
+    finally { setBusy(false); }
+  }
+  async function removeNode(id) {
+    setBusy(true); setError('');
+    try { await request('/api/mesh/nodes/' + encodeURIComponent(id), { method: 'DELETE' }); await loadMesh(); }
+    catch (e) { setError(e.message || (ar ? 'تعذر حذف العقدة.' : 'Could not remove node.')); }
+    finally { setBusy(false); }
+  }
+  return <div className="panel-card" style={{marginTop:16}}>
+    <div className="section-heading">
+      <div><h2>{ar ? 'شبكة الخوادم الخمسة' : 'Five-server compute mesh'}</h2><p className="muted">{ar ? 'اكتشاف عقد موثوقة على جهازك أو شبكتك المحلية فقط.' : 'Discover trusted nodes on this device or your local network only.'}</p></div>
+      <button className="button secondary" onClick={loadMesh} disabled={busy}>{busy ? '…' : (ar ? 'فحص الآن' : 'Check now')}</button>
+    </div>
+    <div className="diagnostic-grid">
+      <article className="stat-card"><span>{ar ? 'العقد المسجلة' : 'Registered nodes'}</span><strong>{mesh?.registered_nodes ?? '—'}</strong></article>
+      <article className="stat-card"><span>{ar ? 'العقد المتاحة' : 'Online nodes'}</span><strong className={mesh?.online_nodes ? 'good' : 'warn'}>{mesh?.online_nodes ?? '—'}</strong></article>
+      <article className="stat-card"><span>{ar ? 'سياسة الاكتشاف' : 'Discovery policy'}</span><strong>{ar ? 'محلي موثوق' : 'Trusted local'}</strong></article>
+    </div>
+    <div className="module-grid" style={{marginTop:12}}>
+      {['A','B','C','D','E'].map((key) => {
+        const slot = mesh?.slots?.find((item) => item.role === key);
+        return <article className="stat-card" key={key}>
+          <span>{ar ? 'الخادم ' + key : 'Server ' + key}</span>
+          <strong>{roleNames[key]}</strong>
+          <small className={slot?.status === 'online' ? 'good' : 'warn'}>{slot?.status === 'online' ? (ar ? 'متصل' : 'Online') : (ar ? 'غير متصل' : 'Offline')}</small>
+          {slot?.selected_node && <small>{slot.selected_node.name} · {slot.selected_node.latency_ms ?? '—'} ms</small>}
+          {slot?.nodes?.filter((node) => node.status !== 'online').map((node) => <small key={node.id}>{node.name} · {ar ? 'غير مستجيب' : 'Unreachable'}</small>)}
+          {slot?.nodes?.map((node) => <button className="text-button" key={node.id} onClick={() => removeNode(node.id)} disabled={busy}>{ar ? 'إزالة ' : 'Remove '}{node.name}</button>)}
+        </article>;
+      })}
+    </div>
+    <form className="proposal-form" onSubmit={discover} style={{marginTop:16}}>
+      <h3>{ar ? 'البحث عن خادم محلي متاح' : 'Find an available local server'}</h3>
+      <label>{ar ? 'اسم العقدة' : 'Node name'}<input value={name} onChange={(e) => setName(e.target.value)} required maxLength="80" placeholder={ar ? 'مثال: هاتف احتياطي' : 'Example: Spare phone'} /></label>
+      <label>{ar ? 'وظيفة الخادم' : 'Server role'}<select value={role} onChange={(e) => setRole(e.target.value)}>{['A','B','C','D','E'].map((key) => <option value={key} key={key}>{'Server ' + key + ' — ' + roleNames[key]}</option>)}</select></label>
+      <label>{ar ? 'عنوان الخادم داخل الشبكة المحلية' : 'Local network server address'}<input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required type="url" placeholder="http://192.168.1.20:8000" /></label>
+      <button className="button primary" disabled={busy || !name.trim() || !baseUrl.trim()}>{busy ? (ar ? 'جارٍ الفحص…' : 'Checking…') : (ar ? 'اكتشاف وفحص الخادم' : 'Discover and verify node')}</button>
+    </form>
+    {error && <p className="notice" role="alert">{error}</p>}
+    {message && <p className="notice">{message}</p>}
+    <p className="chat-footnote">{ar ? 'لا يجري مسح الإنترنت أو الاتصال بمزوّد خارجي. أضف عنوان جهاز تملكه أو تثق به على الشبكة المحلية؛ لا تُسجّل العقدة إلا بعد نجاح فحص الصحة وبروتوكول SOULARAB MESH. هذه المرحلة تسجّل العقد وتفحصها؛ توزيع تنفيذ المهام بين الأجهزة يحتاج محرك عامل متوافقاً على كل عقدة.' : 'No internet scanning or third-party provider is used. Add a device you own or trust on your local network. A node is registered only after health and SOULARAB MESH protocol checks. This stage registers and monitors nodes; task execution across devices requires a compatible worker engine on each node.'}</p>
   </div>;
 }
 
