@@ -1098,7 +1098,7 @@ export default function App() {
         </div>
         <div className="chat-panel panel-card">
           <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
-            <select aria-label={language === 'ar' ? 'اختر النموذج' : 'Choose model'} value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={!models.length}>
+            <select aria-label={language === 'ar' ? 'اختر النموذج' : 'Choose model'} value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); updatePreference('defaultModel', e.target.value); }} disabled={!models.length}>
               {!models.length && <option value="">{language === 'ar' ? 'لا توجد نماذج متاحة' : 'No models available'}</option>}
               {models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}
             </select>
