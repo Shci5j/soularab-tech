@@ -278,6 +278,20 @@ def health():
     return {"status": "ok", "version": VERSION, "mode": APP_ENV, "external_connections": "disabled_by_default"}
 
 
+@app.get("/api/security/status")
+def security_status(_: None = Depends(require_access)):
+    return {
+        "environment": APP_ENV,
+        "token_configured": bool(API_TOKEN),
+        "access_mode": "bearer_token" if API_TOKEN else ("blocked_until_token" if APP_ENV == "production" else "local_without_token"),
+        "identity_model": "single_shared_api_token",
+        "account_management": False,
+        "browser_session_control": "optional_client_side_inactivity_lock",
+        "external_connections_default": "disabled_by_default",
+        "cors_origins": ALLOWED_ORIGINS,
+    }
+
+
 @app.get("/api/assistant/status")
 async def assistant_status(_: None = Depends(require_access)):
     try:

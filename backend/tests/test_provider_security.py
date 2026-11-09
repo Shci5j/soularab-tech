@@ -1,5 +1,10 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+from app import main
 from app.main import validate_local_provider_url
 
 
@@ -82,6 +87,34 @@ class ProjectApiTests(unittest.TestCase):
                     self.assertEqual(archived.status_code, 200)
                     denied = client.post(f"/api/projects/{project_id}/files", files={"file": ("later.txt", b"x", "text/plain")})
                     self.assertEqual(denied.status_code, 409)
+
+
+class SecurityPostureEndpointTests(unittest.TestCase):
+    def test_security_status_requires_token_and_never_exposes_it(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "security.sqlite3", API_TOKEN="test-secret-token", APP_ENV="production"):
+                with TestClient(main.app) as client:
+                    denied = client.get("/api/security/status")
+                    self.assertEqual(denied.status_code, 401)
+                    response = client.get("/api/security/status", headers={"Authorization": "Bearer test-secret-token"})
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.json()
+                    self.assertEqual(payload["access_mode"], "bearer_token")
+                    self.assertTrue(payload["token_configured"])
+                    self.assertFalse(payload["account_management"])
+                    self.assertEqual(payload["identity_model"], "single_shared_api_token")
+                    self.assertNotIn("test-secret-token", response.text)
+
+    def test_local_security_status_explains_no_token_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "local-security.sqlite3", API_TOKEN="", APP_ENV="local"):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/security/status")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["access_mode"], "local_without_token")
+                    self.assertFalse(response.json()["token_configured"])
 
 
 if __name__ == "__main__":

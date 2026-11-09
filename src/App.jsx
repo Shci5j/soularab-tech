@@ -63,6 +63,8 @@ export default function App() {
   const [proposal, setProposal] = useState({ title: '', description: '', risk: 'medium' });
   const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('st-api-token') || '');
   const [authRequired, setAuthRequired] = useState(false);
+  const [securityStatus, setSecurityStatus] = useState(null);
+  const [securityStatusLoading, setSecurityStatusLoading] = useState(false);
   const [loginToken, setLoginToken] = useState('');
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -318,6 +320,19 @@ export default function App() {
 
   useEffect(() => { refresh(); const id = window.setInterval(refresh, (preferences.refreshIntervalSeconds || 15) * 1000); return () => clearInterval(id); }, [apiToken, preferences.refreshIntervalSeconds]);
 
+  async function loadSecurityStatus() {
+    setSecurityStatusLoading(true);
+    try {
+      const result = await request('/api/security/status');
+      setSecurityStatus(result);
+    } catch (error) {
+      setSecurityStatus(null);
+      setNotice(error.message);
+    } finally {
+      setSecurityStatusLoading(false);
+    }
+  }
+
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
     try {
@@ -352,6 +367,7 @@ export default function App() {
   }
 
   useEffect(() => { if (active === 'assistant') loadAssistant(); }, [active, apiToken]);
+  useEffect(() => { if (active === 'security') loadSecurityStatus(); }, [active, apiToken, apiBaseUrl]);
   useEffect(() => { if (active === 'media') refreshMediaEngines(); }, [active, apiToken]);
 
   async function refreshMediaEngines() {
@@ -1196,6 +1212,17 @@ export default function App() {
         </div>
         <div className="panel-card"><h3>{language === 'ar' ? 'تسجيل طلب جديد' : 'Create a request'}</h3><p className="muted">{language === 'ar' ? 'سجّل الإجراء المقترح ليظهر في قائمة المراجعة. لا ينفذ النظام أي تغيير من هذه الخطوة.' : 'Submit a proposed action for review. This step does not execute any change.'}</p><form className="proposal-form" onSubmit={createProposal}><label>{language === 'ar' ? 'عنوان الإجراء' : 'Action title'}<input value={proposal.title} onChange={(e) => setProposal({...proposal, title:e.target.value})} required maxLength="120" placeholder="مثال: ربط مزود نموذج محلي"/></label><label>{language === 'ar' ? 'التفاصيل' : 'Details'}<textarea value={proposal.description} onChange={(e) => setProposal({...proposal, description:e.target.value})} required rows="4" maxLength="2000" placeholder={language === 'ar' ? 'ما الذي سيتغير؟ ولماذا؟' : 'What will change, and why?'} /></label><label>{language === 'ar' ? 'مستوى المخاطر' : 'Risk level'}<select value={proposal.risk} onChange={(e) => setProposal({...proposal, risk:e.target.value})}><option value="low">{language === 'ar' ? 'منخفض' : 'Low'}</option><option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option><option value="high">{language === 'ar' ? 'مرتفع' : 'High'}</option></select></label><button className="button primary" disabled={busy}>{language === 'ar' ? 'إرسال للمراجعة' : 'Submit for review'}</button></form></div>
         <div className="panel-card"><h3>{language === 'ar' ? 'مفتاح الوصول المحلي' : 'Local access token'}</h3><p className="muted">{language === 'ar' ? 'أدخل رمز API الذي ضبطته في الخادم. يُحفظ في جلسة المتصفح الحالية فقط.' : 'Enter the API token configured on the server. It is stored only for this browser session.'}</p><form onSubmit={(e) => {e.preventDefault();sessionStorage.setItem('st-api-token',apiToken);refresh();}}><label>{language === 'ar' ? 'رمز API' : 'API token'}<input type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder={language === 'ar' ? 'اتركه فارغاً إذا لم تضبطه' : 'Leave blank if not configured'}/></label><button className="button secondary">{language === 'ar' ? 'حفظ للجلسة' : 'Save for session'}</button></form></div>
+        <div className="panel-card">
+          <div className="section-heading"><div><h3>{language === 'ar' ? 'حالة الحساب والوصول' : 'Account & access status'}</h3><p className="muted">{language === 'ar' ? 'قراءة مباشرة لوضع المصادقة الفعلي في الخادم.' : 'Live view of the backend authentication configuration.'}</p></div><button type="button" className="button secondary" onClick={loadSecurityStatus} disabled={securityStatusLoading}>{securityStatusLoading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : (language === 'ar' ? 'تحديث' : 'Refresh')}</button></div>
+          {securityStatus ? <>
+            <div className="roadmap-row"><span>{language === 'ar' ? 'بيئة الخادم' : 'Server environment'}</span><b>{securityStatus.environment}</b></div>
+            <div className="roadmap-row"><span>{language === 'ar' ? 'مصادقة API' : 'API authentication'}</span><b className={securityStatus.token_configured ? 'good' : ''}>{securityStatus.token_configured ? (language === 'ar' ? 'رمز Bearer مضبوط' : 'Bearer token configured') : (language === 'ar' ? 'لا يوجد رمز مضبوط' : 'No token configured')}</b></div>
+            <div className="roadmap-row"><span>{language === 'ar' ? 'نموذج الهوية' : 'Identity model'}</span><b>{language === 'ar' ? 'رمز وصول مشترك واحد' : 'Single shared access token'}</b></div>
+            <div className="roadmap-row"><span>{language === 'ar' ? 'إدارة الحسابات' : 'Account management'}</span><b>{securityStatus.account_management ? (language === 'ar' ? 'متاحة' : 'Available') : (language === 'ar' ? 'غير مفعّلة بعد' : 'Not implemented yet')}</b></div>
+            <div className="roadmap-row"><span>{language === 'ar' ? 'قفل جلسة المتصفح' : 'Browser session lock'}</span><b>{language === 'ar' ? 'اختياري من الإعدادات' : 'Optional in Settings'}</b></div>
+            <p className="chat-footnote">{language === 'ar' ? 'تنبيه دقة: النسخة الحالية لا تحتوي على حسابات مستخدمين منفصلة أو ملفات شخصية أو إعادة تعيين كلمات مرور. الوصول إلى الخادم يعتمد على رمز API المشترك، ولا يُعرض الرمز هنا.' : 'Accuracy note: this build does not yet provide individual user accounts, profiles, or password resets. Backend access uses a shared API token; the token itself is never displayed here.'}</p>
+          </> : <p className="muted">{language === 'ar' ? 'تعذر تحميل حالة الأمان. تحقق من اتصال الخادم ورمز الوصول.' : 'Security status unavailable. Check the backend connection and access token.'}</p>}
+        </div>
         <div className="panel-card"><h3>{language === 'ar' ? 'مبادئ الحماية' : 'Security principles'}</h3><ul className="safety-list"><li>{language === 'ar' ? 'لا اتصال بمزود خارجي افتراضياً.' : 'No external provider connection by default.'}</li><li>{language === 'ar' ? 'لا تعديل أو حذف أو نشر دون موافقة منفصلة.' : 'No edits, deletion, or publishing without separate approval.'}</li><li>{language === 'ar' ? 'كل قرار يُسجل في سجل التدقيق.' : 'Every decision is recorded in the audit log.'}</li><li>{language === 'ar' ? 'لا توجد كلمات مرور تجريبية مضمنة في الواجهة.' : 'No demo passwords are embedded in the interface.'}</li><li>{language === 'ar' ? 'المهام الخطرة تتطلب مراجعة بشرية.' : 'High-risk tasks require human review.'}</li></ul></div>
         <div className="panel-card audit-panel"><div className="section-heading"><div><h3>{language === 'ar' ? 'سجل العمليات' : 'Audit log'}</h3><p>{language === 'ar' ? 'آخر الأحداث المسجلة في الخادم' : 'Latest events recorded by the server'}</p></div><button className="button secondary" onClick={refresh}>{language === 'ar' ? 'تحديث السجل ↻' : 'Refresh log ↻'}</button></div><AuditList events={events} language={language}/></div>
       </section>}
