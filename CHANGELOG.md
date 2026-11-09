@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.3 — 2026-11-09
+
+- Validate the backend API base URL before every request that may include the bearer token; allow HTTPS and local loopback HTTP only.
+- Reject embedded URL credentials, query strings, fragments, and non-root paths to prevent sending access tokens to arbitrary insecure endpoints.
+- Add Node built-in URL security tests and run them in CI before the frontend production build.
+- Translate common Arabic backend error details for English-mode users while preserving Arabic-mode responses.
+
 ## 0.16.2 — 2026-11-09
 
 - Add a persisted default Ollama chat temperature preference (0.0–2.0), validated by the backend and included in settings backup/restore.
