@@ -457,8 +457,11 @@ export default function App() {
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
     try {
-      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
+      const nativeApp = Capacitor.isNativePlatform();
+      const [status, result] = nativeApp
+        ? [null, await localNodeRequest('A', '/models')]
+        : await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
+      setAssistantStatus({ connected: nativeApp ? Boolean(result.connected) : status.connected, loading: false, version: nativeApp ? 'llama.cpp' : status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
       if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
