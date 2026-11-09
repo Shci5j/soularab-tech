@@ -330,6 +330,83 @@ class ImageWorkflowRequest(BaseModel):
         return value
 
 
+COMFYUI_ALLOWED_NODE_TYPES = {
+    "1": "CheckpointLoaderSimple",
+    "2": "CLIPTextEncode",
+    "3": "CLIPTextEncode",
+    "4": "EmptyLatentImage",
+    "5": "KSampler",
+    "6": "VAEDecode",
+    "7": "SaveImage",
+}
+COMFYUI_ALLOWED_SAMPLERS = {
+    "euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral",
+    "lms", "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral",
+    "dpmpp_sde", "dpmpp_2m", "dpmpp_2m_sde", "ddim",
+    "uni_pc", "uni_pc_bh2",
+}
+COMFYUI_ALLOWED_SCHEDULERS = {"normal", "karras", "exponential", "simple", "sgm_uniform"}
+
+
+def validate_comfy_workflow(workflow: dict) -> None:
+    """Accept only the fixed, bounded image-generation graph used by the UI."""
+    if not isinstance(workflow, dict) or set(workflow) != set(COMFYUI_ALLOWED_NODE_TYPES):
+        raise ValueError("يسمح فقط بمخطط توليد الصور القياسي المكوّن من سبع عقد.")
+    for node_id, expected_type in COMFYUI_ALLOWED_NODE_TYPES.items():
+        node = workflow.get(node_id)
+        if not isinstance(node, dict) or node.get("class_type") != expected_type or not isinstance(node.get("inputs"), dict):
+            raise ValueError("نوع عقدة ComfyUI أو بنيتها غير مسموح.")
+    expected_inputs = {
+        "1": {"ckpt_name"},
+        "2": {"text", "clip"},
+        "3": {"text", "clip"},
+        "4": {"width", "height", "batch_size"},
+        "5": {"seed", "steps", "cfg", "sampler_name", "scheduler", "denoise", "model", "positive", "negative", "latent_image"},
+        "6": {"samples", "vae"},
+        "7": {"images", "filename_prefix"},
+    }
+    for node_id, keys in expected_inputs.items():
+        if set(workflow[node_id]["inputs"]) != keys:
+            raise ValueError("مدخلات إحدى عقد ComfyUI غير مطابقة للمخطط الآمن.")
+    checkpoint = workflow["1"]["inputs"]["ckpt_name"]
+    if not isinstance(checkpoint, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,119}", checkpoint) or ".." in checkpoint:
+        raise ValueError("اسم نموذج الصورة غير صالح.")
+    for node_id in ("2", "3"):
+        inputs = workflow[node_id]["inputs"]
+        if not isinstance(inputs["text"], str) or len(inputs["text"]) > 4000 or inputs["clip"] != ["1", 1]:
+            raise ValueError("نص المطالبة أو مرجع CLIP غير صالح.")
+    latent = workflow["4"]["inputs"]
+    for dimension in ("width", "height"):
+        value = latent[dimension]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 256 or value > 1536 or value % 64:
+            raise ValueError("أبعاد الصورة يجب أن تكون بين 256 و1536 وبمضاعفات 64.")
+    if latent["batch_size"] != 1:
+        raise ValueError("يسمح بتوليد صورة واحدة في كل مهمة.")
+    sampler = workflow["5"]["inputs"]
+    integer_ranges = {"seed": (0, 4_294_967_295), "steps": (1, 60)}
+    for key, (minimum, maximum) in integer_ranges.items():
+        value = sampler[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise ValueError("قيمة إعدادات KSampler خارج الحدود المسموحة.")
+    if isinstance(sampler["cfg"], bool) or not isinstance(sampler["cfg"], (int, float)) or not 1 <= sampler["cfg"] <= 20:
+        raise ValueError("قيمة CFG خارج الحدود المسموحة.")
+    if isinstance(sampler["denoise"], bool) or not isinstance(sampler["denoise"], (int, float)) or not 0 < sampler["denoise"] <= 1:
+        raise ValueError("قيمة denoise خارج الحدود المسموحة.")
+    if sampler["sampler_name"] not in COMFYUI_ALLOWED_SAMPLERS or sampler["scheduler"] not in COMFYUI_ALLOWED_SCHEDULERS:
+        raise ValueError("خوارزمية أخذ العينات أو الجدولة غير مسموحة.")
+    references = {
+        "model": ["1", 0], "positive": ["2", 0],
+        "negative": ["3", 0], "latent_image": ["4", 0],
+    }
+    if any(sampler[key] != value for key, value in references.items()):
+        raise ValueError("مراجع KSampler لا تطابق مخطط التوليد الآمن.")
+    if workflow["6"]["inputs"] != {"samples": ["5", 0], "vae": ["1", 2]}:
+        raise ValueError("مراجع VAEDecode غير صالحة.")
+    save = workflow["7"]["inputs"]
+    if save["images"] != ["6", 0] or not isinstance(save["filename_prefix"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", save["filename_prefix"]):
+        raise ValueError("إعداد حفظ الصورة غير صالح.")
+
+
 async def media_get(base_url: str, path: str):
     try:
         async with httpx.AsyncClient(timeout=MEDIA_TIMEOUT) as client:
@@ -393,6 +470,10 @@ async def image_engine_models(_: None = Depends(require_access)):
 async def queue_image_workflow(payload: ImageWorkflowRequest, _: None = Depends(require_access)):
     if len(payload.workflow) > 250:
         raise HTTPException(status_code=413, detail="سير العمل يحتوي على عدد عقد يتجاوز الحد المسموح.")
+    try:
+        validate_comfy_workflow(payload.workflow)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     for node_id, node in payload.workflow.items():
         if not isinstance(node_id, str) or not node_id.isdigit() or not isinstance(node, dict) or not node.get("class_type"):
             raise HTTPException(status_code=422, detail="صيغة سير عمل ComfyUI غير صالحة.")
