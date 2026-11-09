@@ -70,6 +70,9 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("backend", "embedded-android");
             return json(Response.Status.OK, result);
         }
+        if (("A".equals(nodeId) || "B".equals(nodeId)) && "/models".equals(path) && Method.GET.equals(session.getMethod())) {
+            return listRoohModels();
+        }
         if (("A".equals(nodeId) || "B".equals(nodeId)) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
             return chatWithRooh(readBody(session));
         }
@@ -154,6 +157,49 @@ final class LocalNodeServer extends NanoHTTPD {
             return json(Response.Status.OK, result);
         }
         return json(Response.Status.NOT_FOUND, error("route_not_found"));
+    }
+
+    private Response listRoohModels() {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/models").openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(3000);
+            connection.setReadTimeout(5000);
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            if (stream == null || status < 200 || status >= 300) {
+                return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_engine_unavailable_start_termux_engine"));
+            }
+            StringBuilder text = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) text.append(line);
+            }
+            JSONObject upstream = new JSONObject(text.toString());
+            JSONArray data = upstream.optJSONArray("data");
+            JSONArray items = new JSONArray();
+            if (data != null) {
+                for (int i = 0; i < data.length(); i++) {
+                    JSONObject model = data.optJSONObject(i);
+                    String id = model == null ? "" : model.optString("id", "").trim();
+                    if (!id.isEmpty()) {
+                        JSONObject item = new JSONObject();
+                        item.put("name", id);
+                        items.put(item);
+                    }
+                }
+            }
+            JSONObject result = new JSONObject();
+            result.put("connected", items.length() > 0);
+            result.put("provider", "llama_cpp");
+            result.put("items", items);
+            return json(Response.Status.OK, result);
+        } catch (Exception exception) {
+            return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_engine_unavailable_start_termux_engine"));
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
     }
 
     private Response chatWithRooh(JSONObject request) {
