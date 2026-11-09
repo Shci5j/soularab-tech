@@ -1066,11 +1066,11 @@ export default function App() {
   }, [active, apiToken]);
 
   const departmentConfig = {
-    store: { name: 'المتاجر الإلكترونية', node: 'E', prompt: 'حدد الكتالوج والمنتجات والتصنيفات والسلة والطلبات ولوحة الإدارة. لا تفعّل دفعاً حقيقياً أو شحناً أو ضرائب.' },
-    video: { name: 'إنشاء الفيديو', node: 'D', prompt: 'قسّم العمل إلى مشاهد ولقطات ونصوص وتعليق صوتي وترجمة ومونتاج وإخراج. افحص موارد الجهاز قبل أي توليد ثقيل.' },
-    graphics: { name: 'التصميم الجرافيكي', node: 'C', prompt: 'حدد المقاس والاستخدام والألوان والتخطيط والعناصر وملفات التسليم القابلة للتحرير.' },
-    documents: { name: 'المستندات والملفات', node: 'E', prompt: 'حدد نوع الملف وبنيته ومحتواه وتنسيقه ومعاينته وتصديره، واحصر الوصول في ملفات المشروع المصرح بها.' },
-    automation: { name: 'الأتمتة والجدولة', node: 'E', prompt: 'حدد المشغّل والجدولة والخطوات وحدود المحاولات وآلية الإيقاف. لا ترسل أو تنشر أو تحذف أو تشتري دون موافقة مستقلة.' },
+    store: { name: 'المتاجر الإلكترونية', node: 'E', engineId: 'workspace-commerce', provider: 'Embedded Node E', engineStatus: 'queue_only', prompt: 'محرك تطوير E يستقبل خطة المتجر ويجهز مهام بناء مساحة العمل؛ لا توجد بعد دورة متجر تنفّذ الطلبات أو الدفع أو الشحن.' },
+    video: { name: 'إنشاء الفيديو', node: 'D', engineId: 'media-pipeline', provider: 'whisper.cpp + media adapters', engineStatus: 'partial', prompt: 'العقدة D مخصصة للصوت والفيديو؛ المتاح حالياً تفريغ الصوت عبر whisper.cpp عند اتصاله، أما توليد الفيديو والمونتاج الآلي فغير مفعّلين بعد.' },
+    graphics: { name: 'التصميم الجرافيكي', node: 'C', engineId: 'comfyui-image-design', provider: 'ComfyUI', engineStatus: 'optional', prompt: 'العقدة C للتصميم والصور. يتاح توليد الصور فقط عند اتصال ComfyUI المحلي؛ تخطيطات الجرافيك القابلة للتحرير تحتاج عاملاً إضافياً.' },
+    documents: { name: 'المستندات والملفات', node: 'E', engineId: 'project-document-tools', provider: 'Local project tools', engineStatus: 'partial', prompt: 'العقدة E تدعم أدوات ملفات المشروع الآمنة وفهرسة الملفات وكتابة الملاحظات عند اختيار الإجراء المعتمد؛ لا تفترض وجود محررات DOCX/PDF متقدمة.' },
+    automation: { name: 'الأتمتة والجدولة', node: 'E', engineId: 'local-automation-queue', provider: 'Embedded Node E', engineStatus: 'queue_only', prompt: 'العقدة E تستقبل مهام الأتمتة في طابور محلي؛ لا يوجد مشغّل جدولة عام مفعّل حالياً، ولا تنفذ إرسالاً أو نشراً أو حذفاً تلقائياً.' },
   };
   async function submitDepartmentWorkflow(event) {
     event.preventDefault();
@@ -1083,14 +1083,18 @@ export default function App() {
     try {
       const description = [
         'القسم: ' + config.name,
-        'الخادم المقترح: ' + config.node,
+        'معرّف المحرك: ' + config.engineId,
+        'الخادم الفعلي: ' + config.node,
+        'المزود: ' + config.provider,
         'المطلوب: ' + details,
         'ضوابط القسم: ' + config.prompt,
+        'حالة المحرك: ' + config.engineStatus,
         'الحالة: خطة للمراجعة فقط؛ لا يبدأ التنفيذ تلقائياً بعد الموافقة.',
       ].join('\\n');
+      const legacyDepartment = { store: 'work', video: 'jathr', graphics: 'work', documents: 'files', automation: 'system' }[active];
       const result = await request('/api/agent-plans', {
         method: 'POST',
-        body: JSON.stringify({ title, description, risk: departmentDraft.risk, department: active }),
+        body: JSON.stringify({ title, description, risk: departmentDraft.risk, department: legacyDepartment }),
       });
       setDepartmentResult(result);
       setDepartmentDraft({ title: '', details: '', risk: 'medium' });
@@ -1282,9 +1286,12 @@ export default function App() {
             </form>
           </div>
           <div className="panel-card">
-            <h3>{language === 'ar' ? 'مسار القسم' : 'Department route'}</h3>
-            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'الخادم المختص' : 'Assigned node'}</span><strong>{departmentConfig[active].node}</strong></div>
-            <p className="muted">{language === 'ar' ? departmentConfig[active].prompt : 'The task is routed to the department adapter after its execution worker is enabled.'}</p>
+            <h3>{language === 'ar' ? 'المحرك المرتبط بالقسم' : 'Department engine binding'}</h3>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'العقدة' : 'Node'}</span><strong>{departmentConfig[active].node}</strong></div>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'معرّف المحرك' : 'Engine ID'}</span><strong>{departmentConfig[active].engineId}</strong></div>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'المزود' : 'Provider'}</span><strong>{departmentConfig[active].provider}</strong></div>
+            <p className="muted">{language === 'ar' ? departmentConfig[active].prompt : 'The engine binding is explicit. Availability and execution depend on the provider being installed and connected.'}</p>
+            <p className="chat-footnote">{language === 'ar' ? 'حالة المحرك: ' + ({ queue_only: 'طابور فقط — لا يوجد عامل تنفيذ مكتمل', partial: 'قدرات جزئية — ليس خط إنتاج كاملاً', optional: 'محرك اختياري — يتطلب اتصال ComfyUI' }[departmentConfig[active].engineStatus]) : 'Engine state: ' + departmentConfig[active].engineStatus}</p>
             {departmentResult ? <div className="notice-inline" role="status">
               <strong>{language === 'ar' ? 'تم إنشاء طلب الموافقة' : 'Approval request created'}</strong>
               <p>{language === 'ar' ? 'رقم المهمة: ' + departmentResult.task_id + ' · رقم الموافقة: ' + departmentResult.approval_id : 'Task #' + departmentResult.task_id + ' · Approval #' + departmentResult.approval_id}</p>
