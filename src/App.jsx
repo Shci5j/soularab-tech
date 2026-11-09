@@ -235,12 +235,12 @@ export default function App() {
 
   useEffect(() => {
     const minutes = Number(preferences.sessionTimeoutMinutes || 0);
+    let timeoutId = null;
     if (!apiToken || ![15, 30, 60].includes(minutes)) {
       window.clearTimeout(timeoutId);
       return;
     }
     const timeoutMs = minutes * 60 * 1000;
-    let timeoutId = null;
     const expireSession = () => {
       sessionStorage.removeItem('st-api-token');
       sessionStorage.removeItem('st-last-activity');
@@ -252,7 +252,7 @@ export default function App() {
     const schedule = () => {
       const last = Number(sessionStorage.getItem('st-last-activity') || Date.now());
       const remaining = timeoutMs - (Date.now() - last);
-      window.clearTimeout(window.__stSessionTimeout);
+      window.clearTimeout(timeoutId);
       if (remaining <= 0) expireSession();
       else timeoutId = window.setTimeout(expireSession, remaining);
     };
