@@ -70,7 +70,7 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("backend", "embedded-android");
             return json(Response.Status.OK, result);
         }
-        if ("A".equals(nodeId) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
+        if (("A".equals(nodeId) || "B".equals(nodeId)) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
             return chatWithRooh(readBody(session));
         }
         if ("/metrics".equals(path) && Method.GET.equals(session.getMethod())) {
@@ -88,7 +88,7 @@ final class LocalNodeServer extends NanoHTTPD {
         if ("/nodes".equals(path) && "E".equals(nodeId) && Method.GET.equals(session.getMethod())) {
             JSONArray nodes = new JSONArray();
             String[] ids = {"A", "B", "C", "D", "E"};
-            String[] names = {"AI & Text", "Image & Design", "Audio & Video", "Development", "Recovery & Scheduler"};
+            String[] names = {"ROOH Orchestrator", "AI & Text", "Image & Design", "Audio & Video", "Development & Recovery"};
             int[] ports = {3101, 3102, 3103, 3104, 3105};
             for (int i = 0; i < ids.length; i++) {
                 JSONObject item = new JSONObject();
@@ -292,10 +292,14 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private String targetFor(String type) {
-        if (type.contains("image") || type.contains("design") || type.contains("logo")) return "B";
-        if (type.contains("audio") || type.contains("video") || type.contains("speech")) return "C";
-        if (type.contains("code") || type.contains("app") || type.contains("web") || type.contains("build")) return "D";
-        if (type.contains("backup") || type.contains("recovery") || type.contains("system")) return "E";
+        String normalized = type == null ? "" : type.toLowerCase();
+        if (normalized.contains("orchestr") || normalized.contains("root") || normalized.contains("hub")) return "A";
+        if (normalized.contains("text") || normalized.contains("chat") || normalized.contains("language") || normalized.contains("agent")) return "B";
+        if (normalized.contains("image") || normalized.contains("design") || normalized.contains("logo") || normalized.contains("graphic")) return "C";
+        if (normalized.contains("audio") || normalized.contains("video") || normalized.contains("speech") || normalized.contains("transcrib")) return "D";
+        if (normalized.contains("code") || normalized.contains("app") || normalized.contains("web") || normalized.contains("build") ||
+            normalized.contains("store") || normalized.contains("document") || normalized.contains("automation") ||
+            normalized.contains("backup") || normalized.contains("recovery") || normalized.contains("system")) return "E";
         return "A";
     }
 
