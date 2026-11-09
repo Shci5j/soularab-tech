@@ -117,6 +117,19 @@ final class LocalNodeServer extends NanoHTTPD {
         if ("/sections".equals(path) && Method.GET.equals(session.getMethod())) {
             return json(Response.Status.OK, listSections());
         }
+        if (path.startsWith("/sections/") && Method.GET.equals(session.getMethod())) {
+            String sectionId = path.substring("/sections/".length());
+            Cursor cursor = helper.getReadableDatabase().query("local_sections", null, "id=?", new String[]{sectionId}, null, null, null, "1");
+            try {
+                if (!cursor.moveToFirst()) return json(Response.Status.NOT_FOUND, error("section_not_found"));
+                JSONObject item = new JSONObject();
+                item.put("id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                item.put("sectionName", cursor.getString(cursor.getColumnIndexOrThrow("section_name")));
+                item.put("content", new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("content"))).opt("value"));
+                item.put("updatedAt", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")));
+                return json(Response.Status.OK, item);
+            } finally { cursor.close(); }
+        }
         if ("/sections".equals(path) && Method.POST.equals(session.getMethod())) {
             JSONObject body = readBody(session);
             String id = body.optString("id", "").trim();
@@ -126,7 +139,7 @@ final class LocalNodeServer extends NanoHTTPD {
                 return json(Response.Status.BAD_REQUEST, error("id_sectionName_content_required"));
             }
             ContentValues values = new ContentValues();
-            values.put("id", id); values.put("section_name", name); values.put("content", String.valueOf(content));
+            values.put("id", id); values.put("section_name", name); values.put("content", new JSONObject().put("value", content).toString());
             helper.getWritableDatabase().insertWithOnConflict("local_sections", null, values, SQLiteDatabase.CONFLICT_REPLACE);
             JSONObject result = new JSONObject(); result.put("status", "saved"); result.put("id", id);
             return json(Response.Status.OK, result);
@@ -179,7 +192,7 @@ final class LocalNodeServer extends NanoHTTPD {
                 JSONObject item = new JSONObject();
                 item.put("id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
                 item.put("sectionName", cursor.getString(cursor.getColumnIndexOrThrow("section_name")));
-                item.put("content", cursor.getString(cursor.getColumnIndexOrThrow("content")));
+                item.put("content", new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("content"))).opt("value"));
                 item.put("updatedAt", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")));
                 result.put(item);
             }
