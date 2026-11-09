@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.2 — 2026-11-09
+
+- Add a persisted default Ollama chat temperature preference (0.0–2.0), validated by the backend and included in settings backup/restore.
+- Add a localized keyboard skip-navigation link to move directly to the main content.
+- Preserve the lower fixed temperature used for task-planning prompts.
+
 ## 0.16.1 — 2026-11-09
 
 - Make the backend execution registry the source of truth for available manual actions in the Agents interface.
