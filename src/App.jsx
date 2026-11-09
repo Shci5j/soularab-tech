@@ -217,6 +217,7 @@ export default function App() {
       };
       const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
       setPreferences(nextPreferences);
+      if (models.some((model) => model.name === nextPreferences.defaultModel)) setSelectedModel(nextPreferences.defaultModel);
       setLanguage(settings.language);
       setTheme(settings.theme);
       setApiBaseUrl(nextApiUrl);
