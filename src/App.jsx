@@ -52,8 +52,8 @@ export default function App() {
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
-    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
-    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }; }
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }; }
   });
   function updatePreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }));
@@ -214,6 +214,7 @@ export default function App() {
         dateFormat: ['long', 'medium', 'short'].includes(settings.preferences.dateFormat) ? settings.preferences.dateFormat : 'long',
         timeZone: ['local', 'UTC'].includes(settings.preferences.timeZone) ? settings.preferences.timeZone : 'local',
         refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
+        sessionTimeoutMinutes: [0, 15, 30, 60].includes(Number(settings.preferences.sessionTimeoutMinutes)) ? Number(settings.preferences.sessionTimeoutMinutes) : 0,
       };
       const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
       setPreferences(nextPreferences);
@@ -231,6 +232,48 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('st-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const minutes = Number(preferences.sessionTimeoutMinutes || 0);
+    if (!apiToken || ![15, 30, 60].includes(minutes)) {
+      window.clearTimeout(window.__stSessionTimeout);
+      return;
+    }
+    const timeoutMs = minutes * 60 * 1000;
+    const expireSession = () => {
+      sessionStorage.removeItem('st-api-token');
+      sessionStorage.removeItem('st-last-activity');
+      setApiToken('');
+      setLoginToken('');
+      setAuthRequired(true);
+      setNotice(language === 'ar' ? 'انتهت جلسة الوصول بسبب عدم النشاط. أدخل رمز الوصول للمتابعة.' : 'Your access session expired after inactivity. Enter your access token to continue.');
+    };
+    const schedule = () => {
+      const last = Number(sessionStorage.getItem('st-last-activity') || Date.now());
+      const remaining = timeoutMs - (Date.now() - last);
+      window.clearTimeout(window.__stSessionTimeout);
+      if (remaining <= 0) expireSession();
+      else window.__stSessionTimeout = window.setTimeout(expireSession, remaining);
+    };
+    const recordActivity = () => {
+      sessionStorage.setItem('st-last-activity', String(Date.now()));
+      schedule();
+    };
+    const onVisibility = () => { if (document.visibilityState === 'visible') schedule(); };
+    if (!sessionStorage.getItem('st-last-activity')) sessionStorage.setItem('st-last-activity', String(Date.now()));
+    schedule();
+    window.addEventListener('pointerdown', recordActivity, { passive: true });
+    window.addEventListener('keydown', recordActivity);
+    window.addEventListener('touchstart', recordActivity, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearTimeout(window.__stSessionTimeout);
+      window.removeEventListener('pointerdown', recordActivity);
+      window.removeEventListener('keydown', recordActivity);
+      window.removeEventListener('touchstart', recordActivity);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [apiToken, preferences.sessionTimeoutMinutes, language]);
 
   async function request(path, options = {}) {
     const response = await fetch(cleanApiBase(apiBaseUrl) + path, {
@@ -250,6 +293,7 @@ export default function App() {
     const value = loginToken.trim();
     if (!value) return;
     sessionStorage.setItem('st-api-token', value);
+    sessionStorage.setItem('st-last-activity', String(Date.now()));
     setApiToken(value);
     setAuthRequired(false);
     setLoginToken('');
@@ -999,7 +1043,7 @@ export default function App() {
       </div></section>}
       {active === 'settings' && <section className="content">
         <div className="panel-card settings-page">
-          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
+          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
           <div className="settings-group"><h3>{language === 'ar' ? 'اللغة والمنطقة' : 'Language & region'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'لغة التطبيق' : 'Application language'}</strong><small>{language === 'ar' ? 'تغيير اللغة واتجاه الواجهة' : 'Change language and interface direction'}</small></div><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية · RTL</option><option value="en">English · LTR</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'التاريخ' : 'Date'}</strong><small>{language === 'ar' ? 'التاريخ المعروض في الصفحة الرئيسية حسب وقت جهازك' : 'Date shown on the home screen using your device time'}</small></div><span className="settings-value">{todayLabel}</span></div>
@@ -1013,7 +1057,8 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'كثافة الواجهة' : 'Interface density'}</strong><small>{language === 'ar' ? 'المسافات بين البطاقات والعناصر' : 'Spacing between cards and elements'}</small></div><select value={preferences.density} onChange={(e) => updatePreference('density', e.target.value)}><option value="comfortable">{language === 'ar' ? 'مريحة' : 'Comfortable'}</option><option value="compact">{language === 'ar' ? 'مضغوطة' : 'Compact'}</option></select></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الجلسة والأمان' : 'Session & security'}</h3>
-            <div className="settings-row"><div><strong>{language === 'ar' ? 'جلسة الوصول الحالية' : 'Current access session'}</strong><small>{apiToken ? (language === 'ar' ? 'يوجد رمز وصول محفوظ لهذه الجلسة فقط' : 'An access token is stored for this browser session only') : (language === 'ar' ? 'لا يوجد رمز وصول محفوظ حالياً' : 'No access token is stored currently')}</small></div><button type="button" className="button secondary" disabled={!apiToken} onClick={() => { sessionStorage.removeItem('st-api-token'); setApiToken(''); setAuthRequired(false); setNotice(language === 'ar' ? 'تم إنهاء جلسة الوصول على هذا الجهاز.' : 'The access session on this device has been ended.'); }}>{language === 'ar' ? 'إنهاء الجلسة' : 'End session'}</button></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'قفل الجلسة عند عدم النشاط' : 'Lock session after inactivity'}</strong><small>{language === 'ar' ? 'إنهاء رمز الوصول وطلب إدخاله مجدداً بعد فترة خمول. يعمل فقط عند استخدام رمز وصول.' : 'Clear the access token and require it again after inactivity. Applies only when an access token is in use.'}</small></div><select value={preferences.sessionTimeoutMinutes || 0} onChange={(e) => updatePreference('sessionTimeoutMinutes', Number(e.target.value))}><option value="0">{language === 'ar' ? 'معطّل' : 'Disabled'}</option><option value="15">{language === 'ar' ? '15 دقيقة' : '15 minutes'}</option><option value="30">{language === 'ar' ? '30 دقيقة' : '30 minutes'}</option><option value="60">{language === 'ar' ? '60 دقيقة' : '60 minutes'}</option></select></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'جلسة الوصول الحالية' : 'Current access session'}</strong><small>{apiToken ? (language === 'ar' ? 'يوجد رمز وصول محفوظ لهذه الجلسة فقط' : 'An access token is stored for this browser session only') : (language === 'ar' ? 'لا يوجد رمز وصول محفوظ حالياً' : 'No access token is stored currently')}</small></div><button type="button" className="button secondary" disabled={!apiToken} onClick={() => { sessionStorage.removeItem('st-api-token'); sessionStorage.removeItem('st-last-activity'); setApiToken(''); setAuthRequired(false); setNotice(language === 'ar' ? 'تم إنهاء جلسة الوصول على هذا الجهاز.' : 'The access session on this device has been ended.'); }}>{language === 'ar' ? 'إنهاء الجلسة' : 'End session'}</button></div>
             <p className="chat-footnote">{language === 'ar' ? 'لا يعرض التطبيق رمز الوصول ولا يضمّنه في النسخ الاحتياطية. إنهاء الجلسة يمسح الرمز من جلسة المتصفح الحالية فقط.' : 'The token is never displayed or included in backups. Ending the session clears it from this browser session only.'}</p>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'تحديث البيانات' : 'Data refresh'}</h3>
