@@ -1,0 +1,39 @@
+name: Android embedded backend build
+
+on:
+  push:
+    branches:
+      - feature/embedded-five-node-backend
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install dependencies
+        run: npm install
+      - name: Build web application
+        run: npm run build
+      - name: Generate Android platform if absent
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+      - name: Sync Capacitor plugins
+        run: npx cap sync android
+      - name: Assemble Android debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
