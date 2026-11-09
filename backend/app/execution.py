@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -8,10 +9,10 @@ from pydantic import BaseModel, Field
 
 
 class TaskExecutionRequest(BaseModel):
-    action: Literal["write_project_note"]
+    action: Literal["write_project_note", "export_project_inventory"]
     project_id: int = Field(gt=0)
     filename: str = Field(min_length=1, max_length=120)
-    content: str = Field(min_length=1, max_length=100_000)
+    content: str = Field(default="", max_length=100_000)
 
 
 def register_execution_routes(app) -> None:
@@ -29,6 +30,14 @@ def register_execution_routes(app) -> None:
                     "risk": "low",
                     "requires_project": True,
                     "allowed_extensions": [".txt", ".md"],
+                },
+                {
+                    "id": "export_project_inventory",
+                    "title": "تصدير فهرس ملفات المشروع",
+                    "description": "ينشئ تقرير Markdown بأسماء الملفات العادية وأحجامها وتواريخ تعديلها، دون قراءة محتوياتها أو تضمين الملفات المخفية والأسرار والروابط الرمزية.",
+                    "risk": "low",
+                    "requires_project": True,
+                    "allowed_extensions": [".md"],
                 }
             ],
             "policy": "allowlist_only",
@@ -43,8 +52,68 @@ def register_execution_routes(app) -> None:
         # Resolve and validate the destination before claiming the task.
         root = main.project_workspace(payload.project_id, require_active=True)
         filename = main.safe_filename(payload.filename)
-        if Path(filename).suffix.lower() not in {".txt", ".md"}:
-            raise HTTPException(status_code=415, detail="يسمح هذا الإجراء بملفات TXT وMD فقط.")
+        suffix = Path(filename).suffix.lower()
+        if payload.action == "write_project_note":
+            if not payload.content.strip():
+                raise HTTPException(status_code=422, detail="محتوى الملاحظة مطلوب.")
+            if suffix not in {".txt", ".md"}:
+                raise HTTPException(status_code=415, detail="يسمح إجراء الملاحظة بملفات TXT وMD فقط.")
+            artifact_content = payload.content
+        else:
+            if suffix != ".md":
+                raise HTTPException(status_code=415, detail="يسمح فهرس المشروع بملف Markdown فقط.")
+            with main.database() as db:
+                project = db.execute("SELECT title, description FROM projects WHERE id=? AND status='active'", (payload.project_id,)).fetchone()
+            if project is None:
+                raise HTTPException(status_code=404, detail="المشروع النشط غير موجود.")
+            entries = []
+            truncated = False
+            sensitive_suffixes = {".pem", ".key", ".p12", ".pfx", ".keystore"}
+            for current, directories, names in os.walk(root, followlinks=False):
+                current_path = Path(current)
+                directories[:] = [
+                    name for name in directories
+                    if not name.startswith(".") and not (current_path / name).is_symlink()
+                ]
+                for name in names:
+                    item = current_path / name
+                    if name.startswith(".") or item.is_symlink() or not item.is_file():
+                        continue
+                    if item.suffix.lower() in sensitive_suffixes or any(marker in name.lower() for marker in ("credential", "secret", "token", "private")) or name.lower() in {"id_rsa", "id_ed25519"}:
+                        continue
+                    try:
+                        resolved = item.resolve(strict=True)
+                        if not resolved.is_relative_to(root):
+                            continue
+                        stat_result = item.stat()
+                    except (OSError, RuntimeError):
+                        continue
+                    modified = main.datetime.fromtimestamp(stat_result.st_mtime, main.timezone.utc).isoformat()
+                    entries.append((resolved.relative_to(root).as_posix(), stat_result.st_size, modified))
+                    if len(entries) > 200:
+                        truncated = True
+                        break
+                if truncated:
+                    break
+            entries = entries[:200]
+            lines = [
+                f"# فهرس المشروع: {project['title']}",
+                "",
+                project["description"] or "تقرير آلي لملفات مساحة المشروع.",
+                "",
+                "| الملف | الحجم (بايت) | آخر تعديل (UTC) |",
+                "|---|---:|---|",
+            ]
+            for relative, size, modified in entries:
+                safe_name = relative.replace("|", "\\|").replace("\n", " ")
+                lines.append(f"| {safe_name} | {size} | {modified} |")
+            if not entries:
+                lines.append("| لا توجد ملفات عادية قابلة للفهرسة | 0 | — |")
+            if truncated:
+                lines.extend(["", "ملاحظة: عُرض أول 200 ملف فقط."])
+            lines.extend(["", "ملاحظة أمان: لا يتضمن هذا التقرير محتويات الملفات أو الملفات المخفية أو مفاتيح التشفير أو الروابط الرمزية."])
+            artifact_content = "\n".join(lines) + "\n"
+
         target = (root / filename).resolve()
         if target.parent != root or target.exists():
             raise HTTPException(status_code=409, detail="الملف موجود مسبقاً أو أن مساره غير مسموح.")
@@ -67,7 +136,7 @@ def register_execution_routes(app) -> None:
                 raise HTTPException(status_code=409, detail="بدأ تنفيذ المهمة بالفعل أو تغيرت حالتها.")
             main.record_task_event(
                 db, task_id, "task.execution.started", "queued", "running",
-                "بدأ الإجراء المسموح write_project_note.", timestamp,
+                f"بدأ الإجراء المسموح {payload.action}.", timestamp,
             )
             db.execute(
                 "INSERT INTO audit(action,details,created_at) VALUES(?,?,?)",
@@ -80,7 +149,7 @@ def register_execution_routes(app) -> None:
             # fails midway, remove only the regular file created by this request.
             with target.open("x", encoding="utf-8", newline="\n") as output:
                 created_artifact = True
-                output.write(payload.content)
+                output.write(artifact_content)
         except Exception as exc:
             if created_artifact:
                 try:
@@ -99,7 +168,7 @@ def register_execution_routes(app) -> None:
                 )
                 db.execute(
                     "INSERT INTO audit(action,details,created_at) VALUES(?,?,?)",
-                    ("task.execution.failed", f"فشل الإجراء للمهمة #{task_id}: {type(exc).__name__}.", failed_at),
+                    ("task.execution.failed", f"فشل الإجراء {payload.action} للمهمة #{task_id}: {type(exc).__name__}.", failed_at),
                 )
             raise HTTPException(status_code=500, detail="تعذر حفظ الملف داخل مساحة المشروع؛ سُجل فشل المهمة.") from exc
 
@@ -113,12 +182,12 @@ def register_execution_routes(app) -> None:
             )
             db.execute(
                 "INSERT INTO audit(action,details,created_at) VALUES(?,?,?)",
-                ("task.execution.completed", f"المهمة #{task_id} أنشأت {artifact}.", completed_at),
+                ("task.execution.completed", f"المهمة #{task_id} نفذت {payload.action} وأنشأت {artifact}.", completed_at),
             )
         return {
             "id": task_id,
             "status": "completed",
             "action": payload.action,
             "artifact": artifact,
-            "bytes": len(payload.content.encode("utf-8")),
+            "bytes": len(artifact_content.encode("utf-8")),
         }
