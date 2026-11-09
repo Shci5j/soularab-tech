@@ -56,6 +56,7 @@ echo "$MODEL_SHA256  $MODEL_PATH" | sha256sum -c -
 nohup "$SERVER_BIN" \
   --model "$MODEL_PATH" \
   --alias rooh-local \
+  --no-webui \
   --host 127.0.0.1 \
   --port "$PORT" \
   --ctx-size "$CTX_SIZE" \
