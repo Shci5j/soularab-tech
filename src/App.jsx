@@ -115,6 +115,8 @@ export default function App() {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskActionId, setTaskActionId] = useState(null);
   const [executionInputs, setExecutionInputs] = useState({});
+  const [executionActions, setExecutionActions] = useState([]);
+  const [loadingExecutionActions, setLoadingExecutionActions] = useState(false);
   const [taskFilter, setTaskFilter] = useState('all');
   const [taskHistoryId, setTaskHistoryId] = useState(null);
   const [taskHistory, setTaskHistory] = useState([]);
@@ -838,6 +840,19 @@ export default function App() {
     }
   }
 
+  async function loadExecutionRegistry() {
+    setLoadingExecutionActions(true);
+    try {
+      const result = await request('/api/executions/registry');
+      setExecutionActions(Array.isArray(result.items) ? result.items : []);
+    } catch (error) {
+      setExecutionActions([]);
+      setNotice(error.message);
+    } finally {
+      setLoadingExecutionActions(false);
+    }
+  }
+
   async function toggleTaskHistory(taskId) {
     if (taskHistoryId === taskId) {
       setTaskHistoryId(null);
@@ -899,7 +914,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (active === 'agents') { loadTasks(); loadProjects(); }
+    if (active === 'agents') { loadTasks(); loadProjects(); loadExecutionRegistry(); }
   }, [active, apiToken]);
 
   async function generateAgentSteps() {
@@ -1254,13 +1269,13 @@ export default function App() {
             </div>
             {task.status==='queued' && <div className="task-execution-form">
               <strong>{language==='ar'?'إجراء آمن ضمن القائمة المسموحة':'Allowlisted safe action'}</strong>
-              <label>{language==='ar'?'نوع الإجراء':'Action type'}<select value={executionInputs[task.id]?.action || 'write_project_note'} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],action:event.target.value,filename:event.target.value==='export_project_inventory'?'inventory.md':('task-'+task.id+'.md')}}))}><option value="write_project_note">{language==='ar'?'حفظ ملاحظة نصية':'Save a text note'}</option><option value="export_project_inventory">{language==='ar'?'تصدير فهرس ملفات المشروع':'Export project file inventory'}</option></select></label>
+              <label>{language==='ar'?'نوع الإجراء':'Action type'}<select value={executionInputs[task.id]?.action || executionActions[0]?.id || ''} disabled={loadingExecutionActions || !executionActions.length} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],action:event.target.value,filename:event.target.value==='export_project_inventory'?'inventory.md':('task-'+task.id+'.md')}}))}>{executionActions.map(action=><option key={action.id} value={action.id}>{language==='ar'?action.title:action.title_en}</option>)}</select></label>
               <label>{language==='ar'?'مساحة المشروع':'Project workspace'}<select value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))}><option value="">{language==='ar'?'اختر مشروعاً نشطاً':'Select an active project'}</option>{projects.filter(project=>project.status==='active').map(project=><option key={project.id} value={project.id}>{project.title} · #{project.id}</option>)}</select></label>
               {!projects.some(project=>project.status==='active') && <small>{language==='ar'?'لا توجد مساحة مشروع نشطة. أنشئ مشروعاً أولاً من قسم الملفات والمشاريع.':'No active project yet. Create one in Files & Projects first.'} <button type="button" className="text-button" onClick={()=>setActive('files')}>{language==='ar'?'فتح المشاريع':'Open projects'}</button></small>}
               <label>{language==='ar'?'اسم الملف الناتج':'Output filename'}<input value={executionInputs[task.id]?.filename ?? ((executionInputs[task.id]?.action === 'export_project_inventory') ? 'inventory.md' : 'task-'+task.id+'.md')} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],filename:event.target.value}}))}/></label>
               {(executionInputs[task.id]?.action || 'write_project_note') === 'write_project_note' && <label>{language==='ar'?'محتوى الملف':'File content'}<textarea rows="3" value={executionInputs[task.id]?.content ?? task.description ?? ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],content:event.target.value}}))} placeholder={language==='ar'?'اكتب المحتوى الذي تريد حفظه…':'Write the content to save…'}/></label>}
-              {(executionInputs[task.id]?.action || 'write_project_note') === 'export_project_inventory' && <small>{language==='ar'?'سينشئ تقريراً بأسماء الملفات وأحجامها وتواريخ تعديلها فقط، دون قراءة المحتوى أو إدراج الملفات المخفية ومفاتيح الوصول.':'Creates a report of filenames, sizes, and modification times only. It does not read file contents or include hidden files and credentials.'}</small>}
-              <button className="button primary" disabled={taskActionId===task.id} onClick={()=>executeQueuedTask(task)}>{taskActionId===task.id?(language==='ar'?'جارٍ التنفيذ…':'Executing…'):(language==='ar'?'بدء التنفيذ اليدوي':'Start manual execution')}</button>
+              {(executionInputs[task.id]?.action || executionActions[0]?.id) && <small>{language==='ar' ? executionActions.find(action=>action.id===(executionInputs[task.id]?.action || executionActions[0]?.id))?.description : executionActions.find(action=>action.id===(executionInputs[task.id]?.action || executionActions[0]?.id))?.description_en}</small>}
+              <button className="button primary" disabled={taskActionId===task.id || !executionActions.length || loadingExecutionActions} onClick={()=>executeQueuedTask(task)}>{taskActionId===task.id?(language==='ar'?'جارٍ التنفيذ…':'Executing…'):(language==='ar'?'بدء التنفيذ اليدوي':'Start manual execution')}</button>
             </div>}
             {taskHistoryId===task.id && <div className="task-history">
               <strong>{language==='ar'?'تسلسل الحالة':'Status timeline'}</strong>
