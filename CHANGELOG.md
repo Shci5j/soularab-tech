@@ -1,5 +1,15 @@
 # Changelog
 
+# Changelog
+
+## 0.15.0 — 2026-11-09
+
+- Expanded settings backup and restore for interface preferences, date format, time zone, and trusted backend URL while excluding authentication secrets.
+- Added a persistent high-contrast accessibility mode with stronger text, borders, and keyboard focus visibility in dark and light themes.
+- Added a default local Ollama text model preference shared by assistant chat and AI-assisted drafting, with backup and restore support.
+- Added an optional browser-session inactivity lock that clears the access token after 15, 30, or 60 minutes and requires re-authentication.
+- Added configurable dashboard refresh intervals and retained device-local settings behavior.
+
 ## 0.14.2 — 2026-11-09
 
 - Completed English translations for the workspace access dialog and primary navigation accessibility label.
