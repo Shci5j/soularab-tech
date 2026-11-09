@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.nanohttpd.protocols.http.NanoHTTPD;
+import fi.iki.elonen.NanoHTTPD;
 
 import java.io.IOException;
 import java.util.HashMap;
