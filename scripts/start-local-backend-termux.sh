@@ -12,7 +12,7 @@ if [ ! -f "backend/app/main.py" ] || [ ! -f "backend/requirements.txt" ]; then
 fi
 
 pkg update -y
-pkg install -y python clang make rust
+pkg install -y python clang make rust pkg-config libffi openssl
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
