@@ -52,8 +52,8 @@ export default function App() {
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
-    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
-    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }; }
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }; }
   });
   function updatePreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }));
@@ -172,6 +172,7 @@ export default function App() {
     document.body.style.zoom = String(preferences.fontScale / 100);
     document.documentElement.dataset.density = preferences.density;
     document.documentElement.dataset.reducedMotion = String(preferences.reducedMotion);
+    document.documentElement.dataset.highContrast = String(Boolean(preferences.highContrast));
     localStorage.setItem('st-preferences', JSON.stringify(preferences));
   }, [preferences]);
 
@@ -208,6 +209,7 @@ export default function App() {
         fontScale: [85, 90, 95, 100, 105, 110, 115, 120, 125].includes(Number(settings.preferences.fontScale)) ? Number(settings.preferences.fontScale) : 100,
         density: ['comfortable', 'compact'].includes(settings.preferences.density) ? settings.preferences.density : 'comfortable',
         reducedMotion: Boolean(settings.preferences.reducedMotion),
+        highContrast: Boolean(settings.preferences.highContrast),
         dateFormat: ['long', 'medium', 'short'].includes(settings.preferences.dateFormat) ? settings.preferences.dateFormat : 'long',
         timeZone: ['local', 'UTC'].includes(settings.preferences.timeZone) ? settings.preferences.timeZone : 'local',
         refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
@@ -1017,6 +1019,7 @@ export default function App() {
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'تقليل الحركة' : 'Reduce motion'}</strong><small>{language === 'ar' ? 'إيقاف الانتقالات والحركات الزخرفية' : 'Disable transitions and decorative motion'}</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'تباين مرتفع' : 'High contrast'}</strong><small>{language === 'ar' ? 'تعزيز وضوح النصوص والحدود وعناصر التركيز' : 'Improve text, border, and focus visibility'}</small></div><input type="checkbox" checked={Boolean(preferences.highContrast)} onChange={(e) => updatePreference('highContrast', e.target.checked)}/></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'النسخ الاحتياطي للإعدادات' : 'Settings backup'}</h3>
             <p className="muted">{language === 'ar' ? 'احفظ اللغة والمظهر وتفضيلات الواجهة وعنوان الخادم لاستعادتها لاحقاً أو نقلها إلى جهاز آخر.' : 'Back up language, appearance, interface preferences, and backend URL for later restoration or transfer to another device.'}</p>
