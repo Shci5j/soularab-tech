@@ -68,10 +68,15 @@ public class LocalBackendPlugin extends Plugin {
         String[] ids = {"A", "B", "C", "D", "E"};
         String[] names = {"AI & Text", "Image & Design", "Audio & Video", "Development", "Recovery & Scheduler"};
         int[] ports = {3101, 3102, 3103, 3104, 3105};
-        for (int i = 0; i < ids.length; i++) {
-            LocalNodeServer server = new LocalNodeServer(ids[i], names[i], ports[i], database, accessToken);
-            server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-            servers.add(server);
+        try {
+            for (int i = 0; i < ids.length; i++) {
+                LocalNodeServer server = new LocalNodeServer(ids[i], names[i], ports[i], database, accessToken);
+                server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+                servers.add(server);
+            }
+        } catch (IOException error) {
+            stopAll();
+            throw error;
         }
     }
 
