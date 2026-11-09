@@ -106,7 +106,7 @@ def register_execution_routes(app) -> None:
             ]
             for relative, size, modified in entries:
                 safe_name = relative.replace("|", "\\|").replace("\n", " ")
-                lines.append(f"| \`{safe_name}\` | {size} | {modified} |")
+                lines.append(f"| {safe_name} | {size} | {modified} |")
             if not entries:
                 lines.append("| لا توجد ملفات عادية قابلة للفهرسة | 0 | — |")
             if truncated:
