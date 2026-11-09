@@ -208,6 +208,8 @@ export default function App() {
         fontScale: [85, 90, 95, 100, 105, 110, 115, 120, 125].includes(Number(settings.preferences.fontScale)) ? Number(settings.preferences.fontScale) : 100,
         density: ['comfortable', 'compact'].includes(settings.preferences.density) ? settings.preferences.density : 'comfortable',
         reducedMotion: Boolean(settings.preferences.reducedMotion),
+        dateFormat: ['long', 'medium', 'short'].includes(settings.preferences.dateFormat) ? settings.preferences.dateFormat : 'long',
+        timeZone: ['local', 'UTC'].includes(settings.preferences.timeZone) ? settings.preferences.timeZone : 'local',
       };
       const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
       setPreferences(nextPreferences);
