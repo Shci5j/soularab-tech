@@ -63,7 +63,11 @@ public class LocalBackendPlugin extends Plugin {
     }
 
     private synchronized void startAll() throws IOException {
-        if (servers.size() == 5 && servers.stream().allMatch(NanoHTTPD::isAlive)) return;
+        if (servers.size() == 5) {
+            boolean allAlive = true;
+            for (LocalNodeServer server : servers) allAlive = allAlive && server.isAlive();
+            if (allAlive) return;
+        }
         stopAll();
         String[] ids = {"A", "B", "C", "D", "E"};
         String[] names = {"AI & Text", "Image & Design", "Audio & Video", "Development", "Recovery & Scheduler"};
