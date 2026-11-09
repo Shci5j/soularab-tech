@@ -5,7 +5,7 @@ export async function localNodeRequest(nodeId, path, options = {}) {
   if (!port) throw new Error('Unknown embedded node: ' + nodeId);
   const token = sessionStorage.getItem('st-embedded-local-token');
   if (!token) throw new Error('Embedded local backend has not started in this app session.');
-  const response = await fetch('http://127.0.0.1:' + port + path, {
+  const response = await fetch('http://localhost:' + port + path, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
