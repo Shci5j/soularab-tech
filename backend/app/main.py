@@ -31,6 +31,8 @@ API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
+ROOH_PROVIDER = os.getenv("ROOH_PROVIDER", "ollama").strip().lower()
+LLAMA_CPP_BASE_URL = os.getenv("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8081").rstrip("/")
 ALLOW_DOCKER_OLLAMA = os.getenv("SOULARAB_ALLOW_DOCKER_OLLAMA", "").lower() == "true"
 ALLOW_DOCKER_MEDIA = os.getenv("SOULARAB_ALLOW_DOCKER_MEDIA", "").lower() == "true"
 COMFYUI_BASE_URL = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/")
@@ -234,6 +236,13 @@ try:
 except ValueError as exc:
     raise RuntimeError(str(exc)) from exc
 
+if ROOH_PROVIDER not in {"ollama", "llama_cpp"}:
+    raise RuntimeError("ROOH_PROVIDER must be either ollama or llama_cpp.")
+try:
+    LLAMA_CPP_BASE_URL = validate_local_provider_url(LLAMA_CPP_BASE_URL)
+except ValueError as exc:
+    raise RuntimeError(str(exc)) from exc
+
 
 def validate_local_media_url(value: str, variable: str) -> str:
     """Media engines are local-only unless a Docker service alias is explicitly enabled."""
@@ -286,6 +295,34 @@ async def ollama_request(path: str, payload: dict | None = None):
         raise HTTPException(status_code=502, detail=str(detail)[:500]) from exc
     except (ValueError, httpx.DecodingError) as exc:
         raise HTTPException(status_code=502, detail="أعاد مزود النموذج استجابة غير صالحة.") from exc
+
+async def llama_cpp_request(method: str, path: str, payload: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            response = await client.request(method, LLAMA_CPP_BASE_URL + path, json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.ConnectError as exc:
+        raise HTTPException(status_code=503, detail="محرك روح المحلي (llama.cpp) غير متصل. شغّل نموذج روح على جهاز الخادم.") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="انتهت مهلة انتظار نموذج روح المحلي.") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = "تعذر على محرك روح المحلي إكمال الطلب."
+        try:
+            detail = exc.response.json().get("error", {}).get("message", detail)
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=str(detail)[:500]) from exc
+    except (ValueError, httpx.DecodingError) as exc:
+        raise HTTPException(status_code=502, detail="أعاد محرك روح المحلي استجابة غير صالحة.") from exc
+
+
+def rooh_system_message() -> dict:
+    return {
+        "role": "system",
+        "content": "أنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. افهم طلب المستخدم، لخّص المطلوب، واقترح خطوات عملية. لا تدّعي تنفيذ إجراء أو الوصول إلى ملف أو جهاز أو خدمة ما لم تؤكد الأداة نجاحه. لا تنفذ أوامر أو تغييرات أو إرسالاً خارجياً دون موافقة صريحة ومحددة من المستخدم. لا تطلب بيانات سرية ولا تحاول الوصول إلى الخزنة."
+    }
+
 
 def row_dict(row: sqlite3.Row) -> dict:
     return dict(row)
@@ -449,38 +486,57 @@ def security_status(_: None = Depends(require_access)):
 @app.get("/api/assistant/status")
 async def assistant_status(_: None = Depends(require_access)):
     try:
+        if ROOH_PROVIDER == "llama_cpp":
+            data = await llama_cpp_request("GET", "/health")
+            return {"provider": "llama_cpp", "connected": data.get("status") in {"ok", "no slot available"}, "version": data.get("status")}
         data = await ollama_request("/api/version")
         return {"provider": "ollama", "connected": True, "version": data.get("version")}
     except HTTPException as exc:
         if exc.status_code == 503:
-            return {"provider": "ollama", "connected": False, "message": exc.detail}
+            return {"provider": ROOH_PROVIDER, "connected": False, "message": exc.detail}
         raise
 
 @app.get("/api/assistant/models")
 async def assistant_models(_: None = Depends(require_access)):
+    if ROOH_PROVIDER == "llama_cpp":
+        data = await llama_cpp_request("GET", "/v1/models")
+        models = [{"name": item.get("id"), "size": None, "modified_at": None} for item in data.get("data", []) if item.get("id")]
+        return {"provider": "llama_cpp", "items": models}
     data = await ollama_request("/api/tags")
     models = [{"name": item.get("name"), "size": item.get("size"), "modified_at": item.get("modified_at")} for item in data.get("models", []) if item.get("name")]
     return {"provider": "ollama", "items": models}
 
 @app.post("/api/assistant/chat")
 async def assistant_chat(payload: ChatRequest, _: None = Depends(require_access)):
-    models = await ollama_request("/api/tags")
-    available = {item.get("name") for item in models.get("models", [])}
-    if payload.model not in available:
-        raise HTTPException(status_code=404, detail="النموذج المحدد غير موجود في Ollama المحلية.")
-    response = await ollama_request("/api/chat", {"model": payload.model, "messages": [message.model_dump() for message in payload.messages], "stream": False, "options": {"temperature": payload.temperature}})
-    message = response.get("message", {})
-    content = message.get("content", "")
+    messages = [rooh_system_message(), *[message.model_dump() for message in payload.messages]]
+    if ROOH_PROVIDER == "llama_cpp":
+        response = await llama_cpp_request("POST", "/v1/chat/completions", {
+            "model": payload.model,
+            "messages": messages,
+            "temperature": payload.temperature,
+            "stream": False,
+        })
+        choices = response.get("choices", [])
+        message = choices[0].get("message", {}) if choices else {}
+        content = message.get("content", "")
+    else:
+        models = await ollama_request("/api/tags")
+        available = {item.get("name") for item in models.get("models", [])}
+        if payload.model not in available:
+            raise HTTPException(status_code=404, detail="النموذج المحدد غير موجود في Ollama المحلية.")
+        response = await ollama_request("/api/chat", {"model": payload.model, "messages": messages, "stream": False, "options": {"temperature": payload.temperature}})
+        message = response.get("message", {})
+        content = message.get("content", "")
     if not content:
-        raise HTTPException(status_code=502, detail="لم يُرجع النموذج محتوى.")
-    audit("assistant.chat", "نموذج محلي: " + payload.model + "؛ عدد الرسائل: " + str(len(payload.messages)))
-    return {"model": payload.model, "message": {"role": "assistant", "content": content}, "done": True}
+        raise HTTPException(status_code=502, detail="لم يُرجع نموذج روح محتوى.")
+    audit("assistant.chat", "محرك محلي: " + ROOH_PROVIDER + "؛ نموذج: " + payload.model + "؛ عدد الرسائل: " + str(len(payload.messages)))
+    return {"provider": ROOH_PROVIDER, "model": payload.model, "message": {"role": "assistant", "content": content}, "done": True}
 
 @app.get("/api/capabilities")
 def capabilities():
     return {
         "modules": ["assistant", "web", "design", "media", "apps", "files", "agents", "domains", "security"],
-        "providers": {"ollama": "local_loopback_opt_in", "llama_cpp": "not_connected", "comfyui": "local_loopback_opt_in", "whisper_cpp": "local_loopback_opt_in"},
+        "providers": {"rooh": ROOH_PROVIDER, "ollama": "available_when_selected", "llama_cpp": "available_when_selected", "comfyui": "local_loopback_opt_in", "whisper_cpp": "local_loopback_opt_in"},
         "policy": {"external_network": "opt_in", "mutations": "explicit_approval", "execution_after_approval": "separate_action"},
     }
 
