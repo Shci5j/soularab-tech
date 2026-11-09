@@ -349,7 +349,7 @@ export default function App() {
     if (rawBody) {
       try { body = JSON.parse(rawBody); }
       catch {
-        const detail = contentType.includes('text/html') || /^\\s*<!doctype html/i.test(rawBody)
+        const detail = contentType.includes('text/html') || /^\s*<!doctype html/i.test(rawBody)
           ? (language === 'ar'
               ? 'وصلت صفحة HTML بدلاً من JSON. عنوان الخادم الخلفي أو مسار API غير صحيح.'
               : 'Received an HTML page instead of JSON. The backend URL or API route is incorrect.')
