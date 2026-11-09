@@ -305,7 +305,8 @@ class MeshNodeCreate(BaseModel):
             raise ValueError("استخدم عنوان IP محلياً موثوقاً؛ أسماء النطاقات العامة غير مسموحة.") from exc
         if not (address.is_loopback or address.is_private) or address.is_multicast or address.is_unspecified or address.is_reserved:
             raise ValueError("يُسمح بعناوين loopback أو الشبكة الخاصة فقط.")
-        return f"http://{address.compressed}" + (f":{parsed.port}" if parsed.port else "")
+        host_part = f"[{address.compressed}]" if address.version == 6 else address.compressed
+        return f"http://{host_part}" + (f":{parsed.port}" if parsed.port else "")
 
 
 MESH_ROLES = {
