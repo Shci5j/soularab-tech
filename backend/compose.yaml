@@ -1,0 +1,63 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: soularab-backend
+    restart: unless-stopped
+    environment:
+      SOULARAB_ENV: production
+      SOULARAB_DATA_DIR: /data
+      SOULARAB_API_TOKEN: ${SOULARAB_API_TOKEN:?Set SOULARAB_API_TOKEN in .env.production}
+      SOULARAB_CORS_ORIGINS: https://${APP_DOMAIN:?Set APP_DOMAIN in .env.production},capacitor://localhost,https://localhost
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://127.0.0.1:8188}
+      WHISPER_CPP_BASE_URL: ${WHISPER_CPP_BASE_URL:-http://127.0.0.1:8080}
+    volumes:
+      - soularab_data:/data
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - soularab_internal
+
+  gateway:
+    image: caddy:2-alpine
+    container_name: soularab-gateway
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - soularab_internal
+
+volumes:
+  soularab_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  soularab_internal:
+    driver: bridge
