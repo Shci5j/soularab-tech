@@ -79,7 +79,7 @@ def register_execution_routes(app) -> None:
                     item = current_path / name
                     if name.startswith(".") or item.is_symlink() or not item.is_file():
                         continue
-                    if item.suffix.lower() in sensitive_suffixes or name.lower() in {"id_rsa", "id_ed25519", "credentials.json"}:
+                    if item.suffix.lower() in sensitive_suffixes or any(marker in name.lower() for marker in ("credential", "secret", "token", "private")) or name.lower() in {"id_rsa", "id_ed25519"}:
                         continue
                     try:
                         resolved = item.resolve(strict=True)
