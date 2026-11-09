@@ -8,7 +8,10 @@
 
 ## الإعداد الأول على الهاتف
 1. ثبّت Termux من مصدره الرسمي (F-Droid أو GitHub الرسمي)، وافتحه.
-2. احصل على نسخة مستودع SOULARAB TECH على الهاتف، ثم ادخل مجلد المشروع في Termux.
+2. نفّذ داخل Termux:
+   `pkg install git`
+   `git clone -b feature/local-five-node-compute-mesh https://github.com/Shci5j/soularab-tech.git`
+   `cd soularab-tech`
 3. شغّل:
    `bash scripts/start-local-backend-termux.sh`
 4. انتظر حتى يظهر أن Uvicorn يستمع على `127.0.0.1:8000`.
