@@ -1,0 +1,21 @@
+{
+  "name": "@soularab/local-backend",
+  "version": "0.1.0",
+  "description": "Five-node embedded Android backend for SOULARAB TECH",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/plugin.js",
+  "types": "dist/definitions.d.ts",
+  "files": [
+    "android",
+    "dist",
+    "src"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^6.2.0"
+  }
+}
