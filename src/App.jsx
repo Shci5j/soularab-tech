@@ -857,17 +857,20 @@ export default function App() {
   async function executeQueuedTask(task) {
     const draft = executionInputs[task.id] || {};
     const projectId = Number(draft.projectId);
-    const filename = (draft.filename || ('task-' + task.id + '.md')).trim();
+    const action = draft.action || 'write_project_note';
+    const filename = (draft.filename || (action === 'export_project_inventory' ? 'inventory.md' : 'task-' + task.id + '.md')).trim();
     const text = (draft.content ?? task.description ?? '').trim();
-    if (!Number.isInteger(projectId) || projectId < 1 || !filename || !text) {
-      setNotice(language === 'ar' ? 'أدخل رقم مشروع صالحاً واسم ملف ومحتوى قبل التنفيذ.' : 'Enter a valid project ID, filename, and content before execution.');
+    if (!Number.isInteger(projectId) || projectId < 1 || !filename || (action === 'write_project_note' && !text)) {
+      setNotice(language === 'ar' ? 'اختر مشروعاً نشطاً واسم ملف، وأدخل المحتوى عند اختيار حفظ ملاحظة.' : 'Select an active project and filename; enter content when saving a note.');
       return;
     }
     setTaskActionId(task.id);
     try {
+      const payload = { action, project_id: projectId, filename };
+      if (action === 'write_project_note') payload.content = text;
       const result = await request('/api/tasks/' + task.id + '/execute', {
         method: 'POST',
-        body: JSON.stringify({ action: 'write_project_note', project_id: projectId, filename, content: text }),
+        body: JSON.stringify(payload),
       });
       setNotice(language === 'ar' ? 'اكتمل التنفيذ وحُفظ الملف: ' + result.artifact : 'Execution completed. Saved: ' + result.artifact);
       await refresh();
@@ -1223,11 +1226,13 @@ export default function App() {
               {['queued','planning','waiting_approval'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
             </div>
             {task.status==='queued' && <div className="task-execution-form">
-              <strong>{language==='ar'?'تنفيذ إجراء آمن: حفظ ملف داخل مشروع':'Run safe action: save a file in a project'}</strong>
+              <strong>{language==='ar'?'إجراء آمن ضمن القائمة المسموحة':'Allowlisted safe action'}</strong>
+              <label>{language==='ar'?'نوع الإجراء':'Action type'}<select value={executionInputs[task.id]?.action || 'write_project_note'} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],action:event.target.value,filename:event.target.value==='export_project_inventory'?'inventory.md':('task-'+task.id+'.md')}}))}><option value="write_project_note">{language==='ar'?'حفظ ملاحظة نصية':'Save a text note'}</option><option value="export_project_inventory">{language==='ar'?'تصدير فهرس ملفات المشروع':'Export project file inventory'}</option></select></label>
               <label>{language==='ar'?'مساحة المشروع':'Project workspace'}<select value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))}><option value="">{language==='ar'?'اختر مشروعاً نشطاً':'Select an active project'}</option>{projects.filter(project=>project.status==='active').map(project=><option key={project.id} value={project.id}>{project.title} · #{project.id}</option>)}</select></label>
               {!projects.some(project=>project.status==='active') && <small>{language==='ar'?'لا توجد مساحة مشروع نشطة. أنشئ مشروعاً أولاً من قسم الملفات والمشاريع.':'No active project yet. Create one in Files & Projects first.'} <button type="button" className="text-button" onClick={()=>setActive('files')}>{language==='ar'?'فتح المشاريع':'Open projects'}</button></small>}
-              <label>{language==='ar'?'اسم الملف':'Filename'}<input value={executionInputs[task.id]?.filename ?? ('task-'+task.id+'.md')} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],filename:event.target.value}}))}/></label>
-              <label>{language==='ar'?'محتوى الملف':'File content'}<textarea rows="3" value={executionInputs[task.id]?.content ?? task.description ?? ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],content:event.target.value}}))} placeholder={language==='ar'?'اكتب المحتوى الذي تريد حفظه…':'Write the content to save…'}/></label>
+              <label>{language==='ar'?'اسم الملف الناتج':'Output filename'}<input value={executionInputs[task.id]?.filename ?? ((executionInputs[task.id]?.action === 'export_project_inventory') ? 'inventory.md' : 'task-'+task.id+'.md')} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],filename:event.target.value}}))}/></label>
+              {(executionInputs[task.id]?.action || 'write_project_note') === 'write_project_note' && <label>{language==='ar'?'محتوى الملف':'File content'}<textarea rows="3" value={executionInputs[task.id]?.content ?? task.description ?? ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],content:event.target.value}}))} placeholder={language==='ar'?'اكتب المحتوى الذي تريد حفظه…':'Write the content to save…'}/></label>}
+              {(executionInputs[task.id]?.action || 'write_project_note') === 'export_project_inventory' && <small>{language==='ar'?'سينشئ تقريراً بأسماء الملفات وأحجامها وتواريخ تعديلها فقط، دون قراءة المحتوى أو إدراج الملفات المخفية ومفاتيح الوصول.':'Creates a report of filenames, sizes, and modification times only. It does not read file contents or include hidden files and credentials.'}</small>}
               <button className="button primary" disabled={taskActionId===task.id} onClick={()=>executeQueuedTask(task)}>{taskActionId===task.id?(language==='ar'?'جارٍ التنفيذ…':'Executing…'):(language==='ar'?'بدء التنفيذ اليدوي':'Start manual execution')}</button>
             </div>}
             {taskHistoryId===task.id && <div className="task-history">
