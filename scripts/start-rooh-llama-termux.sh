@@ -25,7 +25,7 @@ if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
 fi
 
 pkg update -y
-pkg install -y git cmake clang make curl libandroid-spawn
+pkg install -y git cmake clang make curl coreutils gawk libandroid-spawn
 
 if [ ! -x "$SERVER_BIN" ]; then
   if [ ! -d "$LLAMA_DIR/.git" ]; then
