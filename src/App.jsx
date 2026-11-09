@@ -81,6 +81,7 @@ export default function App() {
   const [mediaTranscript, setMediaTranscript] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
   const [projects, setProjects] = useState([]);
+  const [studioProjectId, setStudioProjectId] = useState('');
   const [projectForm, setProjectForm] = useState({ title: '', description: '' });
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -575,7 +576,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { if (active === 'files') loadProjects(); }, [active, apiToken]);
+  useEffect(() => { if (['files', 'web', 'apps'].includes(active)) loadProjects(); }, [active, apiToken]);
 
   async function openProject(project) {
     setSelectedProject(project);
@@ -874,6 +875,32 @@ export default function App() {
     const url=URL.createObjectURL(new Blob([appHtml],{type:'text/html;charset=utf-8'})); const link=document.createElement('a'); link.href=url; link.download='soularab-app-starter.html'; link.click(); URL.revokeObjectURL(url);
   }
 
+
+  async function saveStudioArtifact(kind) {
+    const html = kind === 'website' ? siteHtml : appHtml;
+    const projectId = Number(studioProjectId);
+    const project = projects.find((item) => item.id === projectId && item.status === 'active');
+    if (!html || !project) {
+      setNotice(language === 'ar' ? 'اختر مشروعاً نشطاً وأنشئ المعاينة أولاً.' : 'Select an active project and generate the preview first.');
+      return;
+    }
+    const sourceName = kind === 'website' ? siteDraft.title : appDraft.name;
+    const slug = sourceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'soularab';
+    const filename = (kind === 'website' ? 'website-' : 'app-') + slug + '-' + Date.now() + '.html';
+    const form = new FormData();
+    form.append('file', new Blob([html], { type: 'text/html;charset=utf-8' }), filename);
+    setUploadingFile(true);
+    try {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/projects/' + projectId + '/files', {
+        method: 'POST', headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {}, body: form,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذر حفظ ملف المعاينة داخل المشروع.' : 'Could not save preview to project.'));
+      setNotice(language === 'ar' ? 'تم حفظ ملف HTML داخل مشروع ' + project.title + ': ' + result.name : 'HTML saved to ' + project.title + ': ' + result.name);
+      await loadProjects();
+    } catch (error) { setNotice(error.message); }
+    finally { setUploadingFile(false); }
+  }
 
   async function loadTasks() {
     setLoadingTasks(true);
@@ -1378,7 +1405,7 @@ export default function App() {
             <button className="button primary">{language === 'ar' ? 'إنشاء واجهة التطبيق' : 'Generate app interface'}</button>
             <button type="button" className="button secondary" onClick={() => generateStudioDraft('app')} disabled={appGenerating}>{appGenerating ? (language === 'ar' ? 'روح تخطط الأقسام…' : 'Rooh is planning…') : (language === 'ar' ? 'اقتراح هيكل بواسطة روح ✦' : 'Suggest structure with Rooh ✦')}</button>
           </form></div>
-          <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'المعاينة والتصدير' : 'Preview & export'}</h3><p className="muted">{language === 'ar' ? 'واجهة أولية قابلة للتطوير وربطها بقاعدة بيانات.' : 'An interface starter ready for future backend integration.'}</p></div><button className="button secondary" onClick={downloadAppStarter} disabled={!appHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>{appHtml ? <iframe title="Application preview" sandbox="" srcDoc={appHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#111'}}/> : <Empty text={language === 'ar' ? 'أدخل بيانات التطبيق ثم أنشئ المعاينة.' : 'Enter app details and generate a preview.'}/>}</div>
+          <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'المعاينة والتصدير' : 'Preview & export'}</h3><p className="muted">{language === 'ar' ? 'واجهة أولية قابلة للتطوير وربطها بقاعدة بيانات.' : 'An interface starter ready for future backend integration.'}</p></div><button className="button secondary" onClick={downloadAppStarter} disabled={!appHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div><div className="settings-inline"><select aria-label={language === 'ar' ? 'مشروع حفظ التطبيق' : 'Project to save app'} value={studioProjectId} onChange={(e) => setStudioProjectId(e.target.value)}><option value="">{language === 'ar' ? 'اختر مشروعاً لحفظ HTML' : 'Select project for HTML'}</option>{projects.filter((project) => project.status === 'active').map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button type="button" className="button secondary" onClick={() => saveStudioArtifact('app')} disabled={!appHtml || !studioProjectId || uploadingFile}>{uploadingFile ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : (language === 'ar' ? 'حفظ داخل المشروع' : 'Save to project')}</button></div>{appHtml ? <iframe title="Application preview" sandbox="" srcDoc={appHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#111'}}/> : <Empty text={language === 'ar' ? 'أدخل بيانات التطبيق ثم أنشئ المعاينة.' : 'Enter app details and generate a preview.'}/>}</div>
         </div><p className="chat-footnote">{language === 'ar' ? 'هذه واجهة ثابتة أولية؛ تسجيل الدخول وقواعد البيانات والتزامن تحتاج خادماً وربطاً إضافياً.' : 'This is a static UI starter; authentication, databases, and synchronization need additional backend integration.'}</p>
       </section>}
       {active === 'web' && <section className="content">
@@ -1394,7 +1421,7 @@ export default function App() {
             <button type="button" className="button secondary" onClick={() => generateStudioDraft('website')} disabled={siteGenerating}>{siteGenerating ? (language === 'ar' ? 'روح تكتب المحتوى…' : 'Rooh is drafting…') : (language === 'ar' ? 'كتابة المحتوى بواسطة روح ✦' : 'Draft copy with Rooh ✦')}</button>
           </form></div>
           <div className="panel-card"><div className="section-heading"><div><h3>{language === 'ar' ? 'معاينة مباشرة' : 'Live preview'}</h3><p className="muted">{language === 'ar' ? 'صفحة ثابتة مستقلة دون مكتبات خارجية.' : 'Standalone static page with no external libraries.'}</p></div><button className="button secondary" onClick={downloadLandingPage} disabled={!siteHtml}>{language === 'ar' ? 'تنزيل HTML' : 'Download HTML'}</button></div>
-            {siteHtml ? <iframe title="Website preview" sandbox="" srcDoc={siteHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#101014'}}/> : <Empty text={language === 'ar' ? 'أدخل المحتوى ثم اضغط إنشاء المعاينة.' : 'Enter your content and generate the preview.'}/>}
+            <div className="settings-inline"><select aria-label={language === 'ar' ? 'مشروع حفظ الموقع' : 'Project to save website'} value={studioProjectId} onChange={(e) => setStudioProjectId(e.target.value)}><option value="">{language === 'ar' ? 'اختر مشروعاً لحفظ HTML' : 'Select project for HTML'}</option>{projects.filter((project) => project.status === 'active').map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button type="button" className="button secondary" onClick={() => saveStudioArtifact('website')} disabled={!siteHtml || !studioProjectId || uploadingFile}>{uploadingFile ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : (language === 'ar' ? 'حفظ داخل المشروع' : 'Save to project')}</button></div>{siteHtml ? <iframe title="Website preview" sandbox="" srcDoc={siteHtml} style={{width:'100%',minHeight:'520px',border:'1px solid var(--line)',borderRadius:'14px',background:'#101014'}}/> : <Empty text={language === 'ar' ? 'أدخل المحتوى ثم اضغط إنشاء المعاينة.' : 'Enter your content and generate the preview.'}/>}
           </div>
         </div>
         <p className="chat-footnote">{language === 'ar' ? 'هذه نسخة أولية ثابتة تعمل محلياً داخل المتصفح. ربط النطاقات والاستضافة والنشر يحتاج مزوداً وإعدادات وصول فعلية.' : 'This is a static starter page generated in your browser. Domains, hosting, and publishing require a real provider and credentials.'}</p>
