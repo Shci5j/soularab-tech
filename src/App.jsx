@@ -10,15 +10,20 @@ const modules = [
   { id: 'assistant', title: 'المساعد الذكي', icon: '✦', desc: 'محادثة مع النماذج المحلية والوكلاء' },
   { id: 'web', title: 'المواقع والمتاجر', icon: '▤', desc: 'إنشاء المواقع وإدارتها وفحصها' },
   { id: 'design', title: 'التصميم والهوية', icon: '◈', desc: 'الشعارات والهوية وتجارب المستخدم' },
-  { id: 'media', title: 'الصور والفيديو', icon: '▧', desc: 'مسارات توليد الوسائط ومعالجتها' },
+  { id: 'media', title: 'توليد الصور', icon: '▧', desc: 'توليد الصور وتحريرها عبر محرك محلي' },
+  { id: 'video', title: 'إنشاء الفيديو', icon: '▶', desc: 'تخطيط المشاهد وخط إنتاج الفيديو' },
+  { id: 'store', title: 'المتاجر الإلكترونية', icon: '▣', desc: 'المنتجات والكتالوج والسلة والطلبات' },
   { id: 'apps', title: 'بناء التطبيقات', icon: '▦', desc: 'تطوير التطبيقات وفحص المشاريع' },
-  { id: 'files', title: 'الملفات والمشاريع', icon: '▱', desc: 'إدارة الملفات والنسخ والإصدارات' },
-  { id: 'agents', title: 'الوكلاء والأتمتة', icon: '⌘', desc: 'مهام متعددة الخطوات بموافقات صريحة' },
+  { id: 'graphics', title: 'التصميم الجرافيكي', icon: '◫', desc: 'المنشورات والقوالب والمطبوعات' },
+  { id: 'documents', title: 'المستندات والملفات', icon: '▱', desc: 'إنشاء المستندات وإدارة ملفات المشاريع' },
+  { id: 'files', title: 'المشاريع والأرشفة', icon: '▤', desc: 'مساحات المشاريع والنسخ والاستعادة' },
+  { id: 'agents', title: 'الوكلاء الذكيون', icon: '⌘', desc: 'خطط متعددة الخطوات بموافقات صريحة' },
+  { id: 'automation', title: 'الأتمتة والجدولة', icon: '◷', desc: 'مشغلات محلية وطوابير مهام محكومة' },
   { id: 'domains', title: 'النطاقات والاستضافة', icon: '◎', desc: 'إعدادات النطاق والنشر والاستضافة' },
   { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
 ];
 
-const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
+const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Image Generation', 'Generate and edit images through a local engine'], video: ['Video Studio', 'Plan scenes and assemble a video pipeline'], store: ['Online Stores', 'Products, catalog, cart, and order workflows'], apps: ['App Builder', 'Develop and inspect applications'], graphics: ['Graphic Design', 'Create social posts, templates, and print layouts'], documents: ['Documents', 'Create documents and manage project files'], files: ['Projects & Archives', 'Project workspaces, versions, and restore'], agents: ['AI Agents', 'Multi-step plans with explicit approvals'], automation: ['Automation & Scheduling', 'Controlled local triggers and task queues'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
 
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
@@ -26,6 +31,9 @@ export default function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('st-language') || 'ar');
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('st-api-base-url') || API);
   const [active, setActiveState] = useState('overview');
+  const [departmentDraft, setDepartmentDraft] = useState({ title: '', details: '', risk: 'medium' });
+  const [departmentSubmitting, setDepartmentSubmitting] = useState(false);
+  const [departmentResult, setDepartmentResult] = useState(null);
   function setActive(next) {
     if (next === active) return;
     window.history.pushState({ soularabPage: next }, '', window.location.pathname + window.location.search);
@@ -1057,6 +1065,46 @@ export default function App() {
     if (active === 'agents') { loadTasks(); loadProjects(); loadExecutionRegistry(); }
   }, [active, apiToken]);
 
+  const departmentConfig = {
+    store: { name: 'المتاجر الإلكترونية', node: 'E', prompt: 'حدد الكتالوج والمنتجات والتصنيفات والسلة والطلبات ولوحة الإدارة. لا تفعّل دفعاً حقيقياً أو شحناً أو ضرائب.' },
+    video: { name: 'إنشاء الفيديو', node: 'D', prompt: 'قسّم العمل إلى مشاهد ولقطات ونصوص وتعليق صوتي وترجمة ومونتاج وإخراج. افحص موارد الجهاز قبل أي توليد ثقيل.' },
+    graphics: { name: 'التصميم الجرافيكي', node: 'C', prompt: 'حدد المقاس والاستخدام والألوان والتخطيط والعناصر وملفات التسليم القابلة للتحرير.' },
+    documents: { name: 'المستندات والملفات', node: 'E', prompt: 'حدد نوع الملف وبنيته ومحتواه وتنسيقه ومعاينته وتصديره، واحصر الوصول في ملفات المشروع المصرح بها.' },
+    automation: { name: 'الأتمتة والجدولة', node: 'E', prompt: 'حدد المشغّل والجدولة والخطوات وحدود المحاولات وآلية الإيقاف. لا ترسل أو تنشر أو تحذف أو تشتري دون موافقة مستقلة.' },
+  };
+  async function submitDepartmentWorkflow(event) {
+    event.preventDefault();
+    const config = departmentConfig[active];
+    const title = departmentDraft.title.trim();
+    const details = departmentDraft.details.trim();
+    if (!config || title.length < 3 || details.length < 8 || departmentSubmitting) return;
+    setDepartmentSubmitting(true);
+    setDepartmentResult(null);
+    try {
+      const description = [
+        'القسم: ' + config.name,
+        'الخادم المقترح: ' + config.node,
+        'المطلوب: ' + details,
+        'ضوابط القسم: ' + config.prompt,
+        'الحالة: خطة للمراجعة فقط؛ لا يبدأ التنفيذ تلقائياً بعد الموافقة.',
+      ].join('\\n');
+      const result = await request('/api/agent-plans', {
+        method: 'POST',
+        body: JSON.stringify({ title, description, risk: departmentDraft.risk, department: active }),
+      });
+      setDepartmentResult(result);
+      setDepartmentDraft({ title: '', details: '', risk: 'medium' });
+      await refresh();
+      setNotice(language === 'ar'
+        ? 'تم إنشاء خطة القسم وربطها بمركز الموافقات. لم يبدأ أي تنفيذ بعد.'
+        : 'The department plan was created and sent to approvals. No execution has started.');
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setDepartmentSubmitting(false);
+    }
+  }
+
   async function generateAgentSteps() {
     const title = agentDraft.title.trim();
     if (title.length < 3 || agentGenerating) return;
@@ -1201,6 +1249,49 @@ export default function App() {
             })}
           </div>
           <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>{language === 'ar' ? 'الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة' : 'Active and deferred work, saved code, and items under review'}</small></span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
+        </div>
+      </section>}
+      {['store', 'video', 'graphics', 'documents', 'automation'].includes(active) && <section className="content">
+        <div className="section-heading">
+          <div>
+            <h2>{language === 'ar' ? departmentConfig[active].name : englishModules[active]?.[0]}</h2>
+            <p className="muted">{language === 'ar' ? 'مساحة استقبال مهام القسم وتوجيهها إلى الخادم المختص، مع موافقة منفصلة قبل التنفيذ.' : 'Submit a department brief and route it to the assigned node. Execution requires a separate approval.'}</p>
+          </div>
+          <span className="pill">{language === 'ar' ? 'الخادم ' + departmentConfig[active].node : 'Node ' + departmentConfig[active].node}</span>
+        </div>
+        <div className="two-col">
+          <div className="panel-card">
+            <h3>{language === 'ar' ? 'طلب جديد للقسم' : 'New department request'}</h3>
+            <form className="proposal-form" onSubmit={submitDepartmentWorkflow}>
+              <label>{language === 'ar' ? 'عنوان المهمة' : 'Task title'}
+                <input value={departmentDraft.title} onChange={(e) => setDepartmentDraft({ ...departmentDraft, title: e.target.value })} minLength="3" maxLength="120" required placeholder={language === 'ar' ? 'اكتب عنواناً واضحاً' : 'Enter a clear task title'}/>
+              </label>
+              <label>{language === 'ar' ? 'تفاصيل ومتطلبات المهمة' : 'Task details and requirements'}
+                <textarea rows="7" value={departmentDraft.details} onChange={(e) => setDepartmentDraft({ ...departmentDraft, details: e.target.value })} minLength="8" maxLength="4000" required placeholder={language === 'ar' ? 'اشرح النتيجة المطلوبة والقيود والملفات ذات الصلة…' : 'Describe the desired result, constraints, and relevant files…'}/>
+              </label>
+              <label>{language === 'ar' ? 'مستوى المخاطر' : 'Risk level'}
+                <select value={departmentDraft.risk} onChange={(e) => setDepartmentDraft({ ...departmentDraft, risk: e.target.value })}>
+                  <option value="low">{language === 'ar' ? 'منخفض' : 'Low'}</option>
+                  <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
+                  <option value="high">{language === 'ar' ? 'مرتفع' : 'High'}</option>
+                </select>
+              </label>
+              <button className="button primary" disabled={departmentSubmitting || departmentDraft.title.trim().length < 3 || departmentDraft.details.trim().length < 8}>
+                {departmentSubmitting ? (language === 'ar' ? 'جارٍ إعداد الخطة…' : 'Preparing plan…') : (language === 'ar' ? 'إرسال الخطة للموافقة' : 'Submit plan for approval')}
+              </button>
+            </form>
+          </div>
+          <div className="panel-card">
+            <h3>{language === 'ar' ? 'مسار القسم' : 'Department route'}</h3>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'الخادم المختص' : 'Assigned node'}</span><strong>{departmentConfig[active].node}</strong></div>
+            <p className="muted">{language === 'ar' ? departmentConfig[active].prompt : 'The task is routed to the department adapter after its execution worker is enabled.'}</p>
+            {departmentResult ? <div className="notice-inline" role="status">
+              <strong>{language === 'ar' ? 'تم إنشاء طلب الموافقة' : 'Approval request created'}</strong>
+              <p>{language === 'ar' ? 'رقم المهمة: ' + departmentResult.task_id + ' · رقم الموافقة: ' + departmentResult.approval_id : 'Task #' + departmentResult.task_id + ' · Approval #' + departmentResult.approval_id}</p>
+              <p>{language === 'ar' ? 'الحالة: بانتظار المراجعة. لم يبدأ التنفيذ.' : 'Status: waiting for review. Execution has not started.'}</p>
+              <button type="button" className="button secondary" onClick={() => setActive('security')}>{language === 'ar' ? 'فتح مركز الموافقات' : 'Open approval center'}</button>
+            </div> : <p className="chat-footnote">{language === 'ar' ? 'لن تُنفّذ عمليات شراء أو دفع أو نشر أو حذف أو إرسال خارجي من هذه الشاشة. الموافقة تحفظ القرار فقط، والتنفيذ يحتاج عاملاً فعلياً متصلاً بالقسم.' : 'This screen does not purchase, charge, publish, delete, or send externally. Approval records a decision only; execution requires a connected department worker.'}</p>}
+          </div>
         </div>
       </section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
