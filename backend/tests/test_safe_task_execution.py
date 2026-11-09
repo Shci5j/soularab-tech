@@ -142,5 +142,23 @@ class SafeTaskExecutionTests(unittest.TestCase):
                     self.assertEqual([event["to_status"] for event in events], ["completed", "running", "queued"])
 
 
+    def test_execution_registry_exposes_localized_allowlisted_actions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with self.isolated_client(data):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/executions/registry")
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.json()
+                    self.assertEqual(payload["policy"], "allowlist_only")
+                    ids = {item["id"] for item in payload["items"]}
+                    self.assertEqual(ids, {"write_project_note", "export_project_inventory"})
+                    for item in payload["items"]:
+                        self.assertTrue(item["title"])
+                        self.assertTrue(item["title_en"])
+                        self.assertTrue(item["description"])
+                        self.assertTrue(item["description_en"])
+
+
 if __name__ == "__main__":
     unittest.main()
