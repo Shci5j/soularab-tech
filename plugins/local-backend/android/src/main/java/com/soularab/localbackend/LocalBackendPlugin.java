@@ -70,7 +70,7 @@ public class LocalBackendPlugin extends Plugin {
         }
         stopAll();
         String[] ids = {"A", "B", "C", "D", "E"};
-        String[] names = {"AI & Text", "Image & Design", "Audio & Video", "Development", "Recovery & Scheduler"};
+        String[] names = {"ROOH Orchestrator", "AI & Text", "Image & Design", "Audio & Video", "Development & Recovery"};
         int[] ports = {3101, 3102, 3103, 3104, 3105};
         try {
             for (int i = 0; i < ids.length; i++) {
