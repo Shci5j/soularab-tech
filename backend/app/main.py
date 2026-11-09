@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, field_validator
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("SOULARAB_DATA_DIR", ROOT / "data")).expanduser()
 DB_PATH = DATA_DIR / "soularab.sqlite3"
-VERSION = "0.16.3"
+VERSION = "0.17.0"
 API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -39,7 +39,7 @@ MEDIA_TIMEOUT = float(os.getenv("SOULARAB_MEDIA_TIMEOUT_SECONDS", "180"))
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac", ".mp4", ".mpeg", ".mpga"}
-ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if v.strip()]
+ALLOWED_ORIGINS = [v.strip() for v in os.getenv("SOULARAB_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost").split(",") if v.strip()]
 
 
 def now() -> str:
@@ -120,6 +120,17 @@ def init_db() -> None:
             )
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id, id DESC)")
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS mesh_nodes (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('A','B','C','D','E')),
+                base_url TEXT NOT NULL UNIQUE,
+                capabilities TEXT NOT NULL DEFAULT '[]',
+                last_seen TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
 
 
 def audit(action: str, details: str) -> None:
@@ -271,6 +282,135 @@ def record_task_event(db: sqlite3.Connection, task_id: int, event_type: str, fro
         "INSERT INTO task_events(task_id,event_type,from_status,to_status,details,created_at) VALUES(?,?,?,?,?,?)",
         (task_id, event_type, from_status, to_status, details[:2000], timestamp),
     )
+
+
+
+class MeshNodeCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    role: Literal["A", "B", "C", "D", "E"]
+    base_url: str = Field(min_length=8, max_length=240)
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_private_node_url(cls, value: str) -> str:
+        parsed = urlparse(value.strip().rstrip("/"))
+        if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+            raise ValueError("العقد مسموحة عبر HTTP محلي فقط، دون مسارات أو بيانات دخول.")
+        host = parsed.hostname.lower()
+        if host == "localhost":
+            return parsed.origin if hasattr(parsed, "origin") else f"http://{host}:{parsed.port}" if parsed.port else f"http://{host}"
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError as exc:
+            raise ValueError("استخدم عنوان IP محلياً موثوقاً؛ أسماء النطاقات العامة غير مسموحة.") from exc
+        if not (address.is_loopback or address.is_private) or address.is_multicast or address.is_unspecified or address.is_reserved:
+            raise ValueError("يُسمح بعناوين loopback أو الشبكة الخاصة فقط.")
+        host_part = f"[{address.compressed}]" if address.version == 6 else address.compressed
+        return f"http://{host_part}" + (f":{parsed.port}" if parsed.port else "")
+
+
+MESH_ROLES = {
+    "A": {"name": "النصوص والمحادثة", "capabilities": ["text", "chat"]},
+    "B": {"name": "الصور والتصميم", "capabilities": ["image", "design"]},
+    "C": {"name": "الصوت والفيديو", "capabilities": ["audio", "video", "transcription"]},
+    "D": {"name": "البرمجة والتطبيقات", "capabilities": ["code", "app_build"]},
+    "E": {"name": "الاحتياطي وتوزيع المهام", "capabilities": ["fallback", "task_routing"]},
+}
+
+
+@app.get("/api/mesh/manifest")
+def mesh_manifest():
+    return {
+        "product": "SOULARAB TECH",
+        "mesh_protocol": 1,
+        "version": VERSION,
+        "node_type": "soularab-worker",
+        "capabilities": ["api", "projects", "tasks", "local_storage"],
+        "external_services_required": False,
+    }
+
+
+@app.post("/api/mesh/discover")
+async def mesh_discover(payload: MeshNodeCreate, _: None = Depends(require_access)):
+    base = payload.base_url
+    try:
+        async with httpx.AsyncClient(timeout=3.5, follow_redirects=False) as client:
+            health_response = await client.get(base + "/api/health")
+            health_response.raise_for_status()
+            health_data = health_response.json()
+            manifest_response = await client.get(base + "/api/mesh/manifest")
+            manifest_response.raise_for_status()
+            manifest = manifest_response.json()
+        if health_data.get("status") != "ok" or manifest.get("product") != "SOULARAB TECH" or manifest.get("mesh_protocol") != 1:
+            raise HTTPException(status_code=422, detail="العقدة لا تعلن توافق بروتوكول SOULARAB MESH.")
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="لم يستجب الخادم المحلي أو فشل فحص التوافق.") from exc
+    node_id = secrets.token_urlsafe(12)
+    timestamp = now()
+    capabilities = sorted(set(manifest.get("capabilities", [])))
+    with database() as db:
+        existing = db.execute("SELECT id FROM mesh_nodes WHERE base_url=?", (base,)).fetchone()
+        if existing:
+            node_id = existing["id"]
+            db.execute(
+                "UPDATE mesh_nodes SET name=?, role=?, capabilities=?, last_seen=? WHERE id=?",
+                (payload.name.strip(), payload.role, json.dumps(capabilities), timestamp, node_id),
+            )
+        else:
+            db.execute(
+                "INSERT INTO mesh_nodes(id,name,role,base_url,capabilities,last_seen,created_at) VALUES(?,?,?,?,?,?,?)",
+                (node_id, payload.name.strip(), payload.role, base, json.dumps(capabilities), timestamp, timestamp),
+            )
+    audit("mesh.node_discovered", f"{payload.role}:{payload.name.strip()} at {base}")
+    return {"id": node_id, "name": payload.name.strip(), "role": payload.role, "base_url": base, "status": "online", "capabilities": capabilities, "version": manifest.get("version")}
+
+
+@app.get("/api/mesh/status")
+async def mesh_status(_: None = Depends(require_access)):
+    with database() as db:
+        rows = [dict(row) for row in db.execute("SELECT * FROM mesh_nodes ORDER BY role, created_at").fetchall()]
+    async def probe(node):
+        status = "offline"
+        version = None
+        latency_ms = None
+        started = asyncio.get_running_loop().time()
+        try:
+            async with httpx.AsyncClient(timeout=2.5, follow_redirects=False) as client:
+                response = await client.get(node["base_url"] + "/api/health")
+                response.raise_for_status()
+                data = response.json()
+                if data.get("status") == "ok":
+                    status = "online"
+                    version = data.get("version")
+                    latency_ms = round((asyncio.get_running_loop().time() - started) * 1000)
+                    with database() as db:
+                        db.execute("UPDATE mesh_nodes SET last_seen=? WHERE id=?", (now(), node["id"]))
+        except (httpx.HTTPError, ValueError):
+            pass
+        try:
+            capabilities = json.loads(node["capabilities"])
+        except (TypeError, json.JSONDecodeError):
+            capabilities = []
+        return {"id": node["id"], "name": node["name"], "role": node["role"], "role_name": MESH_ROLES[node["role"]]["name"], "base_url": node["base_url"], "status": status, "latency_ms": latency_ms, "version": version, "capabilities": capabilities, "last_seen": node["last_seen"]}
+    checked = await asyncio.gather(*(probe(node) for node in rows))
+    slots = []
+    for role, details in MESH_ROLES.items():
+        role_nodes = [node for node in checked if node["role"] == role]
+        online = sorted((node for node in role_nodes if node["status"] == "online"), key=lambda item: item["latency_ms"] or 999999)
+        slots.append({"role": role, **details, "status": "online" if online else "offline", "selected_node": online[0] if online else None, "nodes": role_nodes})
+    return {"protocol": 1, "policy": "trusted_private_nodes_only", "external_discovery": False, "slots": slots, "online_nodes": sum(1 for node in checked if node["status"] == "online"), "registered_nodes": len(checked)}
+
+
+@app.delete("/api/mesh/nodes/{node_id}")
+def mesh_remove_node(node_id: str, _: None = Depends(require_access)):
+    with database() as db:
+        cursor = db.execute("DELETE FROM mesh_nodes WHERE id=?", (node_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="العقدة غير موجودة.")
+    audit("mesh.node_removed", node_id)
+    return {"removed": True, "id": node_id}
 
 
 @app.get("/api/health")

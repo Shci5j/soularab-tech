@@ -7,7 +7,7 @@ services:
     environment:
       SOULARAB_ENV: production
       SOULARAB_DATA_DIR: /data
-      SOULARAB_CORS_ORIGINS: ${SOULARAB_CORS_ORIGINS:-http://localhost:8080}
+      SOULARAB_CORS_ORIGINS: ${SOULARAB_CORS_ORIGINS:-http://localhost:8080,https://soularab.pages.dev,https://localhost,capacitor://localhost}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       SOULARAB_ALLOW_DOCKER_OLLAMA: ${SOULARAB_ALLOW_DOCKER_OLLAMA:-true}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}

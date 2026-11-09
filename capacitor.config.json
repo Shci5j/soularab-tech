@@ -1,0 +1,11 @@
+{
+  "appId": "com.soularab.tech",
+  "appName": "SOULARAB TECH",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

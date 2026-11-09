@@ -1,3 +1,9 @@
+## 0.17.0 — 2026-11-09
+
+- Add Capacitor Android project configuration and a reproducible GitHub Actions debug-APK build workflow.
+- Keep Android signing credentials out of source control; release signing is gated on repository secrets.
+- Document engine lifecycle boundaries, local-only provider contracts, resource release, and Android backend connectivity requirements.
+
 # Changelog
 
 ## 0.16.3 — 2026-11-09
