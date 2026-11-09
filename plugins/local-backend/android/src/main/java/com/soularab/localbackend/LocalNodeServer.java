@@ -53,7 +53,7 @@ final class LocalNodeServer extends NanoHTTPD {
         return response;
     }
 
-    private Response route(IHTTPSession session) throws IOException, JSONException {
+    private Response route(IHTTPSession session) throws Exception {
         String path = session.getUri();
         if ("/health".equals(path) && Method.GET.equals(session.getMethod())) {
             JSONObject result = new JSONObject();
@@ -187,7 +187,7 @@ final class LocalNodeServer extends NanoHTTPD {
         return result;
     }
 
-    private JSONObject readBody(IHTTPSession session) throws IOException, JSONException {
+    private JSONObject readBody(IHTTPSession session) throws Exception {
         Map<String, String> files = new HashMap<>();
         session.parseBody(files);
         String body = files.get("postData");
