@@ -220,7 +220,11 @@ export default function App() {
         refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
         sessionTimeoutMinutes: [0, 15, 30, 60].includes(Number(settings.preferences.sessionTimeoutMinutes)) ? Number(settings.preferences.sessionTimeoutMinutes) : 0,
       };
-      const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
+      let nextApiUrl = '';
+      if (typeof settings.apiBaseUrl === 'string') {
+        try { nextApiUrl = safeApiBase(settings.apiBaseUrl); }
+        catch { throw new Error(language === 'ar' ? 'عنوان الخادم في النسخة الاحتياطية غير آمن أو غير صالح.' : 'The backend URL in this backup is unsafe or invalid.'); }
+      }
       setPreferences(nextPreferences);
       if (models.some((model) => model.name === nextPreferences.defaultModel)) setSelectedModel(nextPreferences.defaultModel);
       setLanguage(settings.language);
