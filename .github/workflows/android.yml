@@ -35,6 +35,8 @@ jobs:
           gradle-version: 8.11.1
       - name: Install web and Capacitor dependencies
         run: npm install
+      - name: Run frontend unit tests
+        run: npm test
       - name: Build web application
         env:
           VITE_API_BASE_URL: http://127.0.0.1:8000
