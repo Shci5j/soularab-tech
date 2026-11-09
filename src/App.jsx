@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { LocalBackend } from '@soularab/local-backend';
+import { getEmbeddedNodeHealth } from './services/localNodes.js';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
@@ -376,10 +377,18 @@ export default function App() {
     if (!Capacitor.isNativePlatform()) return undefined;
     let active = true;
     LocalBackend.start()
-      .then((status) => {
+      .then(async (status) => {
         if (!active) return;
-        setEmbeddedBackend(status);
         if (status.accessToken) sessionStorage.setItem('st-embedded-local-token', status.accessToken);
+        const checkedNodes = await Promise.all(status.nodes.map(async (node) => {
+          try {
+            const health = await getEmbeddedNodeHealth(node.id);
+            return { ...node, running: health.status === 'online' };
+          } catch {
+            return { ...node, running: false };
+          }
+        }));
+        if (active) setEmbeddedBackend({ ...status, nodes: checkedNodes, running: checkedNodes.length === 5 && checkedNodes.every((node) => node.running) });
       })
       .catch((error) => {
         if (active) setNotice((language === 'ar' ? 'تعذر تشغيل الخوادم الداخلية: ' : 'Could not start embedded nodes: ') + (error?.message || 'unknown error'));
