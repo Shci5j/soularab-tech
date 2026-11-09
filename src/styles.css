@@ -212,3 +212,7 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 :root[data-high-contrast="true"] .settings-row,
 :root[data-high-contrast="true"] .panel-card,
 :root[data-high-contrast="true"] .destination-card{border-color:var(--line)}
+
+.settings-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.settings-inline select{min-width:150px;max-width:100%}
+@media(max-width:600px){.settings-inline{width:100%}.settings-inline select{flex:1;min-width:0}}
