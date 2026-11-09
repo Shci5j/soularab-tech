@@ -22,7 +22,7 @@ pkg install -y python clang make rust pkg-config libffi openssl
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
-python -m pip install -r backend/requirements.txt
+python -m pip install -r backend/requirements.txt --extra-index-url https://eutalix.github.io/android-pydantic-core/
 
 export PYTHONPATH="$PWD/backend"
 export SOULARAB_ENV=local
