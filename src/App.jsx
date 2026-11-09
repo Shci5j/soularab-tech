@@ -52,8 +52,8 @@ export default function App() {
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
-    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
-    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }; }
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }; }
   });
   function updatePreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }));
@@ -215,6 +215,7 @@ export default function App() {
         reducedMotion: Boolean(settings.preferences.reducedMotion),
         highContrast: Boolean(settings.preferences.highContrast),
         defaultModel: typeof settings.preferences.defaultModel === 'string' && settings.preferences.defaultModel.length <= 120 ? settings.preferences.defaultModel : '',
+        defaultTemperature: Number.isFinite(Number(settings.preferences.defaultTemperature)) && Number(settings.preferences.defaultTemperature) >= 0 && Number(settings.preferences.defaultTemperature) <= 2 ? Number(settings.preferences.defaultTemperature) : 0.7,
         dateFormat: ['long', 'medium', 'short'].includes(settings.preferences.dateFormat) ? settings.preferences.dateFormat : 'long',
         timeZone: ['local', 'UTC'].includes(settings.preferences.timeZone) ? settings.preferences.timeZone : 'local',
         refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
@@ -359,7 +360,7 @@ export default function App() {
     setChatInput('');
     setSendingChat(true);
     try {
-      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, messages: next }) });
+      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next }) });
       setChatMessages([...next, result.message]);
     } catch (error) {
       setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
@@ -1101,6 +1102,7 @@ export default function App() {
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إعدادات الذكاء الاصطناعي' : 'AI settings'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'النموذج النصي الافتراضي' : 'Default text model'}</strong><small>{language === 'ar' ? 'النموذج المحلي الذي يختاره روح تلقائياً للمحادثات ومساعدات الصياغة' : 'Local model selected by default for chat and AI-assisted drafting'}</small></div><div className="settings-inline"><select aria-label={language === 'ar' ? 'النموذج الافتراضي' : 'Default model'} value={selectedModel} disabled={!models.length} onChange={(e) => { setSelectedModel(e.target.value); updatePreference('defaultModel', e.target.value); }}><option value="">{language === 'ar' ? 'لا توجد نماذج محملة' : 'No models loaded'}</option>{models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}</select><button type="button" className="button secondary" onClick={loadAssistant} disabled={assistantStatus.loading}>{language === 'ar' ? 'فحص النماذج' : 'Load models'}</button></div></div>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'درجة الإبداع للنموذج' : 'Model creativity (temperature)'}</strong><small>{language === 'ar' ? 'توازن بين الإجابات الدقيقة والأفكار المتنوعة في محادثات روح' : 'Balance focused answers and more varied ideas in Rooh chat'}: {Number(preferences.defaultTemperature ?? 0.7).toFixed(1)}</small></div><input aria-label={language === 'ar' ? 'درجة الإبداع' : 'Model temperature'} type="range" min="0" max="2" step="0.1" value={preferences.defaultTemperature ?? 0.7} onChange={(e) => updatePreference('defaultTemperature', Number(e.target.value))}/></div>
             <p className="chat-footnote">{language === 'ar' ? 'تُجلب قائمة النماذج من Ollama المحلية عند الضغط على فحص النماذج أو فتح المساعد. لا يتم إرسالها إلى خدمة سحابية.' : 'The model list is read from local Ollama when you load models or open the assistant. It is not sent to a cloud service.'}</p>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}</h3>
