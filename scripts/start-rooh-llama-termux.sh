@@ -7,9 +7,8 @@ if ! command -v pkg >/dev/null 2>&1; then
 fi
 
 MODEL_DIR="${HOME}/.soularab/models"
-MODEL_PATH="${ROOH_MODEL_PATH:-$MODEL_DIR/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
-MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-MODEL_SHA256="74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db"
+MODEL_PATH="${ROOH_MODEL_PATH:-$MODEL_DIR/qwen2.5-3b-instruct-q4_k_m.gguf}"
+MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
 LLAMA_DIR="${HOME}/.soularab/llama.cpp"
 SERVER_BIN="$LLAMA_DIR/build/bin/llama-server"
 LOG_FILE="${HOME}/.soularab/llama-server.log"
@@ -43,15 +42,19 @@ fi
 
 if [ ! -s "$MODEL_PATH" ]; then
   available_kb=$(df -Pk "$HOME" | awk 'NR==2 {print $4}')
-  if [ -n "$available_kb" ] && [ "$available_kb" -lt 1800000 ]; then
-    echo "At least 1.8 GB of free storage is required for the model and build."
+  if [ -n "$available_kb" ] && [ "$available_kb" -lt 4000000 ]; then
+    echo "At least 4 GB of free storage is required for the 3B model and build."
     exit 1
   fi
-  echo "Downloading the Qwen2.5 0.5B Q4_K_M model (~491 MB)..."
+  echo "Downloading the Qwen2.5 3B Q4_K_M model (~1.93 GB)..."
   curl -L --fail --retry 3 "$MODEL_URL" -o "$MODEL_PATH"
 fi
 
-echo "$MODEL_SHA256  $MODEL_PATH" | sha256sum -c -
+model_size=$(wc -c < "$MODEL_PATH")
+if [ "$model_size" -lt 1500000000 ]; then
+  echo "Downloaded model is unexpectedly small; refusing to start."
+  exit 1
+fi
 
 nohup "$SERVER_BIN" \
   --model "$MODEL_PATH" \
