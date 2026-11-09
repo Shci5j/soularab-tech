@@ -26,7 +26,9 @@ def register_execution_routes(app) -> None:
                 {
                     "id": "write_project_note",
                     "title": "إنشاء ملف نصي داخل مشروع",
+                    "title_en": "Create a project text file",
                     "description": "يحفظ محتوى نصياً يقدمه المستخدم داخل مساحة مشروع نشطة.",
+                    "description_en": "Save user-provided text in an active project workspace.",
                     "risk": "low",
                     "requires_project": True,
                     "allowed_extensions": [".txt", ".md"],
@@ -34,7 +36,9 @@ def register_execution_routes(app) -> None:
                 {
                     "id": "export_project_inventory",
                     "title": "تصدير فهرس ملفات المشروع",
+                    "title_en": "Export project file inventory",
                     "description": "ينشئ تقرير Markdown بأسماء الملفات العادية وأحجامها وتواريخ تعديلها، دون قراءة محتوياتها أو تضمين الملفات المخفية والأسرار والروابط الرمزية.",
+                    "description_en": "Create a Markdown report of regular file names, sizes, and modification times without reading file contents or including hidden files, credentials, or symlinks.",
                     "risk": "low",
                     "requires_project": True,
                     "allowed_extensions": [".md"],
