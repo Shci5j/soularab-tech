@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { LocalBackend } from '@soularab/local-backend';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
@@ -45,6 +47,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
   const [api, setApi] = useState({ state: 'checking', version: '—' });
+  const [embeddedBackend, setEmbeddedBackend] = useState({ running: false, nodes: [] });
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
@@ -369,6 +372,21 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    let active = true;
+    LocalBackend.start()
+      .then((status) => {
+        if (!active) return;
+        setEmbeddedBackend(status);
+        if (status.accessToken) sessionStorage.setItem('st-embedded-local-token', status.accessToken);
+      })
+      .catch((error) => {
+        if (active) setNotice((language === 'ar' ? 'تعذر تشغيل الخوادم الداخلية: ' : 'Could not start embedded nodes: ') + (error?.message || 'unknown error'));
+      });
+    return () => { active = false; };
+  }, []);
+  
   useEffect(() => { refresh(); const id = window.setInterval(refresh, (preferences.refreshIntervalSeconds || 15) * 1000); return () => clearInterval(id); }, [apiToken, preferences.refreshIntervalSeconds]);
 
   async function loadSecurityStatus() {
@@ -1119,8 +1137,12 @@ export default function App() {
             <article className="stat-card"><span>{language === 'ar' ? 'حالة الخادم' : 'Server status'}</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? (language === 'ar' ? 'متصل' : 'Online') : (language === 'ar' ? 'غير متصل' : 'Offline')}</strong><small>{api.mode || (language === 'ar' ? 'بانتظار تشغيل الخلفية' : 'Backend not running')}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</span><strong>{approvals.filter((item) => item.status === 'pending').length}</strong><small>{language === 'ar' ? 'تنتظر مراجعتك' : 'Awaiting your review'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'المهام النشطة' : 'Active tasks'}</span><strong>{queuedTasks.filter((task) => ['queued','planning','waiting_approval','running'].includes(task.status)).length}</strong><small>{language === 'ar' ? 'في مسار العمل' : 'In the workflow'}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'الخوادم الداخلية' : 'Embedded nodes'}</span><strong className={embeddedBackend.nodes.length === 5 && embeddedBackend.nodes.every((node) => node.running) ? 'good' : 'warn'}>{embeddedBackend.nodes.filter((node) => node.running).length}/5</strong><small>{language === 'ar' ? 'عقد محلية مستقلة' : 'Independent local nodes'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
           </div>
+          {Capacitor.isNativePlatform() && <div className="engine-status-grid embedded-node-grid">
+            {embeddedBackend.nodes.map((node) => <article className="engine-status-card" key={node.id}><div><strong>{language === 'ar' ? 'الخادم ' + node.id : 'Server ' + node.id}</strong><small>{node.name}</small><small>127.0.0.1:{node.port}</small></div><span className={node.running ? 'good' : 'warn'}>{node.running ? (language === 'ar' ? 'يعمل' : 'Running') : (language === 'ar' ? 'متوقف' : 'Stopped')}</span></article>)}
+          </div>}
           <div className="engine-status-grid">
             {[
               { id: 'ollama', label: 'Ollama', description: language === 'ar' ? 'نماذج المحادثة المحلية' : 'Local language models' },
