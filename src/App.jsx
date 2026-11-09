@@ -334,16 +334,37 @@ export default function App() {
   }
 
   async function request(path, options = {}) {
+    if (Capacitor.isNativePlatform()) {
+      throw new Error(language === 'ar'
+        ? 'هذا القسم لم يُربط بعد بواجهات الخوادم الداخلية. لن يتم إرسال الطلب إلى صفحة الويب بالخطأ.'
+        : 'This section is not connected to the embedded node APIs yet. The request was blocked instead of being sent to the web page.');
+    }
     const response = await fetch(safeApiBase(apiBaseUrl) + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
+    const contentType = response.headers.get('content-type') || '';
+    const rawBody = await response.text();
+    let body = null;
+    if (rawBody) {
+      try { body = JSON.parse(rawBody); }
+      catch {
+        const detail = contentType.includes('text/html') || /^\\s*<!doctype html/i.test(rawBody)
+          ? (language === 'ar'
+              ? 'وصلت صفحة HTML بدلاً من JSON. عنوان الخادم الخلفي أو مسار API غير صحيح.'
+              : 'Received an HTML page instead of JSON. The backend URL or API route is incorrect.')
+          : (language === 'ar' ? 'أعاد الخادم بيانات ليست بصيغة JSON.' : 'The server returned a non-JSON response.');
+        throw new Error(detail);
+      }
+    }
     if (!response.ok) {
       if (response.status === 401) setAuthRequired(true);
-      const body = await response.json().catch(() => ({}));
-      throw new Error(localizeApiError(body.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
+      throw new Error(localizeApiError(body?.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
     }
-    return response.json();
+    if (!contentType.includes('application/json') && body === null) {
+      throw new Error(language === 'ar' ? 'استجابة الخادم فارغة أو غير صالحة.' : 'The server response is empty or invalid.');
+    }
+    return body;
   }
 
   function unlockWorkspace(event) {
@@ -359,6 +380,20 @@ export default function App() {
 
   async function refresh() {
     try {
+      if (Capacitor.isNativePlatform()) {
+        const checks = await Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
+          try { return await getEmbeddedNodeHealth(id); }
+          catch { return { status: 'offline', node: id }; }
+        }));
+        const online = checks.filter((item) => item.status === 'online').length;
+        setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-1.0', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
+        setApprovals([]);
+        setEvents([]);
+        setQueuedTasks([]);
+        setEngineStatuses({});
+        if (online !== 5) setNotice(language === 'ar' ? `بعض الخوادم الداخلية غير متاحة (${online}/5).` : `Some embedded nodes are unavailable (${online}/5).`);
+        return;
+      }
       const [health, approvalData, log, taskQueue, engineData] = await Promise.all([
         request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'), request('/api/engines/status').catch(() => null),
       ]);
