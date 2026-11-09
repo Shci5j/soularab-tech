@@ -10,7 +10,7 @@
 1. ثبّت Termux من مصدره الرسمي (F-Droid أو GitHub الرسمي)، وافتحه.
 2. نفّذ داخل Termux:
    `pkg install git`
-   `git clone -b feature/local-five-node-compute-mesh https://github.com/Shci5j/soularab-tech.git`
+   `git clone https://github.com/Shci5j/soularab-tech.git`
    `cd soularab-tech`
 3. شغّل:
    `bash scripts/start-local-backend-termux.sh`
