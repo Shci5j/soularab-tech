@@ -141,7 +141,7 @@ export default function App() {
     if (!vaultDraft.title.trim() || !vaultDraft.content.trim()) return;
     setVaultItems((items) => [{ id: Date.now(), ...vaultDraft, createdAt: new Date().toISOString() }, ...items]);
     setVaultDraft({ title: '', content: '', category: 'note' });
-    setNotice('تم حفظ العنصر في الخزنة المحلية على هذا الجهاز.');
+    setNotice(language === 'ar' ? 'تم حفظ العنصر في الخزنة المحلية على هذا الجهاز.' : 'Item saved to the local vault on this device.');
   }
 
   function exportVault() {
@@ -159,11 +159,11 @@ export default function App() {
     try {
       const parsed = JSON.parse(await file.text());
       if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item.title !== 'string' || typeof item.content !== 'string')) {
-        throw new Error('صيغة النسخة الاحتياطية غير صالحة.');
+        throw new Error(language === 'ar' ? 'صيغة النسخة الاحتياطية غير صالحة.' : 'Invalid backup file format.');
       }
       setVaultItems(parsed.map((item, index) => ({ id: item.id || Date.now() + index, title: item.title, content: item.content, category: item.category || 'note', createdAt: item.createdAt || new Date().toISOString() })));
-      setNotice('تم استيراد عناصر الخزنة بنجاح.');
-    } catch (error) { setNotice(error.message || 'تعذر قراءة ملف النسخة الاحتياطية.'); }
+      setNotice(language === 'ar' ? 'تم استيراد عناصر الخزنة بنجاح.' : 'Vault items imported successfully.');
+    } catch (error) { setNotice(error.message || (language === 'ar' ? 'تعذر قراءة ملف النسخة الاحتياطية.' : 'Could not read the backup file.')); }
   }
 
   useEffect(() => {
@@ -284,7 +284,7 @@ export default function App() {
     if (!response.ok) {
       if (response.status === 401) setAuthRequired(true);
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || `تعذر إكمال الطلب (${response.status})`);
+      throw new Error(body.detail || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
     }
     return response.json();
   }
@@ -312,7 +312,7 @@ export default function App() {
       setQueuedTasks(Array.isArray(taskQueue.items) ? taskQueue.items : []);
     } catch (error) {
       setApi({ state: 'offline', version: '—' });
-      setNotice(error.message.includes('Failed to fetch') ? 'الخادم غير متصل حالياً. شغّل خدمة FastAPI لربط لوحة التحكم.' : error.message);
+      setNotice(error.message.includes('Failed to fetch') ? (language === 'ar' ? 'الخادم غير متصل حالياً. شغّل خدمة FastAPI لربط لوحة التحكم.' : 'The backend is offline. Start the FastAPI service to connect the dashboard.') : error.message);
     }
   }
 
@@ -325,7 +325,7 @@ export default function App() {
       setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice('Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.');
+      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
       setModels([]);
@@ -345,7 +345,7 @@ export default function App() {
       const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, messages: next }) });
       setChatMessages([...next, result.message]);
     } catch (error) {
-      setChatMessages([...next, { role: 'assistant', content: 'تعذر إكمال الطلب: ' + error.message }]);
+      setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
     } finally {
       setSendingChat(false);
     }
@@ -369,7 +369,7 @@ export default function App() {
       setMediaModels(available);
       setImageDraft((current) => ({ ...current, model: available.includes(current.model) ? current.model : (available[0] || '') }));
       setMediaStatus({ image: Boolean(image?.connected), speech: Boolean(speech?.connected), loading: false });
-      if (results.every((result) => result.status === 'rejected')) setNotice(results[0].reason?.message || 'تعذر فحص محركات الوسائط.');
+      if (results.every((result) => result.status === 'rejected')) setNotice(results[0].reason?.message || (language === 'ar' ? 'تعذر فحص محركات الوسائط.' : 'Could not check media engines.'));
     } catch (error) {
       setMediaStatus({ image: false, speech: false, loading: false });
       setMediaModels([]);
@@ -461,7 +461,7 @@ export default function App() {
         body: form,
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || 'تعذر تفريغ الملف الصوتي.');
+      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذر تفريغ الملف الصوتي.' : 'Audio transcription failed.'));
       setMediaTranscript(result.text || '');
       setNotice(language === 'ar' ? 'اكتمل التفريغ الصوتي محلياً.' : 'Local transcription completed.');
     } catch (error) { setNotice(error.message); }
@@ -487,7 +487,7 @@ export default function App() {
     try {
       await request('/api/projects', { method: 'POST', body: JSON.stringify(projectForm) });
       setProjectForm({ title: '', description: '' });
-      setNotice('تم إنشاء مساحة المشروع ومجلدها المحلي.');
+      setNotice(language === 'ar' ? 'تم إنشاء مساحة المشروع ومجلدها المحلي.' : 'Project workspace and local folder created.');
       await loadProjects();
     } catch (error) {
       setNotice(error.message);
@@ -500,7 +500,7 @@ export default function App() {
     setBusy(true);
     try {
       await request('/api/projects/' + id + '/archive', { method: 'POST' });
-      setNotice('تمت أرشفة المشروع دون حذف ملفاته.');
+      setNotice(language === 'ar' ? 'تمت أرشفة المشروع دون حذف ملفاته.' : 'Project archived without deleting its files.');
       await loadProjects();
     } catch (error) {
       setNotice(error.message);
@@ -524,7 +524,7 @@ export default function App() {
     event.target.value = '';
     if (!file || !selectedProject) return;
     if (file.size > 10 * 1024 * 1024) {
-      setNotice('حجم الملف يتجاوز الحد المسموح (10 ميغابايت).');
+      setNotice(language === 'ar' ? 'حجم الملف يتجاوز الحد المسموح (10 ميغابايت).' : 'File size exceeds the 10 MB limit.');
       return;
     }
     const form = new FormData();
@@ -537,8 +537,8 @@ export default function App() {
         body: form,
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || 'تعذر رفع الملف.');
-      setNotice('تم رفع الملف بنجاح.');
+      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذر رفع الملف.' : 'File upload failed.'));
+      setNotice(language === 'ar' ? 'تم رفع الملف بنجاح.' : 'File uploaded successfully.');
       await openProject(selectedProject);
     } catch (error) { setNotice(error.message); }
     finally { setUploadingFile(false); }
@@ -552,7 +552,7 @@ export default function App() {
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.detail || 'تعذر تنزيل الملف.');
+        throw new Error(result.detail || (language === 'ar' ? 'تعذر تنزيل الملف.' : 'File download failed.'));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -636,7 +636,7 @@ export default function App() {
     try {
       await request('/api/approvals', { method: 'POST', body: JSON.stringify(proposal) });
       setProposal({ title: '', description: '', risk: 'medium' });
-      setNotice('تم تسجيل طلب الموافقة. لم يُنفّذ أي إجراء.');
+      setNotice(language === 'ar' ? 'تم تسجيل طلب الموافقة. لم يُنفّذ أي إجراء.' : 'Approval request recorded. No action was executed.');
       await refresh();
     } catch (error) { setNotice(error.message); }
     finally { setBusy(false); }
@@ -645,13 +645,13 @@ export default function App() {
   async function decide(id, decision) {
     setBusy(true);
     try {
-      const result = await request(`/api/approvals/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, note: 'قرار من لوحة التحكم' }) });
+      const result = await request(`/api/approvals/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, note: language === 'ar' ? 'قرار من لوحة التحكم' : 'Decision made from the dashboard' }) });
       if (result.task_id) {
         setNotice(decision === 'approved'
           ? (language === 'ar' ? 'تمت الموافقة ونُقلت المهمة إلى قائمة الانتظار. لم يبدأ التنفيذ.' : 'Approved and moved the linked task to the queue. Execution has not started.')
           : (language === 'ar' ? 'تم رفض الطلب وإلغاء المهمة المرتبطة.' : 'Request rejected and linked task cancelled.'));
       } else {
-        setNotice(decision === 'approved' ? 'سُجلت الموافقة فقط؛ التنفيذ يحتاج خطوة مستقلة.' : 'تم رفض الطلب وتسجيل القرار.');
+        setNotice(decision === 'approved' ? (language === 'ar' ? 'سُجلت الموافقة فقط؛ التنفيذ يحتاج خطوة مستقلة.' : 'Approval recorded only; execution requires a separate step.') : (language === 'ar' ? 'تم رفض الطلب وتسجيل القرار.' : 'Request rejected and decision recorded.'));
       }
       await refresh();
     } catch (error) { setNotice(error.message); }
@@ -665,15 +665,15 @@ export default function App() {
     if (target.endsWith('.git')) target = target.slice(0, -4);
     if (target.endsWith('/')) target = target.slice(0, -1);
     const parts = target.split('/');
-    if (parts.length !== 2 || !parts.every((part) => /^[A-Za-z0-9_.-]+$/.test(part))) { setRepoError('أدخل المستودع بصيغة owner/repository.'); return; }
+    if (parts.length !== 2 || !parts.every((part) => /^[A-Za-z0-9_.-]+$/.test(part))) { setRepoError(language === 'ar' ? 'أدخل المستودع بصيغة owner/repository.' : 'Enter the repository as owner/repository.'); return; }
     setRepoLoading(true); setRepoError('');
     try {
       const [details, contents] = await Promise.all([fetch('https://api.github.com/repos/' + target), fetch('https://api.github.com/repos/' + target + '/contents')]);
-      if (!details.ok) throw new Error(details.status === 404 ? 'المستودع غير موجود أو غير متاح للعامة.' : 'تعذر قراءة بيانات المستودع (' + details.status + ').');
-      if (!contents.ok) throw new Error('تعذر قراءة الملفات (' + contents.status + ').');
+      if (!details.ok) throw new Error(details.status === 404 ? (language === 'ar' ? 'المستودع غير موجود أو غير متاح للعامة.' : 'Repository not found or not publicly available.') : (language === 'ar' ? 'تعذر قراءة بيانات المستودع (' + details.status + ').' : 'Could not read repository details (' + details.status + ').'));
+      if (!contents.ok) throw new Error(language === 'ar' ? 'تعذر قراءة الملفات (' + contents.status + ').' : 'Could not read repository files (' + contents.status + ').');
       setRepoInfo(await details.json());
       const items = await contents.json(); setRepoFiles(Array.isArray(items) ? items : []);
-    } catch (error) { setRepoInfo(null); setRepoFiles([]); setRepoError(error.message || 'تعذر الاتصال بـ GitHub.'); }
+    } catch (error) { setRepoInfo(null); setRepoFiles([]); setRepoError(error.message || (language === 'ar' ? 'تعذر الاتصال بـ GitHub.' : 'Could not connect to GitHub.')); }
     finally { setRepoLoading(false); }
   }
 
@@ -991,7 +991,7 @@ export default function App() {
   return <div className="app-shell">
     <main className="main-area">
       <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button></div></header>
-      {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="إغلاق">×</button></div>}
+      {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label={language === 'ar' ? 'إغلاق' : 'Close'}>×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
         <div className="workspace-calendar" aria-label={todayLabel}><span className="calendar-mark">▦</span><div><small>{language === 'ar' ? 'التاريخ اليوم' : 'TODAY'}</small><strong>{todayLabel}</strong></div><span className="calendar-live">{language === 'ar' ? 'محدّث تلقائياً' : 'LIVE DATE'}</span></div>
@@ -1122,7 +1122,7 @@ export default function App() {
               {projects.map((project) => <article className="project-card" key={project.id}>
                 <div className="project-card-top"><span className="project-symbol">▣</span><span className={project.status === 'active' ? 'project-status active' : 'project-status'}>{project.status === 'active' ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'مؤرشف' : 'Archived')}</span></div>
                 <strong>{project.title}</strong><p>{project.description || (language === 'ar' ? 'لا يوجد وصف لهذا المشروع.' : 'No project description.')}</p>
-                <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString('ar')}</small>
+                <small>المشروع #{project.id} · {new Date(project.created_at).toLocaleDateString(language === 'ar' ? 'ar' : 'en-US')}</small>
                 <div className="project-actions">
                   {project.status === 'active' && <><button className="text-button" onClick={() => openProject(project)}>{language === 'ar' ? 'إدارة الملفات' : 'Manage files'}</button><button className="text-button" disabled={busy} onClick={() => archiveProject(project.id)}>{language === 'ar' ? 'أرشفة' : 'Archive'}</button></>}
                   <button className="text-button" onClick={() => exportProject(project)}>{language === 'ar' ? 'تصدير ZIP' : 'Export ZIP'}</button>
@@ -1134,7 +1134,7 @@ export default function App() {
         {selectedProject && <div className="panel-card workspace-files">
           <div className="section-heading"><div><h3>ملفات: {selectedProject.title}</h3><p>{language === 'ar' ? 'إدارة الملفات داخل مساحة هذا المشروع فقط' : 'Manage files only within this project workspace'}</p></div><button className="text-button" onClick={() => setSelectedProject(null)}>{language === 'ar' ? 'إغلاق' : 'Close'}</button></div>
           <label className="upload-control">{language === 'ar' ? 'رفع ملف (حد أقصى 10 MB)' : 'Upload file (10 MB maximum)'}<input type="file" onChange={uploadProjectFile} disabled={uploadingFile || selectedProject.status === 'archived'} /></label>
-          {uploadingFile && <p className="muted">جارٍ رفع الملف…</p>}
+          {uploadingFile && <p className="muted">{language === 'ar' ? 'جارٍ رفع الملف…' : 'Uploading file…'}</p>}
           {projectFiles.length ? <div className="workspace-file-list">{projectFiles.map((file) => <div className="workspace-file" key={file.name}><span>▤</span><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="text-button" onClick={() => downloadProjectFile(file.name)}>{language === 'ar' ? 'تنزيل' : 'Download'}</button><button className="text-button danger-text" disabled={uploadingFile || selectedProject.status === 'archived'} onClick={() => deleteProjectFile(file.name)}>{language === 'ar' ? 'حذف' : 'Delete'}</button></div>)}</div> : <Empty text={language === 'ar' ? 'لا توجد ملفات في مساحة هذا المشروع بعد.' : 'No files in this project workspace yet.'}/>}
           <p className="chat-footnote">{language === 'ar' ? 'الملفات تبقى داخل مجلد المشروع على الخادم. الأنواع التنفيذية المحظورة لا يمكن رفعها.' : 'Files remain in the project folder on the server. Blocked executable file types cannot be uploaded.'}</p>
         </div>}
@@ -1337,7 +1337,7 @@ export default function App() {
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
-            <form className="proposal-form" onSubmit={(event) => { event.preventDefault(); if (!moduleDraft.title.trim() || !moduleDraft.details.trim()) return; setVaultItems((items) => [{ id: Date.now(), title: moduleDraft.title.trim(), content: current.title + '\n\n' + moduleDraft.details.trim(), category: 'task', createdAt: new Date().toISOString() }, ...items]); setModuleDraft({ title: '', details: '' }); setNotice('تم حفظ التكليف في الخزنة المحلية.'); }}>
+            <form className="proposal-form" onSubmit={(event) => { event.preventDefault(); if (!moduleDraft.title.trim() || !moduleDraft.details.trim()) return; setVaultItems((items) => [{ id: Date.now(), title: moduleDraft.title.trim(), content: current.title + '\n\n' + moduleDraft.details.trim(), category: 'task', createdAt: new Date().toISOString() }, ...items]); setModuleDraft({ title: '', details: '' }); setNotice(language === 'ar' ? 'تم حفظ التكليف في الخزنة المحلية.' : 'Assignment saved to the local vault.'); }}>
               <label>{language === 'ar' ? 'عنوان المهمة' : 'Task title'}<input value={moduleDraft.title} onChange={(e) => setModuleDraft({...moduleDraft,title:e.target.value})} required maxLength="120" placeholder={language === 'ar' ? 'مثال: إعداد صفحة هبوط' : 'Example: Create a landing page'}/></label>
               <label>{language === 'ar' ? 'التفاصيل والمتطلبات' : 'Details and requirements'}<textarea rows="5" value={moduleDraft.details} onChange={(e) => setModuleDraft({...moduleDraft,details:e.target.value})} required maxLength="12000" placeholder={language === 'ar' ? 'اكتب الهدف والنتيجة المطلوبة والقيود…' : 'Describe the goal, expected outcome, and constraints…'}/></label>
               <button className="button primary" disabled={!moduleDraft.title.trim() || !moduleDraft.details.trim()}>{language === 'ar' ? 'حفظ التكليف في الخزنة' : 'Save task to vault'}</button>
