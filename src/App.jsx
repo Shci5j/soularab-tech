@@ -281,6 +281,50 @@ export default function App() {
     };
   }, [apiToken, preferences.sessionTimeoutMinutes, language]);
 
+  function localizeApiError(detail, status) {
+    if (language !== 'en' || typeof detail !== 'string') return detail;
+    const exact = new Map([
+      ['رمز الوصول غير صحيح أو غير موجود.', 'The access token is missing or invalid.'],
+      ['خدمة Ollama المحلية غير متصلة. شغّل Ollama على جهاز الخادم.', 'The local Ollama service is offline. Start Ollama on the server.'],
+      ['انتهت مهلة انتظار النموذج المحلي.', 'The local model request timed out.'],
+      ['أعاد مزود النموذج استجابة غير صالحة.', 'The model provider returned an invalid response.'],
+      ['النموذج المحدد غير موجود في Ollama المحلية.', 'The selected model is not installed in local Ollama.'],
+      ['لم يُرجع النموذج محتوى.', 'The model returned no content.'],
+      ['محرك الوسائط المحلي غير متصل. تحقق من تشغيل الخدمة على جهاز الخادم.', 'The local media engine is offline. Check that the service is running on the server.'],
+      ['انتهت مهلة انتظار محرك الوسائط المحلي.', 'The local media engine request timed out.'],
+      ['أعاد محرك الوسائط استجابة غير صالحة.', 'The media engine returned an invalid response.'],
+      ['صيغة سير عمل ComfyUI غير صالحة.', 'The ComfyUI workflow format is invalid.'],
+      ['ComfyUI غير متصل. شغّل المحرك المحلي أولاً.', 'ComfyUI is offline. Start the local engine first.'],
+      ['انتهت مهلة إرسال مهمة التوليد إلى ComfyUI.', 'The ComfyUI generation request timed out.'],
+      ['لم يُرجع ComfyUI معرّف مهمة صالحاً.', 'ComfyUI did not return a valid job ID.'],
+      ['ComfyUI غير متصل.', 'ComfyUI is offline.'],
+      ['انتهت مهلة تحميل الصورة.', 'Image download timed out.'],
+      ['تعذر جلب الصورة من ComfyUI.', 'Could not retrieve the image from ComfyUI.'],
+      ['whisper.cpp غير متصل. شغّل خادم التفريغ الصوتي المحلي أولاً.', 'whisper.cpp is offline. Start the local transcription server first.'],
+      ['انتهت مهلة تفريغ الملف الصوتي.', 'Audio transcription timed out.'],
+      ['أعاد محرك التفريغ نصاً غير صالح.', 'The transcription engine returned invalid text.'],
+      ['لم يُرجع محرك التفريغ نصاً.', 'The transcription engine returned no text.'],
+      ['المشروع غير موجود.', 'Project not found.'],
+      ['المشروع مؤرشف مسبقاً.', 'Project is already archived.'],
+      ['لا يمكن رفع ملفات إلى مشروع مؤرشف.', 'Files cannot be uploaded to an archived project.'],
+      ['الملف غير موجود.', 'File not found.'],
+      ['الملف موجود مسبقاً.', 'File already exists.'],
+      ['الحد الأقصى لحجم الملف 10 ميغابايت.', 'The maximum file size is 10 MB.'],
+      ['لا يمكن رفع ملف فارغ.', 'Empty files cannot be uploaded.'],
+      ['طلب الموافقة غير موجود.', 'Approval request not found.'],
+      ['تم اتخاذ قرار بشأن هذا الطلب مسبقاً.', 'A decision has already been recorded for this request.'],
+      ['المهمة غير موجودة.', 'Task not found.'],
+      ['لا توجد مساحة مشروع نشطة. أنشئ مشروعاً أولاً من قسم الملفات والمشاريع.', 'No active project. Create one in Files & Projects first.'],
+    ]);
+    if (exact.has(detail)) return exact.get(detail);
+    const mediaStatus = detail.match(/^رفض محرك الوسائط الطلب \((\d+)\)\.$/);
+    if (mediaStatus) return 'The media engine rejected the request (' + mediaStatus[1] + ').';
+    const speechStatus = detail.match(/^فشل التفريغ الصوتي \((\d+)\)\.$/);
+    if (speechStatus) return 'Audio transcription failed (' + speechStatus[1] + ').';
+    if (/[\u0600-\u06FF]/.test(detail)) return 'The server rejected the request (' + status + ').';
+    return detail;
+  }
+
   async function request(path, options = {}) {
     const response = await fetch(cleanApiBase(apiBaseUrl) + path, {
       ...options,
@@ -289,7 +333,7 @@ export default function App() {
     if (!response.ok) {
       if (response.status === 401) setAuthRequired(true);
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
+      throw new Error(localizeApiError(body.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
     }
     return response.json();
   }
@@ -480,7 +524,7 @@ export default function App() {
         body: form,
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذر تفريغ الملف الصوتي.' : 'Audio transcription failed.'));
+      if (!response.ok) throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذر تفريغ الملف الصوتي.' : 'Audio transcription failed.'));
       setMediaTranscript(result.text || '');
       setNotice(language === 'ar' ? 'اكتمل التفريغ الصوتي محلياً.' : 'Local transcription completed.');
     } catch (error) { setNotice(error.message); }
@@ -556,7 +600,7 @@ export default function App() {
         body: form,
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذر رفع الملف.' : 'File upload failed.'));
+      if (!response.ok) throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذر رفع الملف.' : 'File upload failed.'));
       setNotice(language === 'ar' ? 'تم رفع الملف بنجاح.' : 'File uploaded successfully.');
       await openProject(selectedProject);
     } catch (error) { setNotice(error.message); }
@@ -571,7 +615,7 @@ export default function App() {
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.detail || (language === 'ar' ? 'تعذر تنزيل الملف.' : 'File download failed.'));
+        throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذر تنزيل الملف.' : 'File download failed.'));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -601,7 +645,7 @@ export default function App() {
         body: form,
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || (language === 'ar' ? 'تعذرت استعادة المشروع.' : 'Could not restore the project.'));
+      if (!response.ok) throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذرت استعادة المشروع.' : 'Could not restore the project.'));
       setNotice(language === 'ar'
         ? 'تمت استعادة المشروع: ' + result.title + ' (' + result.restored_files + ' ملف).'
         : 'Project restored: ' + result.title + ' (' + result.restored_files + ' files).');
@@ -620,7 +664,7 @@ export default function App() {
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.detail || (language === 'ar' ? 'تعذر تصدير المشروع.' : 'Could not export the project.'));
+        throw new Error(localizeApiError(result.detail, response.status) || (language === 'ar' ? 'تعذر تصدير المشروع.' : 'Could not export the project.'));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
