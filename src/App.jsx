@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { LocalBackend } from '@soularab/local-backend';
-import { getEmbeddedNodeHealth } from './services/localNodes.js';
+import { getEmbeddedNodeHealth, localNodeRequest } from './services/localNodes.js';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
@@ -470,7 +470,10 @@ export default function App() {
     setChatInput('');
     setSendingChat(true);
     try {
-      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next }) });
+      const payload = { model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next };
+      const result = Capacitor.isNativePlatform() && embeddedBackend.running
+        ? await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(payload) })
+        : await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify(payload) });
       setChatMessages([...next, result.message]);
     } catch (error) {
       setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
