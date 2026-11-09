@@ -268,7 +268,7 @@ export default function App() {
     window.addEventListener('touchstart', recordActivity, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.clearTimeout(window.__stSessionTimeout);
+      window.clearTimeout(timeoutId);
       window.removeEventListener('pointerdown', recordActivity);
       window.removeEventListener('keydown', recordActivity);
       window.removeEventListener('touchstart', recordActivity);
