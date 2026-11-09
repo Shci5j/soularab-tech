@@ -152,3 +152,27 @@ npm run dev
 ## التطوير
 
 كل تطوير يتم على فرع مستقل. لا تُدمج التغييرات إلى `main` دون مراجعة وموافقة صاحب المستودع.
+
+
+## Embedded Android backend (five local nodes)
+
+The Android Capacitor build includes an embedded backend plugin under `plugins/local-backend`. When the native app starts, it launches five independent loopback HTTP services on ports 3101–3105 and verifies their health from the WebView:
+
+- A — AI and text task queue
+- B — image and design task queue
+- C — audio and video task queue
+- D — development task queue
+- E — task dispatch, node directory, and recovery coordination
+
+The services bind to `127.0.0.1` only. Requests use a per-install token passed in the `X-Local-Token` header. Android network security permits cleartext only to `localhost`; other cleartext destinations remain blocked. Queues and local section records persist in the app-private SQLite database with WAL enabled.
+
+Install dependencies and sync the native project:
+
+```sh
+npm install
+npx cap add android   # only if the android platform has not been generated
+npx cap sync android
+npm run build
+```
+
+The current milestone provides real independent HTTP listeners, health/metrics endpoints, persistent task queues, section storage, and routing from node E. It does **not** yet include on-device AI models, image/video processing engines, code execution workers, or an Android foreground service. Queued tasks are stored and routed but are not automatically executed yet. The app process must remain alive for the local listeners to remain available.
