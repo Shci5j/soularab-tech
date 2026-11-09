@@ -536,7 +536,7 @@ async def assistant_chat(payload: ChatRequest, _: None = Depends(require_access)
 def capabilities():
     return {
         "modules": ["assistant", "web", "design", "media", "apps", "files", "agents", "domains", "security"],
-        "providers": {"ollama": "local_loopback_opt_in", "llama_cpp": "not_connected", "comfyui": "local_loopback_opt_in", "whisper_cpp": "local_loopback_opt_in"},
+        "providers": {"rooh": ROOH_PROVIDER, "ollama": "available_when_selected", "llama_cpp": "available_when_selected", "comfyui": "local_loopback_opt_in", "whisper_cpp": "local_loopback_opt_in"},
         "policy": {"external_network": "opt_in", "mutations": "explicit_approval", "execution_after_approval": "separate_action"},
     }
 
