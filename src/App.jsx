@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
 const modules = [
@@ -15,8 +16,6 @@ const modules = [
 ];
 
 const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
-
-function cleanApiBase(value) { let result = value.trim(); while (result.endsWith('/')) result = result.slice(0, -1); return result; }
 
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
@@ -221,7 +220,11 @@ export default function App() {
         refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
         sessionTimeoutMinutes: [0, 15, 30, 60].includes(Number(settings.preferences.sessionTimeoutMinutes)) ? Number(settings.preferences.sessionTimeoutMinutes) : 0,
       };
-      const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
+      let nextApiUrl = '';
+      if (typeof settings.apiBaseUrl === 'string') {
+        try { nextApiUrl = safeApiBase(settings.apiBaseUrl); }
+        catch { throw new Error(language === 'ar' ? 'عنوان الخادم في النسخة الاحتياطية غير آمن أو غير صالح.' : 'The backend URL in this backup is unsafe or invalid.'); }
+      }
       setPreferences(nextPreferences);
       if (models.some((model) => model.name === nextPreferences.defaultModel)) setSelectedModel(nextPreferences.defaultModel);
       setLanguage(settings.language);
@@ -326,7 +329,7 @@ export default function App() {
   }
 
   async function request(path, options = {}) {
-    const response = await fetch(cleanApiBase(apiBaseUrl) + path, {
+    const response = await fetch(safeApiBase(apiBaseUrl) + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
@@ -495,7 +498,7 @@ export default function App() {
       const images = await Promise.all(imageRefs.map(async (item) => {
         const params = new URLSearchParams({ filename: item.filename || '', subfolder: item.subfolder || '', type: 'output' });
         try {
-          const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/image/view?' + params.toString(), {
+          const response = await fetch(safeApiBase(apiBaseUrl) + '/api/media/image/view?' + params.toString(), {
             headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
           });
           if (!response.ok) return null;
@@ -518,7 +521,7 @@ export default function App() {
     setMediaBusy(true);
     setMediaTranscript('');
     try {
-      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/media/transcribe', {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/media/transcribe', {
         method: 'POST',
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
         body: form,
@@ -594,7 +597,7 @@ export default function App() {
     form.append('file', file);
     setUploadingFile(true);
     try {
-      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files', {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files', {
         method: 'POST',
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
         body: form,
@@ -610,7 +613,7 @@ export default function App() {
   async function downloadProjectFile(filename) {
     if (!selectedProject) return;
     try {
-      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/projects/' + selectedProject.id + '/files/' + encodeURIComponent(filename), {
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
       });
       if (!response.ok) {
@@ -639,7 +642,7 @@ export default function App() {
     form.append('file', file);
     setBusy(true);
     try {
-      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/import', {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/projects/import', {
         method: 'POST',
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
         body: form,
@@ -659,7 +662,7 @@ export default function App() {
 
   async function exportProject(project) {
     try {
-      const response = await fetch(cleanApiBase(apiBaseUrl) + '/api/projects/' + project.id + '/export', {
+      const response = await fetch(safeApiBase(apiBaseUrl) + '/api/projects/' + project.id + '/export', {
         headers: apiToken ? { Authorization: 'Bearer ' + apiToken } : {},
       });
       if (!response.ok) {
