@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from app import main
-from app.main import validate_local_provider_url
+from app.main import ChatRequest, validate_local_provider_url
 
 
 class LocalProviderSecurityTests(unittest.TestCase):
@@ -115,6 +115,20 @@ class SecurityPostureEndpointTests(unittest.TestCase):
                     self.assertEqual(response.status_code, 200)
                     self.assertEqual(response.json()["access_mode"], "local_without_token")
                     self.assertFalse(response.json()["token_configured"])
+
+
+class ChatTemperatureValidationTests(unittest.TestCase):
+    def test_temperature_accepts_supported_range(self):
+        base = {"model": "local-model", "messages": [{"role": "user", "content": "Hello"}]}
+        self.assertEqual(ChatRequest(**base, temperature=0).temperature, 0)
+        self.assertEqual(ChatRequest(**base, temperature=2).temperature, 2)
+        self.assertEqual(ChatRequest(**base).temperature, 0.7)
+
+    def test_temperature_rejects_values_outside_supported_range(self):
+        base = {"model": "local-model", "messages": [{"role": "user", "content": "Hello"}]}
+        for value in (-0.1, 2.1):
+            with self.assertRaises(Exception):
+                ChatRequest(**base, temperature=value)
 
 
 if __name__ == "__main__":
