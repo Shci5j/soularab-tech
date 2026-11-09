@@ -52,8 +52,8 @@ export default function App() {
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
   const [preferences, setPreferences] = useState(() => {
-    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
-    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local' }; }
+    try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
+    catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }; }
   });
   function updatePreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }));
@@ -210,6 +210,7 @@ export default function App() {
         reducedMotion: Boolean(settings.preferences.reducedMotion),
         dateFormat: ['long', 'medium', 'short'].includes(settings.preferences.dateFormat) ? settings.preferences.dateFormat : 'long',
         timeZone: ['local', 'UTC'].includes(settings.preferences.timeZone) ? settings.preferences.timeZone : 'local',
+        refreshIntervalSeconds: [15, 30, 60].includes(Number(settings.preferences.refreshIntervalSeconds)) ? Number(settings.preferences.refreshIntervalSeconds) : 15,
       };
       const nextApiUrl = typeof settings.apiBaseUrl === 'string' && (!settings.apiBaseUrl || /^https:\/\//i.test(settings.apiBaseUrl)) ? cleanApiBase(settings.apiBaseUrl) : '';
       setPreferences(nextPreferences);
@@ -266,7 +267,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refresh(); const id = window.setInterval(refresh, 15000); return () => clearInterval(id); }, [apiToken]);
+  useEffect(() => { refresh(); const id = window.setInterval(refresh, (preferences.refreshIntervalSeconds || 15) * 1000); return () => clearInterval(id); }, [apiToken, preferences.refreshIntervalSeconds]);
 
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
@@ -994,7 +995,7 @@ export default function App() {
       </div></section>}
       {active === 'settings' && <section className="content">
         <div className="panel-card settings-page">
-          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local' }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
+          <div className="section-heading"><div><h2>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</h2><p className="muted">{language === 'ar' ? 'تحكم بتجربة الاستخدام واللغة والمظهر وإمكانية الوصول.' : 'Customize language, appearance, and accessibility.'}</p></div><button className="button secondary" onClick={() => { setPreferences({ font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15 }); setLanguage('ar'); setTheme('dark'); }}>{language === 'ar' ? 'استعادة الافتراضيات' : 'Restore defaults'}</button></div>
           <div className="settings-group"><h3>{language === 'ar' ? 'اللغة والمنطقة' : 'Language & region'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'لغة التطبيق' : 'Application language'}</strong><small>{language === 'ar' ? 'تغيير اللغة واتجاه الواجهة' : 'Change language and interface direction'}</small></div><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية · RTL</option><option value="en">English · LTR</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'التاريخ' : 'Date'}</strong><small>{language === 'ar' ? 'التاريخ المعروض في الصفحة الرئيسية حسب وقت جهازك' : 'Date shown on the home screen using your device time'}</small></div><span className="settings-value">{todayLabel}</span></div>
@@ -1006,6 +1007,13 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'نوع الخط' : 'Font family'}</strong><small>{language === 'ar' ? 'تغيير عائلة الخط في التطبيق' : 'Change the application font family'}</small></div><select value={preferences.font} onChange={(e) => updatePreference('font', e.target.value)}><option value="ibm">IBM Plex Arabic</option><option value="system">{language === 'ar' ? 'خط النظام' : 'System font'}</option><option value="tahoma">Tahoma</option><option value="georgia">Georgia</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حجم الخط' : 'Font size'}</strong><small>{language === 'ar' ? 'تكبير أو تصغير النصوص' : 'Scale text'}: {preferences.fontScale}%</small></div><input aria-label="حجم الخط" type="range" min="85" max="125" step="5" value={preferences.fontScale} onChange={(e) => updatePreference('fontScale', Number(e.target.value))}/></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'كثافة الواجهة' : 'Interface density'}</strong><small>{language === 'ar' ? 'المسافات بين البطاقات والعناصر' : 'Spacing between cards and elements'}</small></div><select value={preferences.density} onChange={(e) => updatePreference('density', e.target.value)}><option value="comfortable">{language === 'ar' ? 'مريحة' : 'Comfortable'}</option><option value="compact">{language === 'ar' ? 'مضغوطة' : 'Compact'}</option></select></div>
+          </div>
+          <div className="settings-group"><h3>{language === 'ar' ? 'الجلسة والأمان' : 'Session & security'}</h3>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'جلسة الوصول الحالية' : 'Current access session'}</strong><small>{apiToken ? (language === 'ar' ? 'يوجد رمز وصول محفوظ لهذه الجلسة فقط' : 'An access token is stored for this browser session only') : (language === 'ar' ? 'لا يوجد رمز وصول محفوظ حالياً' : 'No access token is stored currently')}</small></div><button type="button" className="button secondary" disabled={!apiToken} onClick={() => { sessionStorage.removeItem('st-api-token'); setApiToken(''); setAuthRequired(false); setNotice(language === 'ar' ? 'تم إنهاء جلسة الوصول على هذا الجهاز.' : 'The access session on this device has been ended.'); }}>{language === 'ar' ? 'إنهاء الجلسة' : 'End session'}</button></div>
+            <p className="chat-footnote">{language === 'ar' ? 'لا يعرض التطبيق رمز الوصول ولا يضمّنه في النسخ الاحتياطية. إنهاء الجلسة يمسح الرمز من جلسة المتصفح الحالية فقط.' : 'The token is never displayed or included in backups. Ending the session clears it from this browser session only.'}</p>
+          </div>
+          <div className="settings-group"><h3>{language === 'ar' ? 'تحديث البيانات' : 'Data refresh'}</h3>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'فاصل تحديث لوحة التحكم' : 'Dashboard refresh interval'}</strong><small>{language === 'ar' ? 'تحديد عدد الثواني بين فحوص حالة الخادم والمهام' : 'Set how often server and task status are refreshed'}</small></div><select value={preferences.refreshIntervalSeconds || 15} onChange={(e) => updatePreference('refreshIntervalSeconds', Number(e.target.value))}><option value="15">{language === 'ar' ? 'كل 15 ثانية' : 'Every 15 seconds'}</option><option value="30">{language === 'ar' ? 'كل 30 ثانية' : 'Every 30 seconds'}</option><option value="60">{language === 'ar' ? 'كل دقيقة' : 'Every minute'}</option></select></div>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'تقليل الحركة' : 'Reduce motion'}</strong><small>{language === 'ar' ? 'إيقاف الانتقالات والحركات الزخرفية' : 'Disable transitions and decorative motion'}</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
