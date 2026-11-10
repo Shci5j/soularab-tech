@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
+import SoularabTerminal from './components/SoularabTerminal.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
 const modules = [
@@ -9,13 +10,14 @@ const modules = [
   { id: 'design', title: 'التصميم والهوية', icon: '◈', desc: 'الشعارات والهوية وتجارب المستخدم' },
   { id: 'media', title: 'الصور والفيديو', icon: '▧', desc: 'مسارات توليد الوسائط ومعالجتها' },
   { id: 'apps', title: 'بناء التطبيقات', icon: '▦', desc: 'تطوير التطبيقات وفحص المشاريع' },
+  { id: 'terminal', title: 'الطرفية وبيئة التطوير', icon: '⌘', desc: 'أوامر التطوير والملفات والأدوات المحلية' },
   { id: 'files', title: 'الملفات والمشاريع', icon: '▱', desc: 'إدارة الملفات والنسخ والإصدارات' },
   { id: 'agents', title: 'الوكلاء والأتمتة', icon: '⌘', desc: 'مهام متعددة الخطوات بموافقات صريحة' },
   { id: 'domains', title: 'النطاقات والاستضافة', icon: '◎', desc: 'إعدادات النطاق والنشر والاستضافة' },
   { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
 ];
 
-const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
+const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], terminal: ['Terminal & Dev Environment', 'Local development commands, files, and tools'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
 
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
@@ -1135,6 +1137,7 @@ export default function App() {
         </div>
       </section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
+      {active === 'terminal' && <SoularabTerminal language={language} />}
       {active === 'hub' && <section className="content"><div className="panel-card destination-page">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'سولاراب هوب' : 'Soularab Hub'}</h2><p className="muted">{language === 'ar' ? 'مستكشف مستودعات GitHub للقراءة والمتابعة.' : 'Browse GitHub repositories and inspect their contents.'}</p></div><span className="pill">{language === 'ar' ? 'قراءة آمنة' : 'Read only'}</span></div>
         <form className="repo-search" onSubmit={loadGithubRepository}><label>{language === 'ar' ? 'رابط المستودع أو owner/repository' : 'Repository URL or owner/repository'}<input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="owner/repository"/></label><button className="button primary" disabled={repoLoading || !repoInput.trim()}>{repoLoading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Loading…') : (language === 'ar' ? 'استكشاف المستودع' : 'Explore repository')}</button></form>
