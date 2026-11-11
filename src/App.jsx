@@ -438,6 +438,10 @@ export default function App() {
         const queued = await localNodeRequest('E', '/tasks', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
         return { id: queued.id, status: queued.status, execution: 'queued_on_device' };
       }
+      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
+      if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
+      if (/^\/api\/tasks\/\d+\/events$/.test(path)) return { items: [] };
+      if (/^\/api\/tasks\/\d+$/.test(path) && method === 'GET') return await localNodeRequest('E', path.replace('/api', ''));
       if (path === '/api/engines/status' || path === '/api/mesh/status' || path === '/api/mesh/discover' || path === '/api/mesh/nodes/') {
         const ids = ['A', 'B', 'C', 'D', 'E'];
         const nodes = await Promise.all(ids.map(async (id) => {
@@ -1162,6 +1166,16 @@ export default function App() {
     }
   }
 
+  async function controlQueuedTask(taskId, action, priority) {
+    setTaskActionId(taskId);
+    try {
+      await request('/api/tasks/' + taskId + '/' + action, { method: 'POST', body: action === 'priority' ? JSON.stringify({ priority }) : JSON.stringify({}) });
+      setNotice(language === 'ar' ? 'تم تحديث حالة المهمة في الطابور المحلي.' : 'Local queue task updated.');
+      await refresh();
+    } catch (error) { setNotice(error.message); }
+    finally { setTaskActionId(null); }
+  }
+
   async function cancelQueuedTask(taskId) {
     setTaskActionId(taskId);
     try {
@@ -1662,13 +1676,16 @@ export default function App() {
           <div className="panel-card"><h3>{language==='ar'?'ضوابط التنفيذ':'Execution safeguards'}</h3><div className="roadmap-row"><span>{language==='ar'?'حفظ الخطة':'Plan storage'}</span><b className="good">{language==='ar'?'الخزنة المحلية':'Local vault'}</b></div><div className="roadmap-row"><span>{language==='ar'?'مراجعة بشرية':'Human review'}</span><b className="good">{language==='ar'?'مطلوبة':'Required'}</b></div><div className="roadmap-row"><span>{language==='ar'?'التنفيذ التلقائي':'Automatic execution'}</span><b>{language==='ar'?'معطل':'Disabled'}</b></div><p className="chat-footnote">{language==='ar'?'كل خطة تُسجل في طابور المهام وتُرسل أيضاً للموافقة البشرية. إنشاء المهمة أو الموافقة عليها لا يشغّل الأوامر؛ يلزم محرك تنفيذ مستقل ومراجعة أمان.':'Each plan is recorded in the task queue and separately submitted for human approval. Queueing or approving a task never executes commands; a separate execution engine and safety review are required.'}</p><button className="button secondary" onClick={()=>setActive('security')}>{language==='ar'?'فتح قائمة الموافقات':'Open approvals'}</button></div>
         </div>
         <div className="panel-card task-queue-panel">
-          <div className="section-heading"><div><h3>{language==='ar'?'طابور المهام':'Task queue'}</h3><p className="muted">{language==='ar'?'المهام المحفوظة على الخادم. الإلغاء متاح قبل بدء أي تنفيذ.':'Tasks persisted on the server. Cancellation is available before execution starts.'}</p></div><div className="queue-tools"><span className="pill">{queuedTasks.length} {language==='ar'?'مهمة':'tasks'}</span><select className="task-filter" value={taskFilter} onChange={(event)=>setTaskFilter(event.target.value)} aria-label={language==='ar'?'تصفية المهام':'Filter tasks'}><option value="all">{language==='ar'?'كل الحالات':'All statuses'}</option><option value="waiting_approval">{language==='ar'?'بانتظار الموافقة':'Awaiting approval'}</option><option value="queued">{language==='ar'?'في الانتظار':'Queued'}</option><option value="planning">{language==='ar'?'قيد التخطيط':'Planning'}</option><option value="running">{language==='ar'?'قيد التنفيذ':'Running'}</option><option value="completed">{language==='ar'?'مكتملة':'Completed'}</option><option value="failed">{language==='ar'?'فشلت':'Failed'}</option><option value="cancelled">{language==='ar'?'ملغاة':'Cancelled'}</option></select><button className="button secondary" onClick={loadTasks} disabled={loadingTasks}>{loadingTasks?(language==='ar'?'جارٍ التحديث…':'Refreshing…'):(language==='ar'?'تحديث ↻':'Refresh ↻')}</button></div></div>
+          <div className="section-heading"><div><h3>{language==='ar'?'طابور المهام':'Task queue'}</h3><p className="muted">{language==='ar'?'المهام المحفوظة على الخادم. الإلغاء متاح قبل بدء أي تنفيذ.':'Tasks persisted on the server. Cancellation is available before execution starts.'}</p></div><div className="queue-tools"><span className="pill">{queuedTasks.length} {language==='ar'?'مهمة':'tasks'}</span><select className="task-filter" value={taskFilter} onChange={(event)=>setTaskFilter(event.target.value)} aria-label={language==='ar'?'تصفية المهام':'Filter tasks'}><option value="all">{language==='ar'?'كل الحالات':'All statuses'}</option><option value="waiting_approval">{language==='ar'?'بانتظار الموافقة':'Awaiting approval'}</option><option value="queued">{language==='ar'?'في الانتظار':'Queued'}</option><option value="planning">{language==='ar'?'قيد التخطيط':'Planning'}</option><option value="running">{language==='ar'?'قيد التنفيذ':'Running'}</option><option value="paused">{language==='ar'?'متوقفة مؤقتاً':'Paused'}</option><option value="completed">{language==='ar'?'مكتملة':'Completed'}</option><option value="failed">{language==='ar'?'فشلت':'Failed'}</option><option value="cancelled">{language==='ar'?'ملغاة':'Cancelled'}</option></select><button className="button secondary" onClick={loadTasks} disabled={loadingTasks}>{loadingTasks?(language==='ar'?'جارٍ التحديث…':'Refreshing…'):(language==='ar'?'تحديث ↻':'Refresh ↻')}</button></div></div>
           {loadingTasks && !queuedTasks.length ? <Empty text={language==='ar'?'جارٍ تحميل المهام…':'Loading tasks…'}/> : queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).length ? <div className="task-queue-list">{queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).map((task)=> <article className="approval task-queue-item" key={task.id}>
             <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
             {task.description && <p>{task.description}</p>}
             <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
             <div className="approval-actions">
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
+              {Capacitor.isNativePlatform() && ['queued','running'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
+              {Capacitor.isNativePlatform() && task.status==='paused' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'resume')}>{language==='ar'?'استئناف':'Resume'}</button>}
+              {Capacitor.isNativePlatform() && ['queued','paused'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'priority',10)}>{language==='ar'?'أولوية قصوى':'High priority'}</button>}
               {['queued','planning','waiting_approval'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
             </div>
             {task.status==='queued' && <div className="task-execution-form">
