@@ -34,6 +34,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install Android NDK and CMake
+        run: sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
+
       - name: Install dependencies
         run: npm install
 
