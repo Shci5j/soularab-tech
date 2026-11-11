@@ -292,7 +292,7 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("items", items);
             return json(Response.Status.OK, result);
         } catch (Throwable error) {
-            return json(Response.Status.OK, new JSONObject().put("connected", false).put("provider", "llama.cpp-native-android").put("items", new JSONArray()));
+            return json(Response.Status.OK, error("rooh_native_engine_unavailable"));
         }
     }
 
