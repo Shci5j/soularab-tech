@@ -84,6 +84,9 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
+  const [roohEngine, setRoohEngine] = useState({ loaded: false, modelPresent: false, modelBytes: 0, version: '' });
+  const [roohDownloadProgress, setRoohDownloadProgress] = useState({ percent: 0, receivedBytes: 0, totalBytes: 0 });
+  const [roohBusy, setRoohBusy] = useState(false);
   const [mediaStatus, setMediaStatus] = useState({ image: false, speech: false, loading: false });
   const [mediaModels, setMediaModels] = useState([]);
   const [imageDraft, setImageDraft] = useState({ model:'', prompt:'A premium cinematic product photograph, elegant studio lighting, refined composition, ultra-detailed', negative:'blurry, low quality, distorted, watermark, text', width:1024, height:1024, steps:24 });
@@ -591,18 +594,59 @@ export default function App() {
     setAssistantStatus({ connected: false, loading: true });
     try {
       const nativeApp = Capacitor.isNativePlatform();
-      const [status, result] = nativeApp
-        ? [null, await localNodeRequest('A', '/models')]
-        : await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: nativeApp ? Boolean(result.connected) : status.connected, loading: false, version: nativeApp ? 'llama.cpp' : status.version });
+      if (nativeApp) {
+        const engine = await LocalBackend.roohEngineStatus();
+        setRoohEngine(engine);
+        const available = engine.loaded ? [{ name: 'qwen2.5-3b-instruct-q4_k_m' }] : [];
+        setModels(available);
+        setSelectedModel(available[0]?.name || '');
+        setAssistantStatus({ connected: Boolean(engine.loaded), loading: false, version: engine.version || 'llama.cpp native' });
+        if (!engine.loaded) setNotice(engine.modelPresent
+          ? (language === 'ar' ? 'محرك روح مدمج وجاهز، حمّل النموذج إلى الذاكرة من زر تشغيل المحرك.' : 'The native ROOH engine is installed. Load the downloaded model to start.')
+          : (language === 'ar' ? 'محرك روح مدمج داخل التطبيق. نزّل نموذج Qwen مرة واحدة؛ بعد ذلك يعمل دون Termux أو إنترنت.' : 'The ROOH engine is bundled in the app. Download the Qwen model once; inference then works without Termux or internet.'));
+        return;
+      }
+      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
+      setAssistantStatus({ connected: Boolean(status.connected), loading: false, version: status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice(nativeApp ? (language === 'ar' ? 'محرك روح متصل، لكن لم يُعثر على نموذج. تحقق من تشغيل llama-server في Termux.' : 'Rooh engine is online, but no model was found. Check llama-server in Termux.') : (language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.'));
+      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
+      if (Capacitor.isNativePlatform()) setRoohEngine({ loaded: false, modelPresent: false, modelBytes: 0, version: '' });
       setModels([]);
       setNotice(error.message);
     }
+  }
+
+  async function installRoohModel() {
+    if (roohBusy) return;
+    setRoohBusy(true);
+    setRoohDownloadProgress({ percent: 0, receivedBytes: 0, totalBytes: 0 });
+    let listener;
+    try {
+      listener = await LocalBackend.addListener('roohModelDownloadProgress', (progress) => setRoohDownloadProgress(progress));
+      await LocalBackend.downloadRoohModel();
+      const loaded = await LocalBackend.loadRoohModel();
+      setNotice(language === 'ar' ? 'تم تنزيل نموذج روح وتحميله داخل المحرك المحلي.' : 'The ROOH model downloaded and loaded into the native engine.');
+      await loadAssistant();
+    } catch (error) {
+      setNotice((language === 'ar' ? 'تعذر تجهيز محرك روح: ' : 'Could not prepare ROOH: ') + error.message);
+    } finally {
+      if (listener) listener.remove();
+      setRoohBusy(false);
+    }
+  }
+
+  async function loadDownloadedRoohModel() {
+    if (roohBusy) return;
+    setRoohBusy(true);
+    try {
+      await LocalBackend.loadRoohModel();
+      await loadAssistant();
+      setNotice(language === 'ar' ? 'محرك روح جاهز للعمل دون اتصال.' : 'ROOH is ready for offline inference.');
+    } catch (error) { setNotice(error.message); }
+    finally { setRoohBusy(false); }
   }
 
   async function runTerminalCommand(event) {
@@ -632,10 +676,15 @@ export default function App() {
     setChatInput('');
     setSendingChat(true);
     try {
-      const payload = { model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next };
-      const result = Capacitor.isNativePlatform() && embeddedBackend.running
-        ? await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(payload) })
-        : await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify(payload) });
+      let result;
+      if (Capacitor.isNativePlatform()) {
+        const prompt = '<|im_start|>system\\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعِ تنفيذ إجراء قبل تأكيد نجاحه.\\n<|im_end|>\\n' + next.map((message) => '<|im_start|>' + message.role + '\\n' + message.content + '<|im_end|>\\n').join('') + '<|im_start|>assistant\\n';
+        const generated = await LocalBackend.generateRooh({ prompt, maxTokens: 512 });
+        result = { message: { role: 'assistant', content: generated.content } };
+      } else {
+        const payload = { model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next };
+        result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify(payload) });
+      }
       setChatMessages([...next, result.message]);
     } catch (error) {
       setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
@@ -1599,8 +1648,15 @@ export default function App() {
         <p className="chat-footnote">{language === 'ar' ? 'تنبيه أمني: الأوامر تُنفذ بصلاحيات مستخدم Termux، وليست بصلاحيات root. راجع الأمر قبل إرساله؛ لا ترسل أوامر مجهولة أو مدمرة.' : 'Security: commands run with the Termux user permissions, not root. Review every command before sending; avoid unknown or destructive commands.'}</p>
       </div></section>}
       {active === "assistant" && <section className="content">
+        {Capacitor.isNativePlatform() && !roohEngine.loaded && <div className="panel-card rooh-engine-setup">
+          <div><h3>{language === 'ar' ? 'محرك روح المحلي المدمج' : 'Embedded ROOH local engine'}</h3><p className="muted">{language === 'ar' ? 'المحرك مبني داخل APK. نزّل نموذج Qwen مرة واحدة إلى مساحة التطبيق الخاصة (يتطلب نحو 2.8 GB مساحة حرة). بعد التنزيل يعمل الاستدلال دون Termux أو اتصال إنترنت.' : 'The inference engine is bundled in the APK. Download the Qwen model once into private app storage (about 2.8 GB free space required). Inference then runs without Termux or internet.'}</p></div>
+          {roohEngine.modelPresent
+            ? <button className="button primary" disabled={roohBusy} onClick={loadDownloadedRoohModel}>{roohBusy ? (language === 'ar' ? 'جارٍ تحميل النموذج…' : 'Loading model…') : (language === 'ar' ? 'تشغيل محرك روح' : 'Load ROOH model')}</button>
+            : <button className="button primary" disabled={roohBusy} onClick={installRoohModel}>{roohBusy ? (language === 'ar' ? 'جارٍ تنزيل النموذج…' : 'Downloading model…') : (language === 'ar' ? 'تنزيل نموذج روح وتشغيله' : 'Download and load ROOH model')}</button>}
+          {roohBusy && <div className="rooh-progress"><progress max="100" value={Math.max(0, roohDownloadProgress.percent)} /><small>{roohDownloadProgress.percent >= 0 ? roohDownloadProgress.percent + '%' : (language === 'ar' ? 'جارٍ التنزيل…' : 'Downloading…')} · {Math.round(roohDownloadProgress.receivedBytes / 1048576)} MB</small></div>}
+        </div>}
         <div className="assistant-toolbar panel-card">
-          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'تتصل روح بمحرك llama.cpp المحلي الذي يعمل عبر Termux على هذا الهاتف.' : 'Rooh connects to the local llama.cpp engine running through Termux on this phone.') : (language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.')}</p></div>
+          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك llama.cpp مدمج داخل التطبيق ويشغّل نموذج Qwen محلياً على الهاتف دون Termux أو خادم خارجي.' : 'llama.cpp is bundled in the app and runs Qwen locally on this phone without Termux or an external server.') : (language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.')}</p></div>
           <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك روح متصل' : 'Rooh engine connected') : (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected')) : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك روح غير متصل' : 'Rooh engine offline') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected'))}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
