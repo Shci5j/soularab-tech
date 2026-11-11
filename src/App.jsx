@@ -464,7 +464,7 @@ export default function App() {
       setAssistantStatus({ connected: nativeApp ? Boolean(result.connected) : status.connected, loading: false, version: nativeApp ? 'llama.cpp' : status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
+      if (!result.items?.length) setNotice(nativeApp ? (language === 'ar' ? 'محرك روح متصل، لكن لم يُعثر على نموذج. تحقق من تشغيل llama-server في Termux.' : 'Rooh engine is online, but no model was found. Check llama-server in Termux.') : (language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.'));
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
       setModels([]);
@@ -1422,7 +1422,7 @@ export default function App() {
 
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
-          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
+          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'تتصل روح بمحرك llama.cpp المحلي الذي يعمل عبر Termux على هذا الهاتف.' : 'Rooh connects to the local llama.cpp engine running through Termux on this phone.') : (language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.')}</p></div>
           <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
@@ -1438,10 +1438,10 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'شغّل محرك روح في Termux أولاً' : 'Start the Rooh engine in Termux first') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first'))} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
-          <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
+          <p className="chat-footnote">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'يلزم إبقاء جلسة Termux ومحرك llama.cpp يعملين على هذا الهاتف أثناء استخدام روح.' : 'Keep the Termux session and llama.cpp engine running on this phone while using Rooh.') : (language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.')}</p>
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
