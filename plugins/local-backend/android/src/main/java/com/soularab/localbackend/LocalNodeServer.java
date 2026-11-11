@@ -122,6 +122,43 @@ final class LocalNodeServer extends NanoHTTPD {
         if ("/tasks".equals(path) && Method.GET.equals(session.getMethod())) {
             return json(Response.Status.OK, listTasks());
         }
+        if (path.startsWith("/tasks/") && Method.POST.equals(session.getMethod())) {
+            String[] parts = path.split("/");
+            if (parts.length != 4) return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
+            String action = parts[3];
+            long taskId;
+            try { taskId = Long.parseLong(parts[2]); }
+            catch (NumberFormatException ex) { return json(Response.Status.BAD_REQUEST, error("invalid_task_id")); }
+            SQLiteDatabase db = helper.getWritableDatabase();
+            Cursor current = db.query("node_tasks", new String[]{"status"}, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
+            String currentStatus;
+            try {
+                if (!current.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
+                currentStatus = current.getString(0);
+            } finally { current.close(); }
+            ContentValues values = new ContentValues();
+            if ("pause".equals(action)) {
+                if (!("queued".equals(currentStatus) || "running".equals(currentStatus))) return json(Response.Status.CONFLICT, error("task_cannot_be_paused"));
+                values.put("status", "paused");
+            } else if ("resume".equals(action)) {
+                if (!"paused".equals(currentStatus)) return json(Response.Status.CONFLICT, error("task_is_not_paused"));
+                values.put("status", "queued");
+            } else if ("cancel".equals(action)) {
+                if (!("queued".equals(currentStatus) || "paused".equals(currentStatus))) return json(Response.Status.CONFLICT, error("running_task_cannot_be_cancelled_without_worker_support"));
+                values.put("status", "cancelled");
+            } else if ("priority".equals(action)) {
+                JSONObject body = readBody(session);
+                int priority = body.optInt("priority", 0);
+                if (priority < 0 || priority > 10) return json(Response.Status.BAD_REQUEST, error("priority_must_be_between_0_and_10"));
+                values.put("priority", priority);
+            } else {
+                return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
+            }
+            values.put("updated_at", java.time.Instant.now().toString());
+            int changed = db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
+            if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+            return getTask(String.valueOf(taskId));
+        }
         if (path.startsWith("/tasks/") && Method.GET.equals(session.getMethod())) {
             String id = path.substring("/tasks/".length());
             return getTask(id);
@@ -283,7 +320,7 @@ final class LocalNodeServer extends NanoHTTPD {
 
     private JSONArray listTasks() throws JSONException {
         JSONArray result = new JSONArray();
-        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "id DESC", "100");
+        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "priority DESC, id DESC", "100");
         try {
             while (cursor.moveToNext()) result.put(taskFromCursor(cursor));
         } finally { cursor.close(); }
@@ -304,8 +341,14 @@ final class LocalNodeServer extends NanoHTTPD {
         JSONObject item = new JSONObject();
         item.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
         item.put("node", cursor.getString(cursor.getColumnIndexOrThrow("node_id")));
-        item.put("taskType", cursor.getString(cursor.getColumnIndexOrThrow("task_type")));
-        item.put("payload", new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload"))));
+        String taskType = cursor.getString(cursor.getColumnIndexOrThrow("task_type"));
+        JSONObject payload = new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")));
+        item.put("taskType", taskType);
+        item.put("payload", payload);
+        item.put("title", payload.optString("title", taskType));
+        item.put("description", payload.optString("description", ""));
+        item.put("department", payload.optString("department", nodeId));
+        item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
         item.put("createdAt", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
         item.put("updatedAt", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")));
