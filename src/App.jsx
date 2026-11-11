@@ -1688,7 +1688,8 @@ export default function App() {
           {loadingTasks && !queuedTasks.length ? <Empty text={language==='ar'?'جارٍ تحميل المهام…':'Loading tasks…'}/> : queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).length ? <div className="task-queue-list">{queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).map((task)=> <article className="approval task-queue-item" key={task.id}>
             <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
             {task.description && <p>{task.description}</p>}
-            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
+            {task.result && <div className="notice-inline task-result"><strong>{language==='ar'?'نتيجة التنفيذ المحلي':'Local execution result'}</strong><p>{task.result}</p></div>}
+            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')} · {language==='ar'?'الأولوية':'Priority'} {task.priority || 0}</small>
             <div className="approval-actions">
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
               {Capacitor.isNativePlatform() && task.status==='queued' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
