@@ -18,6 +18,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import fi.iki.elonen.NanoHTTPD;
 
 import java.io.IOException;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import android.os.StatFs;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,6 +92,119 @@ public class LocalBackendPlugin extends Plugin {
         } catch (Exception error) {
             call.reject("Termux command service unavailable. Enable Allow external apps in Termux.", error);
         }
+    }
+
+    private File roohModelFile() {
+        File directory = new File(getContext().getFilesDir(), "rooh/models");
+        if (!directory.exists()) directory.mkdirs();
+        return new File(directory, "qwen2.5-3b-instruct-q4_k_m.gguf");
+    }
+
+    @PluginMethod
+    public void roohEngineStatus(PluginCall call) {
+        File model = roohModelFile();
+        JSObject result = new JSObject();
+        boolean loaded = false;
+        String version = "unavailable";
+        try { loaded = RoohNative.isLoaded(); version = RoohNative.version(); }
+        catch (Throwable error) { result.put("nativeError", error.getClass().getSimpleName()); }
+        result.put("engine", "llama.cpp-native-android");
+        result.put("version", version);
+        result.put("loaded", loaded);
+        result.put("modelPresent", model.isFile() && model.length() > 1500000000L);
+        result.put("modelBytes", model.isFile() ? model.length() : 0);
+        result.put("modelPath", model.getAbsolutePath());
+        result.put("runtime", "on-device-cpu");
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void downloadRoohModel(PluginCall call) {
+        call.setKeepAlive(true);
+        new Thread(() -> {
+            File target = roohModelFile();
+            File partial = new File(target.getParentFile(), target.getName() + ".part");
+            HttpURLConnection connection = null;
+            try {
+                if (target.isFile() && target.length() > 1500000000L) {
+                    JSObject ready = new JSObject(); ready.put("downloaded", true); ready.put("bytes", target.length());
+                    call.resolve(ready); return;
+                }
+                StatFs storage = new StatFs(target.getParentFile().getAbsolutePath());
+                if (storage.getAvailableBytes() < 2800000000L) throw new IOException("يلزم توفير 2.8 جيجابايت على الأقل من المساحة الحرة لتنزيل النموذج.");
+                URL url = new URL("https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf?download=true");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setInstanceFollowRedirects(true);
+                connection.setConnectTimeout(30000);
+                connection.setReadTimeout(120000);
+                connection.setRequestProperty("User-Agent", "SOULARAB-TECH-ROOH/1.0");
+                int status = connection.getResponseCode();
+                if (status < 200 || status >= 300) throw new IOException("تعذر تنزيل النموذج (HTTP " + status + ").");
+                long total = connection.getContentLengthLong();
+                try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(partial, false)) {
+                    byte[] buffer = new byte[1024 * 1024];
+                    long received = 0;
+                    int count;
+                    int lastPercent = -1;
+                    while ((count = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, count);
+                        received += count;
+                        int percent = total > 0 ? (int) Math.min(100, received * 100 / total) : -1;
+                        if (percent != lastPercent) {
+                            lastPercent = percent;
+                            JSObject progress = new JSObject();
+                            progress.put("receivedBytes", received); progress.put("totalBytes", total); progress.put("percent", percent);
+                            notifyListeners("roohModelDownloadProgress", progress);
+                        }
+                    }
+                    output.getFD().sync();
+                }
+                if (partial.length() < 1500000000L) throw new IOException("ملف النموذج أصغر من الحجم المتوقع؛ تم رفضه.");
+                if (target.exists() && !target.delete()) throw new IOException("تعذر استبدال ملف النموذج القديم.");
+                if (!partial.renameTo(target)) throw new IOException("تعذر تثبيت ملف النموذج بعد التنزيل.");
+                JSObject result = new JSObject(); result.put("downloaded", true); result.put("bytes", target.length());
+                call.resolve(result);
+            } catch (Exception error) {
+                partial.delete();
+                call.reject(error.getMessage() == null ? "فشل تنزيل نموذج روح." : error.getMessage(), error);
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }, "rooh-model-download").start();
+    }
+
+    @PluginMethod
+    public void loadRoohModel(PluginCall call) {
+        new Thread(() -> {
+            try {
+                File model = roohModelFile();
+                if (!model.isFile() || model.length() < 1500000000L) throw new IOException("ملف نموذج Qwen غير موجود أو غير مكتمل. نزّله أولاً.");
+                String error = RoohNative.loadModel(model.getAbsolutePath());
+                if (error != null && !error.isEmpty()) throw new IOException(error);
+                JSObject result = new JSObject(); result.put("loaded", true); result.put("version", RoohNative.version());
+                call.resolve(result);
+            } catch (Throwable error) {
+                call.reject(error.getMessage() == null ? "تعذر تحميل محرك روح المحلي." : error.getMessage(), error);
+            }
+        }, "rooh-model-load").start();
+    }
+
+    @PluginMethod
+    public void generateRooh(PluginCall call) {
+        String prompt = call.getString("prompt", "");
+        int maxTokens = call.getInt("maxTokens", 512);
+        if (prompt.trim().isEmpty() || prompt.length() > 50000) { call.reject("نص المحادثة فارغ أو طويل جداً."); return; }
+        call.setKeepAlive(true);
+        new Thread(() -> {
+            try {
+                String answer = RoohNative.generate(prompt, maxTokens);
+                if (answer == null || answer.trim().isEmpty()) throw new IOException("أعاد محرك روح استجابة فارغة.");
+                JSObject result = new JSObject(); result.put("content", answer); result.put("model", "qwen2.5-3b-instruct-q4_k_m"); result.put("provider", "llama.cpp-native-android");
+                call.resolve(result);
+            } catch (Throwable error) {
+                call.reject(error.getMessage() == null ? "فشل الاستدلال المحلي." : error.getMessage(), error);
+            }
+        }, "rooh-inference").start();
     }
 
     @PluginMethod
