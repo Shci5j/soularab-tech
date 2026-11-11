@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define ROOH_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "RoohEngine", __VA_ARGS__)
