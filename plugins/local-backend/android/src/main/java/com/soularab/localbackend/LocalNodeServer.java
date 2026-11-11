@@ -62,7 +62,7 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private void processNextTextTask() throws Exception {
-        if (!"B".equals(nodeId)) return;
+        if (!"B".equals(nodeId) || !RoohNative.isLoaded()) return;
         SQLiteDatabase db = helper.getWritableDatabase();
         Cursor cursor = db.query("node_tasks", new String[]{"id", "payload"}, "node_id=? AND status='queued' AND task_type IN ('assistant','agents','ai','text')",
             new String[]{nodeId}, null, null, "priority DESC, id ASC", "1");
@@ -98,55 +98,12 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private String executeRoohTextTask(String prompt) throws Exception {
-        HttpURLConnection modelsConnection = null;
-        String model;
-        try {
-            modelsConnection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/models").openConnection();
-            modelsConnection.setConnectTimeout(3000);
-            modelsConnection.setReadTimeout(5000);
-            if (modelsConnection.getResponseCode() < 200 || modelsConnection.getResponseCode() >= 300) throw new IOException("model_service_unavailable");
-            StringBuilder modelsText = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(modelsConnection.getInputStream(), "UTF-8"))) {
-                String line; while ((line = reader.readLine()) != null) modelsText.append(line);
-            }
-            JSONArray data = new JSONObject(modelsText.toString()).optJSONArray("data");
-            if (data == null || data.length() == 0) throw new IOException("no_local_model");
-            model = data.optJSONObject(0).optString("id", "");
-            if (model.isEmpty()) throw new IOException("model_id_missing");
-        } finally { if (modelsConnection != null) modelsConnection.disconnect(); }
-
-        JSONObject body = new JSONObject();
-        body.put("model", model);
-        body.put("temperature", 0.5);
-        body.put("stream", false);
-        JSONArray messages = new JSONArray();
-        messages.put(new JSONObject().put("role", "system").put("content", "أنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها."));
-        messages.put(new JSONObject().put("role", "user").put("content", prompt));
-        body.put("messages", messages);
-        HttpURLConnection connection = null;
-        try {
-            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/chat/completions").openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(90000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] bytes = body.toString().getBytes("UTF-8");
-            connection.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null || status < 200 || status >= 300) throw new IOException("local_llm_request_failed_" + status);
-            StringBuilder responseText = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
-                String line; while ((line = reader.readLine()) != null) responseText.append(line);
-            }
-            JSONArray choices = new JSONObject(responseText.toString()).optJSONArray("choices");
-            JSONObject message = choices != null && choices.length() > 0 ? choices.optJSONObject(0).optJSONObject("message") : null;
-            String content = message == null ? "" : message.optString("content", "").trim();
-            if (content.isEmpty()) throw new IOException("empty_local_llm_response");
-            return content;
-        } finally { if (connection != null) connection.disconnect(); }
+        if (!RoohNative.isLoaded()) throw new IOException("rooh_native_engine_not_loaded");
+        String formatted = "<|im_start|>system\nأنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها.<|im_end|>\n"
+            + "<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        String answer = RoohNative.generate(formatted, 512);
+        if (answer == null || answer.trim().isEmpty()) throw new IOException("empty_native_model_response");
+        return answer.trim();
     }
 
     @Override
@@ -185,7 +142,8 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
             result.put("worker", "B".equals(nodeId) ? (workerActive.get() ? "running" : "stopped") : "not_configured");
-            result.put("taskExecution", "B".equals(nodeId) ? "local_llama_cpp_text" : "engine_dependent");
+            result.put("taskExecution", "B".equals(nodeId) ? "native_llama_cpp_text" : "engine_dependent");
+            result.put("roohEngineLoaded", "B".equals(nodeId) || "A".equals(nodeId) ? safeRoohLoaded() : false);
             return json(Response.Status.OK, result);
         }
         if (("A".equals(nodeId) || "B".equals(nodeId)) && "/models".equals(path) && Method.GET.equals(session.getMethod())) {
@@ -318,119 +276,56 @@ final class LocalNodeServer extends NanoHTTPD {
         return json(Response.Status.NOT_FOUND, error("route_not_found"));
     }
 
+    private boolean safeRoohLoaded() {
+        try { return RoohNative.isLoaded(); } catch (Throwable ignored) { return false; }
+    }
+
     private Response listRoohModels() {
-        HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/models").openConnection();
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(3000);
-            connection.setReadTimeout(5000);
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null || status < 200 || status >= 300) {
-                return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_engine_unavailable_start_termux_engine"));
-            }
-            StringBuilder text = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
-                String line;
-                while ((line = reader.readLine()) != null) text.append(line);
-            }
-            JSONObject upstream = new JSONObject(text.toString());
-            JSONArray data = upstream.optJSONArray("data");
+            boolean loaded = RoohNative.isLoaded();
             JSONArray items = new JSONArray();
-            if (data != null) {
-                for (int i = 0; i < data.length(); i++) {
-                    JSONObject model = data.optJSONObject(i);
-                    String id = model == null ? "" : model.optString("id", "").trim();
-                    if (!id.isEmpty()) {
-                        JSONObject item = new JSONObject();
-                        item.put("name", id);
-                        items.put(item);
-                    }
-                }
-            }
+            if (loaded) items.put(new JSONObject().put("name", "qwen2.5-3b-instruct-q4_k_m"));
             JSONObject result = new JSONObject();
-            result.put("connected", items.length() > 0);
-            result.put("provider", "llama_cpp");
+            result.put("connected", loaded);
+            result.put("provider", "llama.cpp-native-android");
+            result.put("engine", "on-device");
             result.put("items", items);
             return json(Response.Status.OK, result);
-        } catch (Exception exception) {
-            return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_engine_unavailable_start_termux_engine"));
-        } finally {
-            if (connection != null) connection.disconnect();
+        } catch (Throwable error) {
+            return json(Response.Status.OK, new JSONObject().put("connected", false).put("provider", "llama.cpp-native-android").put("items", new JSONArray()));
         }
     }
 
     private Response chatWithRooh(JSONObject request) {
-        String model = request.optString("model", "").trim();
+        String model = request.optString("model", "qwen2.5-3b-instruct-q4_k_m").trim();
         JSONArray incoming = request.optJSONArray("messages");
-        if (model.isEmpty() || incoming == null || incoming.length() < 1 || incoming.length() > 30) {
-            return json(Response.Status.BAD_REQUEST, error("model_and_messages_required"));
-        }
-        HttpURLConnection connection = null;
+        if (incoming == null || incoming.length() < 1 || incoming.length() > 30) return json(Response.Status.BAD_REQUEST, error("model_and_messages_required"));
         try {
-            JSONObject body = new JSONObject();
-            body.put("model", model);
-            body.put("temperature", Math.max(0, Math.min(2, request.optDouble("temperature", 0.7))));
-            body.put("stream", false);
-            JSONArray messages = new JSONArray();
-            JSONObject system = new JSONObject();
-            system.put("role", "system");
-            system.put("content", "أنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعي تنفيذ إجراء قبل تأكيد نجاحه، ولا تنفذ تغييرات أو إجراءات خارجية دون موافقة صريحة، ولا تحاول الوصول إلى الخزنة.");
-            messages.put(system);
+            if (!RoohNative.isLoaded()) return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_native_engine_not_loaded_download_and_load_model"));
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("<|im_start|>system\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعي تنفيذ إجراء قبل تأكيد نجاحه، ولا تنفذ تغييرات أو إجراءات خارجية دون موافقة صريحة.\n<|im_end|>\n");
             for (int i = 0; i < incoming.length(); i++) {
                 JSONObject item = incoming.optJSONObject(i);
                 if (item == null) return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
                 String role = item.optString("role", "");
                 String content = item.optString("content", "");
-                if (!("user".equals(role) || "assistant".equals(role)) || content.trim().isEmpty() || content.length() > 12000) {
+                if (!("user".equals(role) || "assistant".equals(role)) || content.trim().isEmpty() || content.length() > 12000)
                     return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
-                }
-                JSONObject safe = new JSONObject();
-                safe.put("role", role);
-                safe.put("content", content);
-                messages.put(safe);
+                prompt.append("<|im_start|>").append(role).append("\n").append(content).append("<|im_end|>\n");
             }
-            body.put("messages", messages);
-
-            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/chat/completions").openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(90000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] bytes = body.toString().getBytes("UTF-8");
-            connection.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(bytes);
-            }
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null) return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_response"));
-            StringBuilder text = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
-                String line;
-                while ((line = reader.readLine()) != null) text.append(line);
-            }
-            if (status < 200 || status >= 300) {
-                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_request_failed"));
-            }
-            JSONObject upstream = new JSONObject(text.toString());
-            JSONArray choices = upstream.optJSONArray("choices");
-            JSONObject message = choices != null && choices.length() > 0 ? choices.optJSONObject(0).optJSONObject("message") : null;
-            if (message == null || message.optString("content", "").trim().isEmpty()) {
-                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_message"));
-            }
+            prompt.append("<|im_start|>assistant\n");
+            String answer = RoohNative.generate(prompt.toString(), Math.max(64, Math.min(1024, request.optInt("max_tokens", 512))));
+            if (answer == null || answer.trim().isEmpty()) return json(Response.Status.INTERNAL_ERROR, error("rooh_native_engine_empty_response"));
+            JSONObject message = new JSONObject().put("role", "assistant").put("content", answer.trim());
             JSONObject result = new JSONObject();
-            result.put("provider", "llama_cpp");
+            result.put("provider", "llama.cpp-native-android");
             result.put("model", model);
             result.put("message", message);
             result.put("done", true);
+            result.put("offline", true);
             return json(Response.Status.OK, result);
-        } catch (Exception exception) {
-            return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_unavailable"));
-        } finally {
-            if (connection != null) connection.disconnect();
+        } catch (Throwable exception) {
+            return json(Response.Status.INTERNAL_ERROR, error("rooh_native_inference_failed_" + exception.getClass().getSimpleName()));
         }
     }
 
