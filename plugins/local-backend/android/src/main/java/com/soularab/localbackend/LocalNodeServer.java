@@ -130,7 +130,9 @@ final class LocalNodeServer extends NanoHTTPD {
             try { taskId = Long.parseLong(parts[2]); }
             catch (NumberFormatException ex) { return json(Response.Status.BAD_REQUEST, error("invalid_task_id")); }
             SQLiteDatabase db = helper.getWritableDatabase();
-            Cursor current = db.query("node_tasks", new String[]{"status"}, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
+            Cursor current = "E".equals(nodeId)
+                ? db.query("node_tasks", new String[]{"status"}, "id=?", new String[]{String.valueOf(taskId)}, null, null, null, "1")
+                : db.query("node_tasks", new String[]{"status"}, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
             String currentStatus;
             try {
                 if (!current.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
@@ -155,7 +157,9 @@ final class LocalNodeServer extends NanoHTTPD {
                 return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
             }
             values.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            int changed = db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
+            int changed = "E".equals(nodeId)
+                ? db.update("node_tasks", values, "id=?", new String[]{String.valueOf(taskId)})
+                : db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
             if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
             return getTask(String.valueOf(taskId));
         }
@@ -320,7 +324,9 @@ final class LocalNodeServer extends NanoHTTPD {
 
     private JSONArray listTasks() throws JSONException {
         JSONArray result = new JSONArray();
-        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "priority DESC, id DESC", "100");
+        Cursor cursor = "E".equals(nodeId)
+            ? helper.getReadableDatabase().query("node_tasks", null, null, null, null, null, "priority DESC, id DESC", "200")
+            : helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "priority DESC, id DESC", "100");
         try {
             while (cursor.moveToNext()) result.put(taskFromCursor(cursor));
         } finally { cursor.close(); }
@@ -330,7 +336,9 @@ final class LocalNodeServer extends NanoHTTPD {
     private Response getTask(String rawId) throws JSONException {
         long id;
         try { id = Long.parseLong(rawId); } catch (NumberFormatException ex) { return json(Response.Status.BAD_REQUEST, error("invalid_task_id")); }
-        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "id=? AND node_id=?", new String[]{String.valueOf(id), nodeId}, null, null, null, "1");
+        Cursor cursor = "E".equals(nodeId)
+            ? helper.getReadableDatabase().query("node_tasks", null, "id=?", new String[]{String.valueOf(id)}, null, null, null, "1")
+            : helper.getReadableDatabase().query("node_tasks", null, "id=? AND node_id=?", new String[]{String.valueOf(id), nodeId}, null, null, null, "1");
         try {
             if (!cursor.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
             return json(Response.Status.OK, taskFromCursor(cursor));
