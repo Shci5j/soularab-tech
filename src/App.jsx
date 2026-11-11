@@ -428,9 +428,34 @@ export default function App() {
 
   async function request(path, options = {}) {
     if (Capacitor.isNativePlatform()) {
+      const method = String(options.method || 'GET').toUpperCase();
+      const nativeBody = options.body ? JSON.parse(options.body) : {};
+      if (path === '/api/health') return { ...(await getEmbeddedNodeHealth('A')), version: 'embedded-android', mode: 'local' };
+      if (path === '/api/assistant/status' || path === '/api/assistant/models') return await localNodeRequest('A', '/models');
+      if (path === '/api/assistant/chat' && method === 'POST') return await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(nativeBody) });
+      if (path === '/api/tasks' && method === 'GET') return { items: await localNodeRequest('E', '/tasks') };
+      if (path === '/api/tasks' && method === 'POST') {
+        const queued = await localNodeRequest('E', '/tasks', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
+        return { id: queued.id, status: queued.status, execution: 'queued_on_device' };
+      }
+      if (path === '/api/engines/status' || path === '/api/mesh/status' || path === '/api/mesh/discover' || path === '/api/mesh/nodes/') {
+        const ids = ['A', 'B', 'C', 'D', 'E'];
+        const nodes = await Promise.all(ids.map(async (id) => {
+          try { return await getEmbeddedNodeHealth(id); }
+          catch { return { node: id, status: 'offline' }; }
+        }));
+        if (path === '/api/engines/status') return { providers: Object.fromEntries(nodes.map((node) => [node.node, { connected: node.status === 'online', provider: 'embedded-android' }])) };
+        return { connected: nodes.some((node) => node.status === 'online'), nodes };
+      }
+      if (path === '/api/approvals') return { items: [] };
+      if (path.startsWith('/api/audit')) return { items: [] };
+      if (path === '/api/security/status') return { mode: 'embedded-local', authentication: 'device-local', node: await getEmbeddedNodeHealth('E') };
+      if (path === '/api/media/image/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('C') };
+      if (path === '/api/media/speech/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('D') };
+      if (path === '/api/media/image/models') return { models: [] };
       throw new Error(language === 'ar'
-        ? 'هذا القسم لم يُربط بعد بواجهات الخوادم الداخلية. لن يتم إرسال الطلب إلى صفحة الويب بالخطأ.'
-        : 'This section is not connected to the embedded node APIs yet. The request was blocked instead of being sent to the web page.');
+        ? 'هذا الإجراء يحتاج محركاً محلياً غير مثبت أو واجهة تنفيذ لم تُفعّل بعد: ' + path
+        : 'This action requires a local engine or execution API that is not installed yet: ' + path);
     }
     const response = await fetch(safeApiBase(apiBaseUrl) + path, {
       ...options,
