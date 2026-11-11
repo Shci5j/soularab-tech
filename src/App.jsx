@@ -678,7 +678,7 @@ export default function App() {
     try {
       let result;
       if (Capacitor.isNativePlatform()) {
-        const prompt = '<|im_start|>system\\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعِ تنفيذ إجراء قبل تأكيد نجاحه.\\n<|im_end|>\\n' + next.map((message) => '<|im_start|>' + message.role + '\\n' + message.content + '<|im_end|>\\n').join('') + '<|im_start|>assistant\\n';
+        const prompt = '<|im_start|>system\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعِ تنفيذ إجراء قبل تأكيد نجاحه.\n<|im_end|>\n' + next.map((message) => '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n').join('') + '<|im_start|>assistant\n';
         const generated = await LocalBackend.generateRooh({ prompt, maxTokens: 512 });
         result = { message: { role: 'assistant', content: generated.content } };
       } else {
@@ -1303,7 +1303,7 @@ export default function App() {
         'ضوابط القسم: ' + config.prompt,
         'حالة المحرك: ' + config.engineStatus,
         'الحالة: خطة للمراجعة فقط؛ لا يبدأ التنفيذ تلقائياً بعد الموافقة.',
-      ].join('\\n');
+      ].join('\n');
       const legacyDepartment = ({ store: 'store', video: 'video', graphics: 'graphics', documents: 'documents', automation: 'automation' })[active] || active;
       const result = await request('/api/agent-plans', {
         method: 'POST',
