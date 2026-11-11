@@ -449,11 +449,18 @@ export default function App() {
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
     try {
-      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
-      setModels(result.items || []);
-      setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
+      const native = Capacitor.isNativePlatform();
+      const [status, result] = native
+        ? await Promise.all([
+            localNodeRequest('A', '/health'),
+            localNodeRequest('A', '/models'),
+          ])
+        : await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
+      const items = Array.isArray(result.items) ? result.items : [];
+      setAssistantStatus({ connected: native ? status.status === 'online' : Boolean(status.connected), loading: false, version: native ? 'llama.cpp / local' : status.version });
+      setModels(items);
+      setSelectedModel((current) => items.some((item) => item.name === current) ? current : (items.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : items[0]?.name || ''));
+      if (!items.length) setNotice(language === 'ar' ? 'محرك روح المحلي متصل، لكن لم يُعثر على نموذج محمّل.' : 'The local Rooh engine is reachable, but no model is loaded.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
       setModels([]);
@@ -1322,7 +1329,7 @@ export default function App() {
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
           <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'محرك روح متصل' : 'Rooh engine connected') : (language === 'ar' ? 'محرك روح غير متصل' : 'Rooh engine disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
           <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
@@ -1337,7 +1344,7 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل محرك روح وحمّل نموذجاً محلياً أولاً' : 'Start the local Rooh engine and load a model first')} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
           <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
