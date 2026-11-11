@@ -435,8 +435,8 @@ export default function App() {
       if (path === '/api/assistant/chat' && method === 'POST') return await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(nativeBody) });
       if (path === '/api/tasks' && method === 'GET') return { items: await localNodeRequest('E', '/tasks') };
       if (path === '/api/tasks' && method === 'POST') {
-        const queued = await localNodeRequest('E', '/tasks', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
-        return { id: queued.id, status: queued.status, execution: 'queued_on_device' };
+        const queued = await localNodeRequest('E', '/dispatch', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
+        return { id: queued.taskId, status: queued.status, assignedNode: queued.assignedNode, execution: 'queued_on_device' };
       }
       const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
       if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
