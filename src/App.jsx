@@ -390,6 +390,17 @@ export default function App() {
     setLoginToken('');
   }
 
+  async function controlEmbeddedNode(id, action) {
+    if (!Capacitor.isNativePlatform() || !LocalBackend.controlNode) return;
+    try {
+      const status = await LocalBackend.controlNode({ id, action });
+      setEmbeddedBackend(status);
+      setNotice(language === 'ar' ? (action === 'start' ? 'تم تشغيل الخادم ' : 'تم إيقاف الخادم ') + id : 'Node ' + id + (action === 'start' ? ' started.' : ' stopped.'));
+    } catch (error) {
+      setNotice(error.message || (language === 'ar' ? 'تعذر التحكم بالخادم.' : 'Could not control the node.'));
+    }
+  }
+
   async function refresh() {
     try {
       if (Capacitor.isNativePlatform()) {
@@ -1265,7 +1276,7 @@ export default function App() {
             <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
           </div>
           {Capacitor.isNativePlatform() && <div className="engine-status-grid embedded-node-grid">
-            {embeddedBackend.nodes.map((node) => <article className="engine-status-card" key={node.id}><div><strong>{language === 'ar' ? 'الخادم ' + node.id : 'Server ' + node.id}</strong><small>{node.name}</small><small>127.0.0.1:{node.port}</small></div><span className={node.running ? 'good' : 'warn'}>{node.running ? (language === 'ar' ? 'يعمل' : 'Running') : (language === 'ar' ? 'متوقف' : 'Stopped')}</span></article>)}
+            {embeddedBackend.nodes.map((node) => <article className="engine-status-card node-control-card" key={node.id}><div><strong>{language === 'ar' ? 'الخادم ' + node.id : 'Server ' + node.id}</strong><small>{node.name}</small><small>127.0.0.1:{node.port}</small><small>{node.running ? (language === 'ar' ? 'نشط — يستجيب لفحص الحالة' : 'Active — health check responding') : (language === 'ar' ? 'متوقف — لا يستقبل طلبات' : 'Stopped — not accepting requests')}</small><div className="node-control-actions">{node.running ? <button type="button" className="button danger" onClick={() => controlEmbeddedNode(node.id,'stop')}>{language === 'ar' ? 'إيقاف الخادم' : 'Stop server'}</button> : <button type="button" className="button primary" onClick={() => controlEmbeddedNode(node.id,'start')}>{language === 'ar' ? 'تشغيل الخادم' : 'Start server'}</button>}<button type="button" className="button secondary" onClick={() => refresh()}>{language === 'ar' ? 'فحص الحالة' : 'Check status'}</button></div></div><span className={node.running ? 'good' : 'warn'}>{node.running ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'متوقف' : 'Stopped')}</span></article>)}
           </div>}
           <div className="engine-status-grid">
             {[
