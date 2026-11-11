@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+      - "feature/**"
   workflow_dispatch:
 
 permissions:
@@ -13,7 +18,7 @@ jobs:
   android:
     name: Build installable Android debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -29,6 +34,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install Android NDK and CMake
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -x "$SDKMANAGER"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "ndk;27.2.12479018" "cmake;3.22.1"
+
       - name: Install dependencies
         run: npm install
 
@@ -38,8 +52,11 @@ jobs:
       - name: Build web application
         run: npm run build
 
-      - name: Generate Android native project
-        run: npx cap add android
+      - name: Generate Android native project when missing
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
 
       - name: Sync Capacitor assets
         run: npx cap sync android

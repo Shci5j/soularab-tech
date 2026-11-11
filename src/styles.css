@@ -220,3 +220,43 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .skip-link{position:fixed;z-index:2000;top:-64px;left:12px;padding:11px 16px;border:1px solid var(--gold);border-radius:9px;background:var(--surface);color:var(--text);font-weight:700;box-shadow:var(--shadow);transition:top .15s ease}
 .skip-link:focus{top:12px}
 #main-content:focus{outline:none}
+
+/* Termux command bridge */
+.terminal-page{max-width:1100px;margin:0 auto}
+.terminal-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0}
+.terminal-presets>strong{width:100%;font-size:12px;color:var(--gold)}
+.terminal-presets button{display:grid;gap:4px;text-align:left}
+.terminal-presets button code{font-size:11px;color:var(--gold)}
+.terminal-presets button small{font-size:9px;color:var(--muted)}
+.terminal-command-form{display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:12px;background:#090b0d}
+.terminal-command-form label{display:grid;gap:8px;color:var(--muted);font-size:11px}
+.terminal-command-form textarea{font-family:ui-monospace,monospace;direction:ltr;text-align:left;background:#050607;color:#d6e7d8;border-color:#303a32}
+.terminal-command-form .button{justify-self:start}
+.terminal-history{margin-top:20px}
+.terminal-history article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border-bottom:1px solid var(--line)}
+.terminal-history code{direction:ltr;text-align:left;color:var(--gold);overflow-wrap:anywhere}
+.terminal-history small{color:var(--muted);font-size:9px;white-space:nowrap}
+@media(max-width:600px){.terminal-presets button{flex:1;min-width:calc(50% - 8px)}.terminal-history article{align-items:flex-start;flex-direction:column}}
+
+.node-control-card{align-items:flex-start}
+.node-control-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.node-control-actions .button{font-size:10px;padding:7px 10px}
+
+.pin-setup{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;align-items:end}
+.pin-setup label{display:grid;gap:6px;font-size:11px;color:var(--muted)}
+.pin-setup button{grid-column:1/-1;justify-self:start}
+.app-lock-backdrop{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:18px;background:#050607f2;backdrop-filter:blur(18px)}
+.app-lock-card{width:min(100%,390px);display:grid;gap:15px;padding:30px;border:1px solid var(--gold);border-radius:18px;background:var(--surface);box-shadow:var(--shadow);text-align:center}
+.app-lock-card .auth-mark{margin:auto}
+.app-lock-card h2{margin:0;font-size:22px}
+.app-lock-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.8}
+.app-lock-card input{direction:ltr;text-align:center;letter-spacing:12px;font-size:22px;padding:14px}
+@media(max-width:600px){.pin-setup{grid-template-columns:1fr}.pin-setup button{grid-column:auto}}
+
+.rooh-engine-setup{display:grid;gap:14px;margin-bottom:16px;padding:18px;border:1px solid var(--gold);border-radius:14px;background:var(--surface)}
+.rooh-engine-setup h3{margin:0 0 7px;font-size:16px}
+.rooh-engine-setup p{margin:0;line-height:1.8}
+.rooh-engine-setup .button{justify-self:start}
+.rooh-progress{display:grid;gap:6px}
+.rooh-progress progress{width:100%;height:10px;accent-color:var(--gold)}
+.rooh-progress small{color:var(--muted);font-variant-numeric:tabular-nums}

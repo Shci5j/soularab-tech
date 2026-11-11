@@ -31,7 +31,7 @@ API_TOKEN = os.getenv("SOULARAB_API_TOKEN", "").strip()
 APP_ENV = os.getenv("SOULARAB_ENV", "local").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
-ROOH_PROVIDER = os.getenv("ROOH_PROVIDER", "ollama").strip().lower()
+ROOH_PROVIDER = os.getenv("ROOH_PROVIDER", "llama_cpp").strip().lower()
 LLAMA_CPP_BASE_URL = os.getenv("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8081").rstrip("/")
 ALLOW_DOCKER_OLLAMA = os.getenv("SOULARAB_ALLOW_DOCKER_OLLAMA", "").lower() == "true"
 ALLOW_DOCKER_MEDIA = os.getenv("SOULARAB_ALLOW_DOCKER_MEDIA", "").lower() == "true"

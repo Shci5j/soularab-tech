@@ -18,12 +18,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class LocalNodeServer extends NanoHTTPD {
     final String nodeId;
     final String title;
     private final LocalBackendDatabase helper;
     private final String accessToken;
+    private final AtomicBoolean workerActive = new AtomicBoolean(false);
+    private Thread workerThread;
 
     LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken) {
         super("127.0.0.1", port);
@@ -31,6 +34,76 @@ final class LocalNodeServer extends NanoHTTPD {
         this.title = title;
         this.helper = helper;
         this.accessToken = accessToken;
+    }
+
+    void startWorker() {
+        if (!"B".equals(nodeId) || !workerActive.compareAndSet(false, true)) return;
+        workerThread = new Thread(() -> {
+            while (workerActive.get()) {
+                try {
+                    processNextTextTask();
+                    Thread.sleep(1200);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception ignored) {
+                    try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }, "soularab-node-" + nodeId + "-worker");
+        workerThread.setDaemon(true);
+        workerThread.start();
+    }
+
+    void stopWorker() {
+        workerActive.set(false);
+        if (workerThread != null) workerThread.interrupt();
+        workerThread = null;
+    }
+
+    private void processNextTextTask() throws Exception {
+        if (!"B".equals(nodeId) || !RoohNative.isLoaded()) return;
+        SQLiteDatabase db = helper.getWritableDatabase();
+        Cursor cursor = db.query("node_tasks", new String[]{"id", "payload"}, "node_id=? AND status='queued' AND task_type IN ('assistant','agents','ai','text')",
+            new String[]{nodeId}, null, null, "priority DESC, id ASC", "1");
+        long taskId;
+        JSONObject payload;
+        try {
+            if (!cursor.moveToFirst()) return;
+            taskId = cursor.getLong(0);
+            payload = new JSONObject(cursor.getString(1));
+        } finally { cursor.close(); }
+        ContentValues claim = new ContentValues();
+        claim.put("status", "running");
+        claim.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+        if (db.update("node_tasks", claim, "id=? AND node_id=? AND status='queued'", new String[]{String.valueOf(taskId), nodeId}) != 1) return;
+
+        String prompt = payload.optString("description", "").trim();
+        if (prompt.isEmpty()) prompt = payload.optString("details", "").trim();
+        if (prompt.isEmpty()) prompt = payload.optString("title", "اكتب خطة عمل واضحة ومختصرة.");
+        try {
+            String answer = executeRoohTextTask(prompt);
+            ContentValues completed = new ContentValues();
+            completed.put("status", "completed");
+            completed.put("result", answer);
+            completed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
+        } catch (Exception error) {
+            ContentValues failed = new ContentValues();
+            failed.put("status", "failed");
+            failed.put("result", "تعذر تنفيذ المهمة عبر محرك روح المحلي: " + error.getClass().getSimpleName());
+            failed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
+        }
+    }
+
+    private String executeRoohTextTask(String prompt) throws Exception {
+        if (!RoohNative.isLoaded()) throw new IOException("rooh_native_engine_not_loaded");
+        String formatted = "<|im_start|>system\nأنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها.<|im_end|>\n"
+            + "<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        String answer = RoohNative.generate(formatted, 512);
+        if (answer == null || answer.trim().isEmpty()) throw new IOException("empty_native_model_response");
+        return answer.trim();
     }
 
     @Override
@@ -68,9 +141,15 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("title", title);
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
+            result.put("worker", "B".equals(nodeId) ? (workerActive.get() ? "running" : "stopped") : "not_configured");
+            result.put("taskExecution", "B".equals(nodeId) ? "native_llama_cpp_text" : "engine_dependent");
+            result.put("roohEngineLoaded", "B".equals(nodeId) || "A".equals(nodeId) ? safeRoohLoaded() : false);
             return json(Response.Status.OK, result);
         }
-        if ("A".equals(nodeId) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
+        if (("A".equals(nodeId) || "B".equals(nodeId)) && "/models".equals(path) && Method.GET.equals(session.getMethod())) {
+            return listRoohModels();
+        }
+        if (("A".equals(nodeId) || "B".equals(nodeId)) && "/chat".equals(path) && Method.POST.equals(session.getMethod())) {
             return chatWithRooh(readBody(session));
         }
         if ("/metrics".equals(path) && Method.GET.equals(session.getMethod())) {
@@ -88,7 +167,7 @@ final class LocalNodeServer extends NanoHTTPD {
         if ("/nodes".equals(path) && "E".equals(nodeId) && Method.GET.equals(session.getMethod())) {
             JSONArray nodes = new JSONArray();
             String[] ids = {"A", "B", "C", "D", "E"};
-            String[] names = {"AI & Text", "Image & Design", "Audio & Video", "Development", "Recovery & Scheduler"};
+            String[] names = {"ROOH Orchestrator", "AI & Text", "Image & Design", "Audio & Video", "Development & Recovery"};
             int[] ports = {3101, 3102, 3103, 3104, 3105};
             for (int i = 0; i < ids.length; i++) {
                 JSONObject item = new JSONObject();
@@ -118,6 +197,47 @@ final class LocalNodeServer extends NanoHTTPD {
         }
         if ("/tasks".equals(path) && Method.GET.equals(session.getMethod())) {
             return json(Response.Status.OK, listTasks());
+        }
+        if (path.startsWith("/tasks/") && Method.POST.equals(session.getMethod())) {
+            String[] parts = path.split("/");
+            if (parts.length != 4) return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
+            String action = parts[3];
+            long taskId;
+            try { taskId = Long.parseLong(parts[2]); }
+            catch (NumberFormatException ex) { return json(Response.Status.BAD_REQUEST, error("invalid_task_id")); }
+            SQLiteDatabase db = helper.getWritableDatabase();
+            Cursor current = "E".equals(nodeId)
+                ? db.query("node_tasks", new String[]{"status"}, "id=?", new String[]{String.valueOf(taskId)}, null, null, null, "1")
+                : db.query("node_tasks", new String[]{"status"}, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
+            String currentStatus;
+            try {
+                if (!current.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
+                currentStatus = current.getString(0);
+            } finally { current.close(); }
+            ContentValues values = new ContentValues();
+            if ("pause".equals(action)) {
+                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused_without_a_running_worker"));
+                values.put("status", "paused");
+            } else if ("resume".equals(action)) {
+                if (!"paused".equals(currentStatus)) return json(Response.Status.CONFLICT, error("task_is_not_paused"));
+                values.put("status", "queued");
+            } else if ("cancel".equals(action)) {
+                if (!("queued".equals(currentStatus) || "paused".equals(currentStatus))) return json(Response.Status.CONFLICT, error("running_task_cannot_be_cancelled_without_worker_support"));
+                values.put("status", "cancelled");
+            } else if ("priority".equals(action)) {
+                JSONObject body = readBody(session);
+                int priority = body.optInt("priority", 0);
+                if (priority < 0 || priority > 10) return json(Response.Status.BAD_REQUEST, error("priority_must_be_between_0_and_10"));
+                values.put("priority", priority);
+            } else {
+                return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
+            }
+            values.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            int changed = "E".equals(nodeId)
+                ? db.update("node_tasks", values, "id=?", new String[]{String.valueOf(taskId)})
+                : db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
+            if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+            return getTask(String.valueOf(taskId));
         }
         if (path.startsWith("/tasks/") && Method.GET.equals(session.getMethod())) {
             String id = path.substring("/tasks/".length());
@@ -156,76 +276,56 @@ final class LocalNodeServer extends NanoHTTPD {
         return json(Response.Status.NOT_FOUND, error("route_not_found"));
     }
 
-    private Response chatWithRooh(JSONObject request) {
-        String model = request.optString("model", "").trim();
-        JSONArray incoming = request.optJSONArray("messages");
-        if (model.isEmpty() || incoming == null || incoming.length() < 1 || incoming.length() > 30) {
-            return json(Response.Status.BAD_REQUEST, error("model_and_messages_required"));
-        }
-        HttpURLConnection connection = null;
+    private boolean safeRoohLoaded() {
+        try { return RoohNative.isLoaded(); } catch (Throwable ignored) { return false; }
+    }
+
+    private Response listRoohModels() {
         try {
-            JSONObject body = new JSONObject();
-            body.put("model", model);
-            body.put("temperature", Math.max(0, Math.min(2, request.optDouble("temperature", 0.7))));
-            body.put("stream", false);
-            JSONArray messages = new JSONArray();
-            JSONObject system = new JSONObject();
-            system.put("role", "system");
-            system.put("content", "أنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعي تنفيذ إجراء قبل تأكيد نجاحه، ولا تنفذ تغييرات أو إجراءات خارجية دون موافقة صريحة، ولا تحاول الوصول إلى الخزنة.");
-            messages.put(system);
+            boolean loaded = RoohNative.isLoaded();
+            JSONArray items = new JSONArray();
+            if (loaded) items.put(new JSONObject().put("name", "qwen2.5-3b-instruct-q4_k_m"));
+            JSONObject result = new JSONObject();
+            result.put("connected", loaded);
+            result.put("provider", "llama.cpp-native-android");
+            result.put("engine", "on-device");
+            result.put("items", items);
+            return json(Response.Status.OK, result);
+        } catch (Throwable error) {
+            return json(Response.Status.OK, error("rooh_native_engine_unavailable"));
+        }
+    }
+
+    private Response chatWithRooh(JSONObject request) {
+        String model = request.optString("model", "qwen2.5-3b-instruct-q4_k_m").trim();
+        JSONArray incoming = request.optJSONArray("messages");
+        if (incoming == null || incoming.length() < 1 || incoming.length() > 30) return json(Response.Status.BAD_REQUEST, error("model_and_messages_required"));
+        try {
+            if (!RoohNative.isLoaded()) return json(Response.Status.SERVICE_UNAVAILABLE, error("rooh_native_engine_not_loaded_download_and_load_model"));
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("<|im_start|>system\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعي تنفيذ إجراء قبل تأكيد نجاحه، ولا تنفذ تغييرات أو إجراءات خارجية دون موافقة صريحة.\n<|im_end|>\n");
             for (int i = 0; i < incoming.length(); i++) {
                 JSONObject item = incoming.optJSONObject(i);
                 if (item == null) return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
                 String role = item.optString("role", "");
                 String content = item.optString("content", "");
-                if (!("user".equals(role) || "assistant".equals(role)) || content.trim().isEmpty() || content.length() > 12000) {
+                if (!("user".equals(role) || "assistant".equals(role)) || content.trim().isEmpty() || content.length() > 12000)
                     return json(Response.Status.BAD_REQUEST, error("invalid_chat_message"));
-                }
-                JSONObject safe = new JSONObject();
-                safe.put("role", role);
-                safe.put("content", content);
-                messages.put(safe);
+                prompt.append("<|im_start|>").append(role).append("\n").append(content).append("<|im_end|>\n");
             }
-            body.put("messages", messages);
-
-            connection = (HttpURLConnection) new URL("http://localhost:8081/v1/chat/completions").openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(90000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] bytes = body.toString().getBytes("UTF-8");
-            connection.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(bytes);
-            }
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null) return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_response"));
-            StringBuilder text = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
-                String line;
-                while ((line = reader.readLine()) != null) text.append(line);
-            }
-            if (status < 200 || status >= 300) {
-                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_request_failed"));
-            }
-            JSONObject upstream = new JSONObject(text.toString());
-            JSONArray choices = upstream.optJSONArray("choices");
-            JSONObject message = choices != null && choices.length() > 0 ? choices.optJSONObject(0).optJSONObject("message") : null;
-            if (message == null || message.optString("content", "").trim().isEmpty()) {
-                return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_empty_message"));
-            }
+            prompt.append("<|im_start|>assistant\n");
+            String answer = RoohNative.generate(prompt.toString(), Math.max(64, Math.min(1024, request.optInt("max_tokens", 512))));
+            if (answer == null || answer.trim().isEmpty()) return json(Response.Status.INTERNAL_ERROR, error("rooh_native_engine_empty_response"));
+            JSONObject message = new JSONObject().put("role", "assistant").put("content", answer.trim());
             JSONObject result = new JSONObject();
-            result.put("provider", "llama_cpp");
+            result.put("provider", "llama.cpp-native-android");
             result.put("model", model);
             result.put("message", message);
             result.put("done", true);
+            result.put("offline", true);
             return json(Response.Status.OK, result);
-        } catch (Exception exception) {
-            return json(Response.Status.INTERNAL_ERROR, error("rooh_engine_unavailable"));
-        } finally {
-            if (connection != null) connection.disconnect();
+        } catch (Throwable exception) {
+            return json(Response.Status.INTERNAL_ERROR, error("rooh_native_inference_failed_" + exception.getClass().getSimpleName()));
         }
     }
 
@@ -237,7 +337,9 @@ final class LocalNodeServer extends NanoHTTPD {
 
     private JSONArray listTasks() throws JSONException {
         JSONArray result = new JSONArray();
-        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "id DESC", "100");
+        Cursor cursor = "E".equals(nodeId)
+            ? helper.getReadableDatabase().query("node_tasks", null, null, null, null, null, "priority DESC, id DESC", "200")
+            : helper.getReadableDatabase().query("node_tasks", null, "node_id=?", new String[]{nodeId}, null, null, "priority DESC, id DESC", "100");
         try {
             while (cursor.moveToNext()) result.put(taskFromCursor(cursor));
         } finally { cursor.close(); }
@@ -247,7 +349,9 @@ final class LocalNodeServer extends NanoHTTPD {
     private Response getTask(String rawId) throws JSONException {
         long id;
         try { id = Long.parseLong(rawId); } catch (NumberFormatException ex) { return json(Response.Status.BAD_REQUEST, error("invalid_task_id")); }
-        Cursor cursor = helper.getReadableDatabase().query("node_tasks", null, "id=? AND node_id=?", new String[]{String.valueOf(id), nodeId}, null, null, null, "1");
+        Cursor cursor = "E".equals(nodeId)
+            ? helper.getReadableDatabase().query("node_tasks", null, "id=?", new String[]{String.valueOf(id)}, null, null, null, "1")
+            : helper.getReadableDatabase().query("node_tasks", null, "id=? AND node_id=?", new String[]{String.valueOf(id), nodeId}, null, null, null, "1");
         try {
             if (!cursor.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
             return json(Response.Status.OK, taskFromCursor(cursor));
@@ -258,11 +362,20 @@ final class LocalNodeServer extends NanoHTTPD {
         JSONObject item = new JSONObject();
         item.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
         item.put("node", cursor.getString(cursor.getColumnIndexOrThrow("node_id")));
-        item.put("taskType", cursor.getString(cursor.getColumnIndexOrThrow("task_type")));
-        item.put("payload", new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload"))));
+        String taskType = cursor.getString(cursor.getColumnIndexOrThrow("task_type"));
+        JSONObject payload = new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")));
+        item.put("taskType", taskType);
+        item.put("payload", payload);
+        item.put("title", payload.optString("title", taskType));
+        item.put("description", payload.optString("description", ""));
+        item.put("department", payload.optString("department", nodeId));
+        item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
+        item.put("result", cursor.getString(cursor.getColumnIndexOrThrow("result")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
-        item.put("createdAt", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
-        item.put("updatedAt", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")));
+        String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
+        String updatedAt = cursor.getString(cursor.getColumnIndexOrThrow("updated_at"));
+        item.put("createdAt", createdAt); item.put("created_at", createdAt);
+        item.put("updatedAt", updatedAt); item.put("updated_at", updatedAt);
         return item;
     }
 
@@ -292,10 +405,28 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private String targetFor(String type) {
-        if (type.contains("image") || type.contains("design") || type.contains("logo")) return "B";
-        if (type.contains("audio") || type.contains("video") || type.contains("speech")) return "C";
-        if (type.contains("code") || type.contains("app") || type.contains("web") || type.contains("build")) return "D";
-        if (type.contains("backup") || type.contains("recovery") || type.contains("system")) return "E";
+        String normalized = type == null ? "" : type.trim().toLowerCase();
+        // Explicit department routing: every visible workspace section has a
+        // deterministic owner node; keyword matching is only a fallback.
+        switch (normalized) {
+            case "overview": case "hub": case "root": case "orchestrator": return "A";
+            case "assistant": case "agents": case "ai": case "text": return "B";
+            case "design": case "media": case "graphics": case "image": return "C";
+            case "video": case "audio": case "speech": return "D";
+            case "web": case "store": case "apps": case "documents": case "files":
+            case "automation": case "domains": case "security": case "terminal":
+            case "development": case "recovery": return "E";
+            default: break;
+        }
+        if (normalized.contains("orchestr") || normalized.contains("root") || normalized.contains("hub")) return "A";
+        if (normalized.contains("text") || normalized.contains("chat") || normalized.contains("language") || normalized.contains("agent")) return "B";
+        if (normalized.contains("image") || normalized.contains("design") || normalized.contains("logo") || normalized.contains("graphic")) return "C";
+        if (normalized.contains("audio") || normalized.contains("video") || normalized.contains("speech") || normalized.contains("transcrib")) return "D";
+        if (normalized.contains("code") || normalized.contains("app") || normalized.contains("web") || normalized.contains("build") ||
+            normalized.contains("store") || normalized.contains("document") || normalized.contains("automation") ||
+            normalized.contains("backup") || normalized.contains("recovery") || normalized.contains("system") ||
+            normalized.contains("file") || normalized.contains("domain") || normalized.contains("security") ||
+            normalized.contains("terminal")) return "E";
         return "A";
     }
 
