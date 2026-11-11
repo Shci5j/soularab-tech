@@ -234,7 +234,7 @@ final class LocalNodeServer extends NanoHTTPD {
             }
             body.put("messages", messages);
 
-            connection = (HttpURLConnection) new URL("http://localhost:8081/v1/chat/completions").openConnection();
+            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/chat/completions").openConnection();
             connection.setRequestMethod("POST");
             connection.setConnectTimeout(10000);
             connection.setReadTimeout(90000);
