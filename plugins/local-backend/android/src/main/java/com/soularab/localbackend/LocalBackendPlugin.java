@@ -140,7 +140,8 @@ public class LocalBackendPlugin extends Plugin {
                 connection.setRequestProperty("User-Agent", "SOULARAB-TECH-ROOH/1.0");
                 int status = connection.getResponseCode();
                 if (status < 200 || status >= 300) throw new IOException("تعذر تنزيل النموذج (HTTP " + status + ").");
-                long total = -1L;\n                try { total = Long.parseLong(connection.getHeaderField("Content-Length")); } catch (Exception ignored) {}
+                long total = -1L;
+                try { total = Long.parseLong(connection.getHeaderField("Content-Length")); } catch (Exception ignored) {}
                 try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(partial, false)) {
                     byte[] buffer = new byte[1024 * 1024];
                     long received = 0;
