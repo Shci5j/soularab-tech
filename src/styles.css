@@ -237,3 +237,7 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .terminal-history code{direction:ltr;text-align:left;color:var(--gold);overflow-wrap:anywhere}
 .terminal-history small{color:var(--muted);font-size:9px;white-space:nowrap}
 @media(max-width:600px){.terminal-presets button{flex:1;min-width:calc(50% - 8px)}.terminal-history article{align-items:flex-start;flex-direction:column}}
+
+.node-control-card{align-items:flex-start}
+.node-control-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.node-control-actions .button{font-size:10px;padding:7px 10px}
