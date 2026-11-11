@@ -453,6 +453,7 @@ export default function App() {
       }
       if (path === '/api/approvals') return { items: [] };
       if (path.startsWith('/api/audit')) return { items: [] };
+      if (path === '/api/executions/registry') return { items: [], policy: 'native_allowlist_pending' };
       if (path === '/api/security/status') return { mode: 'embedded-local', authentication: 'device-local', node: await getEmbeddedNodeHealth('E') };
       if (path === '/api/media/image/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('C') };
       if (path === '/api/media/speech/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('D') };
