@@ -140,7 +140,7 @@ public class LocalBackendPlugin extends Plugin {
                 connection.setRequestProperty("User-Agent", "SOULARAB-TECH-ROOH/1.0");
                 int status = connection.getResponseCode();
                 if (status < 200 || status >= 300) throw new IOException("تعذر تنزيل النموذج (HTTP " + status + ").");
-                long total = connection.getContentLengthLong();
+                long total = -1L;\n                try { total = Long.parseLong(connection.getHeaderField("Content-Length")); } catch (Exception ignored) {}
                 try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(partial, false)) {
                     byte[] buffer = new byte[1024 * 1024];
                     long received = 0;
@@ -184,7 +184,7 @@ public class LocalBackendPlugin extends Plugin {
                 JSObject result = new JSObject(); result.put("loaded", true); result.put("version", RoohNative.version());
                 call.resolve(result);
             } catch (Throwable error) {
-                call.reject(error.getMessage() == null ? "تعذر تحميل محرك روح المحلي." : error.getMessage(), error);
+                call.reject(error.getMessage() == null ? "تعذر تحميل محرك روح المحلي." : error.getMessage(), error instanceof Exception ? (Exception) error : new Exception(error));
             }
         }, "rooh-model-load").start();
     }
@@ -202,7 +202,7 @@ public class LocalBackendPlugin extends Plugin {
                 JSObject result = new JSObject(); result.put("content", answer); result.put("model", "qwen2.5-3b-instruct-q4_k_m"); result.put("provider", "llama.cpp-native-android");
                 call.resolve(result);
             } catch (Throwable error) {
-                call.reject(error.getMessage() == null ? "فشل الاستدلال المحلي." : error.getMessage(), error);
+                call.reject(error.getMessage() == null ? "فشل الاستدلال المحلي." : error.getMessage(), error instanceof Exception ? (Exception) error : new Exception(error));
             }
         }, "rooh-inference").start();
     }
