@@ -1332,7 +1332,7 @@ export default function App() {
         const available = await request('/api/assistant/models');
         model = available.items?.[0]?.name || '';
       }
-      if (!model) throw new Error(language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.');
+      if (!model) throw new Error(Capacitor.isNativePlatform() ? (language === 'ar' ? 'حمّل نموذج روح وشغّله من قسم المساعد المحلي أولاً.' : 'Download and load the ROOH model in the local assistant first.') : (language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.'));
       const context = agentDraft.steps.trim();
       const prompt = language === 'ar'
         ? 'أنت مساعد تخطيط داخل SOULARAB TECH. اقترح خطوات عملية واضحة ومحددة للمهمة التالية. أعد الخطوات فقط، كل خطوة في سطر مستقل ومرقمة. لا تدّعِ تنفيذ أي إجراء، ولا تقترح تجاوز الموافقات أو تشغيل أوامر تلقائياً. عنوان المهمة: ' + title + (context ? '\nالملاحظات الحالية: ' + context : '')
@@ -1672,10 +1672,10 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'شغّل محرك روح في Termux أولاً' : 'Start the Rooh engine in Termux first') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first'))} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'نزّل نموذج روح وشغّله من اللوحة أعلاه أولاً' : 'Download and load the ROOH model above first') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first'))} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
-          <p className="chat-footnote">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'يلزم إبقاء جلسة Termux ومحرك llama.cpp يعملين على هذا الهاتف أثناء استخدام روح.' : 'Keep the Termux session and llama.cpp engine running on this phone while using Rooh.') : (language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.')}</p>
+          <p className="chat-footnote">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'بعد تنزيل نموذج Qwen مرة واحدة، يعمل محرك روح داخل التطبيق دون Termux أو خادم خارجي، ويمكنه الاستدلال دون إنترنت.' : 'After the one-time Qwen download, the ROOH engine runs inside the app without Termux or an external server and can infer offline.') : (language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.')}</p>
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
