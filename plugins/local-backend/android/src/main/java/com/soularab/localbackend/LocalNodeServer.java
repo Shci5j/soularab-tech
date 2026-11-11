@@ -350,8 +350,10 @@ final class LocalNodeServer extends NanoHTTPD {
         item.put("department", payload.optString("department", nodeId));
         item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
-        item.put("createdAt", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
-        item.put("updatedAt", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")));
+        String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
+        String updatedAt = cursor.getString(cursor.getColumnIndexOrThrow("updated_at"));
+        item.put("createdAt", createdAt); item.put("created_at", createdAt);
+        item.put("updatedAt", updatedAt); item.put("updated_at", updatedAt);
         return item;
     }
 
