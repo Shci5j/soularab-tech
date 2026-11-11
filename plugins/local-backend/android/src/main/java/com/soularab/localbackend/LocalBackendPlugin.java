@@ -84,26 +84,53 @@ public class LocalBackendPlugin extends Plugin {
         }
     }
 
-    private synchronized void startAll() throws IOException {
-        if (servers.size() == 5) {
-            boolean allAlive = true;
-            for (LocalNodeServer server : servers) allAlive = allAlive && server.isAlive();
-            if (allAlive) return;
-        }
-        stopAll();
-        String[] ids = {"A", "B", "C", "D", "E"};
-        String[] names = {"ROOH Orchestrator", "AI & Text", "Image & Design", "Audio & Video", "Development & Recovery"};
-        int[] ports = {3101, 3102, 3103, 3104, 3105};
+    private static final String[] NODE_IDS = {"A", "B", "C", "D", "E"};
+    private static final String[] NODE_NAMES = {"ROOH Orchestrator", "AI & Text", "Image & Design", "Audio & Video", "Development & Recovery"};
+    private static final int[] NODE_PORTS = {3101, 3102, 3103, 3104, 3105};
+
+    @PluginMethod
+    public void controlNode(PluginCall call) {
+        String id = call.getString("id", "");
+        String action = call.getString("action", "");
         try {
-            for (int i = 0; i < ids.length; i++) {
-                LocalNodeServer server = new LocalNodeServer(ids[i], names[i], ports[i], database, accessToken);
-                server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-                servers.add(server);
-            }
-        } catch (IOException error) {
-            stopAll();
-            throw error;
+            if ("start".equals(action)) startNode(id);
+            else if ("stop".equals(action)) stopNode(id);
+            else { call.reject("Action must be start or stop"); return; }
+            call.resolve(statusObject());
+        } catch (Exception error) {
+            call.reject("Unable to " + action + " node " + id, error);
         }
+    }
+
+    private synchronized void startAll() throws IOException {
+        for (String id : NODE_IDS) startNode(id);
+    }
+
+    private synchronized void startNode(String id) throws IOException {
+        int index = nodeIndex(id);
+        if (index < 0) throw new IllegalArgumentException("Unknown node: " + id);
+        for (LocalNodeServer server : servers) {
+            if (server.nodeId.equals(id) && server.isAlive()) return;
+        }
+        stopNode(id);
+        LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken);
+        server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+        servers.add(server);
+    }
+
+    private synchronized void stopNode(String id) {
+        for (int i = servers.size() - 1; i >= 0; i--) {
+            LocalNodeServer server = servers.get(i);
+            if (server.nodeId.equals(id)) {
+                try { server.stop(); } catch (Exception ignored) {}
+                servers.remove(i);
+            }
+        }
+    }
+
+    private int nodeIndex(String id) {
+        for (int i = 0; i < NODE_IDS.length; i++) if (NODE_IDS[i].equals(id)) return i;
+        return -1;
     }
 
     private synchronized void stopAll() {
@@ -113,17 +140,19 @@ public class LocalBackendPlugin extends Plugin {
         servers.clear();
     }
 
-    private JSObject statusObject() {
+    private synchronized JSObject statusObject() {
         JSObject result = new JSObject();
         JSArray nodes = new JSArray();
-        boolean allRunning = servers.size() == 5;
-        for (LocalNodeServer server : servers) {
-            boolean running = server.isAlive();
+        boolean allRunning = true;
+        for (int i = 0; i < NODE_IDS.length; i++) {
+            LocalNodeServer found = null;
+            for (LocalNodeServer server : servers) if (server.nodeId.equals(NODE_IDS[i])) { found = server; break; }
+            boolean running = found != null && found.isAlive();
             allRunning = allRunning && running;
             JSObject item = new JSObject();
-            item.put("id", server.nodeId);
-            item.put("name", server.title);
-            item.put("port", server.getListeningPort());
+            item.put("id", NODE_IDS[i]);
+            item.put("name", NODE_NAMES[i]);
+            item.put("port", NODE_PORTS[i]);
             item.put("running", running);
             nodes.put(item);
         }
