@@ -241,3 +241,14 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .node-control-card{align-items:flex-start}
 .node-control-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
 .node-control-actions .button{font-size:10px;padding:7px 10px}
+
+.pin-setup{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;align-items:end}
+.pin-setup label{display:grid;gap:6px;font-size:11px;color:var(--muted)}
+.pin-setup button{grid-column:1/-1;justify-self:start}
+.app-lock-backdrop{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:18px;background:#050607f2;backdrop-filter:blur(18px)}
+.app-lock-card{width:min(100%,390px);display:grid;gap:15px;padding:30px;border:1px solid var(--gold);border-radius:18px;background:var(--surface);box-shadow:var(--shadow);text-align:center}
+.app-lock-card .auth-mark{margin:auto}
+.app-lock-card h2{margin:0;font-size:22px}
+.app-lock-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.8}
+.app-lock-card input{direction:ltr;text-align:center;letter-spacing:12px;font-size:22px;padding:14px}
+@media(max-width:600px){.pin-setup{grid-template-columns:1fr}.pin-setup button{grid-column:auto}}
