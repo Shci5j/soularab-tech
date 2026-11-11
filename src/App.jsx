@@ -139,6 +139,11 @@ export default function App() {
   const [terminalCommand, setTerminalCommand] = useState('pwd');
   const [terminalHistory, setTerminalHistory] = useState([]);
   const [terminalBusy, setTerminalBusy] = useState(false);
+  const [appLockEnabled, setAppLockEnabled] = useState(() => localStorage.getItem('st-app-lock-enabled') === 'true');
+  const [appLocked, setAppLocked] = useState(() => localStorage.getItem('st-app-lock-enabled') === 'true');
+  const [appPin, setAppPin] = useState('');
+  const [appPinConfirm, setAppPinConfirm] = useState('');
+  const [appLockError, setAppLockError] = useState('');
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -195,6 +200,58 @@ export default function App() {
     document.documentElement.dataset.highContrast = String(Boolean(preferences.highContrast));
     localStorage.setItem('st-preferences', JSON.stringify(preferences));
   }, [preferences]);
+
+  async function hashAppPin(pin, saltHex) {
+    if (!globalThis.crypto?.subtle) throw new Error(language === 'ar' ? 'التشفير الآمن غير متاح في هذا الجهاز.' : 'Secure cryptography is unavailable on this device.');
+    const salt = new Uint8Array((saltHex.match(/.{2}/g) || []).map((part) => parseInt(part, 16)));
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, key, 256);
+    return Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function saveAppPin() {
+    if (!/^\\d{6}$/.test(appPin) || appPin !== appPinConfirm) {
+      setAppLockError(language === 'ar' ? 'أدخل رمزاً من 6 أرقام وتأكد من تطابق الرمزَين.' : 'Enter a 6-digit PIN and make sure both entries match.');
+      return;
+    }
+    try {
+      const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      const hash = await hashAppPin(appPin, salt);
+      localStorage.setItem('st-app-lock-salt', salt);
+      localStorage.setItem('st-app-lock-hash', hash);
+      localStorage.setItem('st-app-lock-enabled', 'true');
+      setAppLockEnabled(true);
+      setAppLocked(false);
+      setAppPin(''); setAppPinConfirm(''); setAppLockError('');
+      setNotice(language === 'ar' ? 'تم تفعيل قفل التطبيق برمز PIN.' : 'App PIN lock enabled.');
+    } catch (error) { setAppLockError(error.message); }
+  }
+
+  async function unlockApp() {
+    try {
+      const salt = localStorage.getItem('st-app-lock-salt') || '';
+      const expected = localStorage.getItem('st-app-lock-hash') || '';
+      const actual = await hashAppPin(appPin, salt);
+      if (actual !== expected) {
+        setAppLockError(language === 'ar' ? 'رمز القفل غير صحيح.' : 'Incorrect PIN.');
+        setAppPin('');
+        return;
+      }
+      setAppLocked(false); setAppPin(''); setAppLockError('');
+    } catch (error) { setAppLockError(error.message); }
+  }
+
+  function lockAppNow() {
+    if (appLockEnabled) { setAppLocked(true); setAppPin(''); setAppLockError(''); }
+  }
+
+  function removeAppLock() {
+    localStorage.removeItem('st-app-lock-salt');
+    localStorage.removeItem('st-app-lock-hash');
+    localStorage.removeItem('st-app-lock-enabled');
+    setAppLockEnabled(false); setAppLocked(false); setAppPin(''); setAppPinConfirm(''); setAppLockError('');
+    setNotice(language === 'ar' ? 'تم تعطيل قفل التطبيق.' : 'App lock disabled.');
+  }
 
   function exportSettingsBackup() {
     const backup = {
@@ -1371,6 +1428,12 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حجم الخط' : 'Font size'}</strong><small>{language === 'ar' ? 'تكبير أو تصغير النصوص' : 'Scale text'}: {preferences.fontScale}%</small></div><input aria-label="حجم الخط" type="range" min="85" max="125" step="5" value={preferences.fontScale} onChange={(e) => updatePreference('fontScale', Number(e.target.value))}/></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'كثافة الواجهة' : 'Interface density'}</strong><small>{language === 'ar' ? 'المسافات بين البطاقات والعناصر' : 'Spacing between cards and elements'}</small></div><select value={preferences.density} onChange={(e) => updatePreference('density', e.target.value)}><option value="comfortable">{language === 'ar' ? 'مريحة' : 'Comfortable'}</option><option value="compact">{language === 'ar' ? 'مضغوطة' : 'Compact'}</option></select></div>
           </div>
+          <div className="settings-group"><h3>{language === 'ar' ? 'قفل التطبيق' : 'App lock'}</h3>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'حالة القفل' : 'Lock status'}</strong><small>{appLockEnabled ? (language === 'ar' ? 'التطبيق محمي برمز PIN عند فتحه مجدداً' : 'The app asks for your PIN when reopened') : (language === 'ar' ? 'لا يوجد قفل محلي مفعّل' : 'No local app lock is enabled')}</small></div>{appLockEnabled ? <div className="settings-inline"><button type="button" className="button secondary" onClick={lockAppNow}>{language === 'ar' ? 'قفل الآن' : 'Lock now'}</button><button type="button" className="button danger" onClick={removeAppLock}>{language === 'ar' ? 'تعطيل القفل' : 'Disable lock'}</button></div> : <span className="pill">{language === 'ar' ? 'غير محمي' : 'Unprotected'}</span>}</div>
+            {!appLockEnabled && <div className="pin-setup"><label>{language === 'ar' ? 'رمز PIN — ستة أرقام' : 'PIN — six digits'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\\D/g,'').slice(0,6))} placeholder="••••••"/></label><label>{language === 'ar' ? 'تأكيد الرمز' : 'Confirm PIN'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPinConfirm} onChange={(e) => setAppPinConfirm(e.target.value.replace(/\\D/g,'').slice(0,6))} placeholder="••••••"/></label><button type="button" className="button primary" onClick={saveAppPin} disabled={appPin.length !== 6 || appPinConfirm.length !== 6}>{language === 'ar' ? 'تفعيل قفل التطبيق' : 'Enable app lock'}</button></div>}
+            {appLockError && !appLocked && <p className="warn">{appLockError}</p>}
+            <p className="chat-footnote">{language === 'ar' ? 'يُخزّن التطبيق تجزئة مشتقة من الرمز مع ملح عشوائي، ولا يخزّن الرمز نفسه. القفل PIN محلي؛ البصمة وفتح Android الحيوي غير مدمجين في هذه النسخة بعد.' : 'Only a salted, derived PIN hash is stored, never the PIN itself. This is a local PIN lock; Android biometric unlock is not integrated in this build.'}</p>
+          </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الجلسة والأمان' : 'Session & security'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'قفل الجلسة عند عدم النشاط' : 'Lock session after inactivity'}</strong><small>{language === 'ar' ? 'إنهاء رمز الوصول وطلب إدخاله مجدداً بعد فترة خمول. يعمل فقط عند استخدام رمز وصول.' : 'Clear the access token and require it again after inactivity. Applies only when an access token is in use.'}</small></div><select value={preferences.sessionTimeoutMinutes || 0} onChange={(e) => updatePreference('sessionTimeoutMinutes', Number(e.target.value))}><option value="0">{language === 'ar' ? 'معطّل' : 'Disabled'}</option><option value="15">{language === 'ar' ? '15 دقيقة' : '15 minutes'}</option><option value="30">{language === 'ar' ? '30 دقيقة' : '30 minutes'}</option><option value="60">{language === 'ar' ? '60 دقيقة' : '60 minutes'}</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'جلسة الوصول الحالية' : 'Current access session'}</strong><small>{apiToken ? (language === 'ar' ? 'يوجد رمز وصول محفوظ لهذه الجلسة فقط' : 'An access token is stored for this browser session only') : (language === 'ar' ? 'لا يوجد رمز وصول محفوظ حالياً' : 'No access token is stored currently')}</small></div><button type="button" className="button secondary" disabled={!apiToken} onClick={() => { sessionStorage.removeItem('st-api-token'); sessionStorage.removeItem('st-last-activity'); setApiToken(''); setAuthRequired(false); setNotice(language === 'ar' ? 'تم إنهاء جلسة الوصول على هذا الجهاز.' : 'The access session on this device has been ended.'); }}>{language === 'ar' ? 'إنهاء الجلسة' : 'End session'}</button></div>
@@ -1691,7 +1754,8 @@ export default function App() {
       <button className={active === 'root' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('root')}><span>⬡</span>{language === 'ar' ? 'الجذر' : 'Root'}</button>
       <button className={active === 'settings' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('settings')}><span>⚙</span>{language === 'ar' ? 'الإعدادات' : 'Settings'}</button>
       <button className={active === 'terminal' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('terminal')}><span>⌘</span>{language === 'ar' ? 'الطرفية' : 'Terminal'}</button>
-    </nav>      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    </nav>      {appLocked && <div className="app-lock-backdrop" role="dialog" aria-modal="true" aria-labelledby="app-lock-title"><form className="app-lock-card" onSubmit={(event) => { event.preventDefault(); unlockApp(); }}><div className="brand-mark auth-mark">ST</div><p className="eyebrow">SOULARAB TECH / APP LOCK</p><h2 id="app-lock-title">{language === 'ar' ? 'التطبيق مقفل' : 'App locked'}</h2><p>{language === 'ar' ? 'أدخل رمز PIN المكوّن من ستة أرقام للمتابعة.' : 'Enter your six-digit PIN to continue.'}</p><input type="password" inputMode="numeric" autoComplete="current-password" maxLength="6" autoFocus value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\\D/g,'').slice(0,6))} placeholder="••••••"/>{appLockError && <small className="warn">{appLockError}</small>}<button className="button primary" disabled={appPin.length !== 6}>{language === 'ar' ? 'فتح التطبيق' : 'Unlock app'}</button></form></div>}
+      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
           <p className="eyebrow">SOULARAB TECH / SECURE ACCESS</p>
