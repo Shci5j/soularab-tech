@@ -144,6 +144,8 @@ export default function App() {
   const [appPin, setAppPin] = useState('');
   const [appPinConfirm, setAppPinConfirm] = useState('');
   const [appLockError, setAppLockError] = useState('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [rootAccess, setRootAccess] = useState({ available: false, checked: false, message: '' });
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -239,6 +241,28 @@ export default function App() {
       }
       setAppLocked(false); setAppPin(''); setAppLockError('');
     } catch (error) { setAppLockError(error.message); }
+  }
+
+  async function unlockWithBiometric() {
+    try {
+      const availability = await LocalBackend.biometricAvailability();
+      setBiometricAvailable(Boolean(availability.available));
+      if (!availability.available) throw new Error(language === 'ar' ? 'البصمة القوية غير مهيأة أو غير متاحة على هذا الجهاز.' : 'Strong biometrics are not enrolled or available on this device.');
+      await LocalBackend.authenticateBiometric({ title: 'SOULARAB TECH', subtitle: language === 'ar' ? 'تأكيد الهوية لفتح التطبيق' : 'Verify your identity to unlock the app' });
+      setAppLocked(false); setAppPin(''); setAppLockError('');
+    } catch (error) { setAppLockError(error.message || (language === 'ar' ? 'فشل التحقق البيومتري.' : 'Biometric verification failed.')); }
+  }
+
+  async function inspectRootAccess() {
+    if (!Capacitor.isNativePlatform() || !LocalBackend.checkRootAccess) {
+      setRootAccess({ available: false, checked: true, message: language === 'ar' ? 'صلاحيات الجذر متاحة فقط على Android مروّت.' : 'Root access is available only on a rooted Android device.' });
+      return;
+    }
+    try {
+      const result = await LocalBackend.checkRootAccess();
+      setRootAccess({ ...result, checked: true });
+      setNotice(result.available ? (language === 'ar' ? 'تم اكتشاف صلاحيات الجذر UID 0.' : 'Root UID 0 access detected.') : (language === 'ar' ? 'هذا الهاتف لا يمنح التطبيق صلاحيات الجذر.' : 'This phone did not grant root access.'));
+    } catch (error) { setRootAccess({ available: false, checked: true, message: error.message }); }
   }
 
   function lockAppNow() {
@@ -1432,7 +1456,8 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حالة القفل' : 'Lock status'}</strong><small>{appLockEnabled ? (language === 'ar' ? 'التطبيق محمي برمز PIN عند فتحه مجدداً' : 'The app asks for your PIN when reopened') : (language === 'ar' ? 'لا يوجد قفل محلي مفعّل' : 'No local app lock is enabled')}</small></div>{appLockEnabled ? <div className="settings-inline"><button type="button" className="button secondary" onClick={lockAppNow}>{language === 'ar' ? 'قفل الآن' : 'Lock now'}</button><button type="button" className="button danger" onClick={removeAppLock}>{language === 'ar' ? 'تعطيل القفل' : 'Disable lock'}</button></div> : <span className="pill">{language === 'ar' ? 'غير محمي' : 'Unprotected'}</span>}</div>
             {!appLockEnabled && <div className="pin-setup"><label>{language === 'ar' ? 'رمز PIN — ستة أرقام' : 'PIN — six digits'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/></label><label>{language === 'ar' ? 'تأكيد الرمز' : 'Confirm PIN'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPinConfirm} onChange={(e) => setAppPinConfirm(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/></label><button type="button" className="button primary" onClick={saveAppPin} disabled={appPin.length !== 6 || appPinConfirm.length !== 6}>{language === 'ar' ? 'تفعيل قفل التطبيق' : 'Enable app lock'}</button></div>}
             {appLockError && !appLocked && <p className="warn">{appLockError}</p>}
-            <p className="chat-footnote">{language === 'ar' ? 'يُخزّن التطبيق تجزئة مشتقة من الرمز مع ملح عشوائي، ولا يخزّن الرمز نفسه. القفل PIN محلي؛ البصمة وفتح Android الحيوي غير مدمجين في هذه النسخة بعد.' : 'Only a salted, derived PIN hash is stored, never the PIN itself. This is a local PIN lock; Android biometric unlock is not integrated in this build.'}</p>
+            <p className="chat-footnote">{language === 'ar' ? 'يُخزّن التطبيق تجزئة مشتقة من الرمز مع ملح عشوائي. يمكنك استخدام البصمة القوية المسجلة في Android لفتح التطبيق.' : 'Only a salted PIN hash is stored. Enrolled Android strong biometrics can also unlock the app.'}</p>
+            <button type="button" className="button secondary" onClick={async () => { try { const result = await LocalBackend.biometricAvailability(); setBiometricAvailable(Boolean(result.available)); setNotice(result.available ? (language === 'ar' ? 'البصمة متاحة على هذا الجهاز.' : 'Biometrics are available.') : (language === 'ar' ? 'البصمة غير مهيأة على هذا الجهاز.' : 'Biometrics are not enrolled on this device.')); } catch (error) { setNotice(error.message); } }}>{language === 'ar' ? 'فحص البصمة البيومترية' : 'Check biometric availability'}{biometricAvailable ? ' ✓' : ''}</button>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الجلسة والأمان' : 'Session & security'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'قفل الجلسة عند عدم النشاط' : 'Lock session after inactivity'}</strong><small>{language === 'ar' ? 'إنهاء رمز الوصول وطلب إدخاله مجدداً بعد فترة خمول. يعمل فقط عند استخدام رمز وصول.' : 'Clear the access token and require it again after inactivity. Applies only when an access token is in use.'}</small></div><select value={preferences.sessionTimeoutMinutes || 0} onChange={(e) => updatePreference('sessionTimeoutMinutes', Number(e.target.value))}><option value="0">{language === 'ar' ? 'معطّل' : 'Disabled'}</option><option value="15">{language === 'ar' ? '15 دقيقة' : '15 minutes'}</option><option value="30">{language === 'ar' ? '30 دقيقة' : '30 minutes'}</option><option value="60">{language === 'ar' ? '60 دقيقة' : '60 minutes'}</option></select></div>
@@ -1754,7 +1779,7 @@ export default function App() {
       <button className={active === 'root' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('root')}><span>⬡</span>{language === 'ar' ? 'الجذر' : 'Root'}</button>
       <button className={active === 'settings' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('settings')}><span>⚙</span>{language === 'ar' ? 'الإعدادات' : 'Settings'}</button>
       <button className={active === 'terminal' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('terminal')}><span>⌘</span>{language === 'ar' ? 'الطرفية' : 'Terminal'}</button>
-    </nav>      {appLocked && <div className="app-lock-backdrop" role="dialog" aria-modal="true" aria-labelledby="app-lock-title"><form className="app-lock-card" onSubmit={(event) => { event.preventDefault(); unlockApp(); }}><div className="brand-mark auth-mark">ST</div><p className="eyebrow">SOULARAB TECH / APP LOCK</p><h2 id="app-lock-title">{language === 'ar' ? 'التطبيق مقفل' : 'App locked'}</h2><p>{language === 'ar' ? 'أدخل رمز PIN المكوّن من ستة أرقام للمتابعة.' : 'Enter your six-digit PIN to continue.'}</p><input type="password" inputMode="numeric" autoComplete="current-password" maxLength="6" autoFocus value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/>{appLockError && <small className="warn">{appLockError}</small>}<button className="button primary" disabled={appPin.length !== 6}>{language === 'ar' ? 'فتح التطبيق' : 'Unlock app'}</button></form></div>}
+    </nav>      {appLocked && <div className="app-lock-backdrop" role="dialog" aria-modal="true" aria-labelledby="app-lock-title"><form className="app-lock-card" onSubmit={(event) => { event.preventDefault(); unlockApp(); }}><div className="brand-mark auth-mark">ST</div><p className="eyebrow">SOULARAB TECH / APP LOCK</p><h2 id="app-lock-title">{language === 'ar' ? 'التطبيق مقفل' : 'App locked'}</h2><p>{language === 'ar' ? 'أدخل رمز PIN المكوّن من ستة أرقام للمتابعة.' : 'Enter your six-digit PIN to continue.'}</p><input type="password" inputMode="numeric" autoComplete="current-password" maxLength="6" autoFocus value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/>{appLockError && <small className="warn">{appLockError}</small>}{Capacitor.isNativePlatform() && <button type="button" className="button secondary" onClick={unlockWithBiometric}>{language === 'ar' ? 'فتح بالبصمة' : 'Unlock with biometrics'}</button>}<button className="button primary" disabled={appPin.length !== 6}>{language === 'ar' ? 'فتح التطبيق' : 'Unlock app'}</button></form></div>}
       {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
