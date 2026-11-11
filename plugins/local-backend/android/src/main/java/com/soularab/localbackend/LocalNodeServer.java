@@ -18,12 +18,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class LocalNodeServer extends NanoHTTPD {
     final String nodeId;
     final String title;
     private final LocalBackendDatabase helper;
     private final String accessToken;
+    private final AtomicBoolean workerActive = new AtomicBoolean(false);
+    private Thread workerThread;
 
     LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken) {
         super("127.0.0.1", port);
@@ -31,6 +34,119 @@ final class LocalNodeServer extends NanoHTTPD {
         this.title = title;
         this.helper = helper;
         this.accessToken = accessToken;
+    }
+
+    void startWorker() {
+        if (!"B".equals(nodeId) || !workerActive.compareAndSet(false, true)) return;
+        workerThread = new Thread(() -> {
+            while (workerActive.get()) {
+                try {
+                    processNextTextTask();
+                    Thread.sleep(1200);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception ignored) {
+                    try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }, "soularab-node-" + nodeId + "-worker");
+        workerThread.setDaemon(true);
+        workerThread.start();
+    }
+
+    void stopWorker() {
+        workerActive.set(false);
+        if (workerThread != null) workerThread.interrupt();
+        workerThread = null;
+    }
+
+    private void processNextTextTask() throws Exception {
+        if (!"B".equals(nodeId)) return;
+        SQLiteDatabase db = helper.getWritableDatabase();
+        Cursor cursor = db.query("node_tasks", new String[]{"id", "payload"}, "node_id=? AND status='queued' AND task_type IN ('assistant','agents','ai','text')",
+            new String[]{nodeId}, null, null, "priority DESC, id ASC", "1");
+        long taskId;
+        JSONObject payload;
+        try {
+            if (!cursor.moveToFirst()) return;
+            taskId = cursor.getLong(0);
+            payload = new JSONObject(cursor.getString(1));
+        } finally { cursor.close(); }
+        ContentValues claim = new ContentValues();
+        claim.put("status", "running");
+        claim.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+        if (db.update("node_tasks", claim, "id=? AND node_id=? AND status='queued'", new String[]{String.valueOf(taskId), nodeId}) != 1) return;
+
+        String prompt = payload.optString("description", "").trim();
+        if (prompt.isEmpty()) prompt = payload.optString("details", "").trim();
+        if (prompt.isEmpty()) prompt = payload.optString("title", "اكتب خطة عمل واضحة ومختصرة.");
+        try {
+            String answer = executeRoohTextTask(prompt);
+            ContentValues completed = new ContentValues();
+            completed.put("status", "completed");
+            completed.put("result", answer);
+            completed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
+        } catch (Exception error) {
+            ContentValues failed = new ContentValues();
+            failed.put("status", "failed");
+            failed.put("result", "تعذر تنفيذ المهمة عبر محرك روح المحلي: " + error.getClass().getSimpleName());
+            failed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
+        }
+    }
+
+    private String executeRoohTextTask(String prompt) throws Exception {
+        HttpURLConnection modelsConnection = null;
+        String model;
+        try {
+            modelsConnection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/models").openConnection();
+            modelsConnection.setConnectTimeout(3000);
+            modelsConnection.setReadTimeout(5000);
+            if (modelsConnection.getResponseCode() < 200 || modelsConnection.getResponseCode() >= 300) throw new IOException("model_service_unavailable");
+            StringBuilder modelsText = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(modelsConnection.getInputStream(), "UTF-8"))) {
+                String line; while ((line = reader.readLine()) != null) modelsText.append(line);
+            }
+            JSONArray data = new JSONObject(modelsText.toString()).optJSONArray("data");
+            if (data == null || data.length() == 0) throw new IOException("no_local_model");
+            model = data.optJSONObject(0).optString("id", "");
+            if (model.isEmpty()) throw new IOException("model_id_missing");
+        } finally { if (modelsConnection != null) modelsConnection.disconnect(); }
+
+        JSONObject body = new JSONObject();
+        body.put("model", model);
+        body.put("temperature", 0.5);
+        body.put("stream", false);
+        JSONArray messages = new JSONArray();
+        messages.put(new JSONObject().put("role", "system").put("content", "أنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها."));
+        messages.put(new JSONObject().put("role", "user").put("content", prompt));
+        body.put("messages", messages);
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL("http://127.0.0.1:8081/v1/chat/completions").openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(90000);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = body.toString().getBytes("UTF-8");
+            connection.setFixedLengthStreamingMode(bytes.length);
+            try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            if (stream == null || status < 200 || status >= 300) throw new IOException("local_llm_request_failed_" + status);
+            StringBuilder responseText = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
+                String line; while ((line = reader.readLine()) != null) responseText.append(line);
+            }
+            JSONArray choices = new JSONObject(responseText.toString()).optJSONArray("choices");
+            JSONObject message = choices != null && choices.length() > 0 ? choices.optJSONObject(0).optJSONObject("message") : null;
+            String content = message == null ? "" : message.optString("content", "").trim();
+            if (content.isEmpty()) throw new IOException("empty_local_llm_response");
+            return content;
+        } finally { if (connection != null) connection.disconnect(); }
     }
 
     @Override
@@ -357,6 +473,7 @@ final class LocalNodeServer extends NanoHTTPD {
         item.put("description", payload.optString("description", ""));
         item.put("department", payload.optString("department", nodeId));
         item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
+        item.put("result", cursor.getString(cursor.getColumnIndexOrThrow("result")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
         String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
         String updatedAt = cursor.getString(cursor.getColumnIndexOrThrow("updated_at"));
