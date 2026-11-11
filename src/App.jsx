@@ -514,16 +514,19 @@ export default function App() {
   async function refresh() {
     try {
       if (Capacitor.isNativePlatform()) {
-        const checks = await Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
-          try { return await getEmbeddedNodeHealth(id); }
-          catch { return { status: 'offline', node: id }; }
-        }));
+        const [checks, localTasks] = await Promise.all([
+          Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
+            try { return await getEmbeddedNodeHealth(id); }
+            catch { return { status: 'offline', node: id }; }
+          })),
+          localNodeRequest('E', '/tasks').catch(() => []),
+        ]);
         const online = checks.filter((item) => item.status === 'online').length;
-        setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-1.0', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
+        setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-android', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
         setApprovals([]);
         setEvents([]);
-        setQueuedTasks([]);
-        setEngineStatuses({});
+        setQueuedTasks(Array.isArray(localTasks) ? localTasks : []);
+        setEngineStatuses(Object.fromEntries(checks.map((item) => [item.node, { connected: item.status === 'online', provider: 'embedded-android' }])));
         if (online !== 5) setNotice(language === 'ar' ? `بعض الخوادم الداخلية غير متاحة (${online}/5).` : `Some embedded nodes are unavailable (${online}/5).`);
         return;
       }
