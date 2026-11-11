@@ -103,12 +103,20 @@ npm run dev
 - يتطلب المساعد تشغيل Ollama وتثبيت نموذج محلي. عيّن `OLLAMA_BASE_URL` فقط إذا كان عنوان الخدمة على loopback وبروتوكول HTTP.
 - واجهة الهاتف لا تشغّل النموذج بنفسها؛ تستعمل الخادم المحلي كوسيط.
 
-### تشغيل المساعد المحلي
+### تشغيل روح محلياً
+
+**على هاتف Android نفسه (Termux + llama.cpp):**
+1. ثبّت Termux من مصدره الرسمي، واستنسخ المستودع كما في قسم تشغيل الهاتف.
+2. من جذر المستودع شغّل `bash scripts/start-local-backend-termux.sh`.
+3. يجهّز السكربت محرك `llama.cpp` ونموذج Qwen2.5-0.5B-Instruct Q4_K_M (تنزيل أولي يقارب 491 MB)، ثم يشغّل API ومحرك روح محلياً على loopback.
+4. افتح قسم «المساعد الذكي» في التطبيق؛ ستظهر النماذج المتاحة من محرك روح المحلي.
+
+**على حاسوب أو خادم يعمل عليه Ollama:**
 1. ثبّت Ollama على الجهاز الذي سيشغّل الخادم: https://ollama.com/download
 2. نزّل نموذجاً يناسب الذاكرة المتاحة، مثلاً `ollama pull qwen2.5:3b`، بعد مراجعة بطاقة النموذج وترخيصه وشروط الاستخدام.
-3. شغّل الخادم والواجهة كما سبق، ثم افتح قسم «المساعد الذكي» واختر النموذج.
-4. عنوان Ollama الافتراضي هو `http://127.0.0.1:11434`؛ الاتصال محصور محلياً ولا يدعم مزوداً بعيداً في هذه المرحلة.
-5. عند فتح الواجهة من هاتف عبر الشبكة المحلية، أضف عنوان الواجهة إلى `SOULARAB_CORS_ORIGINS` في بيئة الخادم، مع إبقاء الوصول إلى API محمياً برمز قوي.
+3. اترك `ROOH_PROVIDER=ollama` (القيمة الافتراضية)، ثم شغّل الخادم والواجهة وافتح قسم «المساعد الذكي».
+
+يدعم API الآن مزود Ollama أو `llama.cpp` المتوافق مع OpenAI API عبر `ROOH_PROVIDER`، مع حصر عنوان كل محرك في loopback. لا يُرسل نص المحادثة إلى مزود سحابي.
 
 ### محركات الوسائط المحلية
 
@@ -152,3 +160,27 @@ npm run dev
 ## التطوير
 
 كل تطوير يتم على فرع مستقل. لا تُدمج التغييرات إلى `main` دون مراجعة وموافقة صاحب المستودع.
+
+
+## Embedded Android backend (five local nodes)
+
+The Android Capacitor build includes an embedded backend plugin under `plugins/local-backend`. When the native app starts, it launches five independent loopback HTTP services on ports 3101–3105 and verifies their health from the WebView:
+
+- A — AI and text task queue
+- B — image and design task queue
+- C — audio and video task queue
+- D — development task queue
+- E — task dispatch, node directory, and recovery coordination
+
+The services bind to `127.0.0.1` only. Requests use a per-install token passed in the `X-Local-Token` header. Android network security permits cleartext only to `localhost`; other cleartext destinations remain blocked. Queues and local section records persist in the app-private SQLite database with WAL enabled.
+
+Install dependencies and sync the native project:
+
+```sh
+npm install
+npx cap add android   # only if the android platform has not been generated
+npx cap sync android
+npm run build
+```
+
+The current milestone provides real independent HTTP listeners, health/metrics endpoints, persistent task queues, section storage, and routing from node E. It does **not** yet include on-device AI models, image/video processing engines, code execution workers, or an Android foreground service. Queued tasks are stored and routed but are not automatically executed yet. The app process must remain alive for the local listeners to remain available.

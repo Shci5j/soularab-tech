@@ -1,0 +1,16 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.soularab.localbackend"
+    compileSdkVersion project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 35
+
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 23
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 35
+    }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+}

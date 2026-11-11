@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { LocalBackend } from '@soularab/local-backend';
+import { getEmbeddedNodeHealth, localNodeRequest } from './services/localNodes.js';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
@@ -45,6 +48,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
   const [api, setApi] = useState({ state: 'checking', version: '—' });
+  const [embeddedBackend, setEmbeddedBackend] = useState({ running: false, nodes: [] });
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
@@ -330,16 +334,37 @@ export default function App() {
   }
 
   async function request(path, options = {}) {
+    if (Capacitor.isNativePlatform()) {
+      throw new Error(language === 'ar'
+        ? 'هذا القسم لم يُربط بعد بواجهات الخوادم الداخلية. لن يتم إرسال الطلب إلى صفحة الويب بالخطأ.'
+        : 'This section is not connected to the embedded node APIs yet. The request was blocked instead of being sent to the web page.');
+    }
     const response = await fetch(safeApiBase(apiBaseUrl) + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
+    const contentType = response.headers.get('content-type') || '';
+    const rawBody = await response.text();
+    let body = null;
+    if (rawBody) {
+      try { body = JSON.parse(rawBody); }
+      catch {
+        const detail = contentType.includes('text/html') || /^\s*<!doctype html/i.test(rawBody)
+          ? (language === 'ar'
+              ? 'وصلت صفحة HTML بدلاً من JSON. عنوان الخادم الخلفي أو مسار API غير صحيح.'
+              : 'Received an HTML page instead of JSON. The backend URL or API route is incorrect.')
+          : (language === 'ar' ? 'أعاد الخادم بيانات ليست بصيغة JSON.' : 'The server returned a non-JSON response.');
+        throw new Error(detail);
+      }
+    }
     if (!response.ok) {
       if (response.status === 401) setAuthRequired(true);
-      const body = await response.json().catch(() => ({}));
-      throw new Error(localizeApiError(body.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
+      throw new Error(localizeApiError(body?.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
     }
-    return response.json();
+    if (!contentType.includes('application/json') && body === null) {
+      throw new Error(language === 'ar' ? 'استجابة الخادم فارغة أو غير صالحة.' : 'The server response is empty or invalid.');
+    }
+    return body;
   }
 
   function unlockWorkspace(event) {
@@ -355,6 +380,20 @@ export default function App() {
 
   async function refresh() {
     try {
+      if (Capacitor.isNativePlatform()) {
+        const checks = await Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
+          try { return await getEmbeddedNodeHealth(id); }
+          catch { return { status: 'offline', node: id }; }
+        }));
+        const online = checks.filter((item) => item.status === 'online').length;
+        setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-1.0', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
+        setApprovals([]);
+        setEvents([]);
+        setQueuedTasks([]);
+        setEngineStatuses({});
+        if (online !== 5) setNotice(language === 'ar' ? `بعض الخوادم الداخلية غير متاحة (${online}/5).` : `Some embedded nodes are unavailable (${online}/5).`);
+        return;
+      }
       const [health, approvalData, log, taskQueue, engineData] = await Promise.all([
         request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'), request('/api/engines/status').catch(() => null),
       ]);
@@ -369,6 +408,29 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    let active = true;
+    LocalBackend.start()
+      .then(async (status) => {
+        if (!active) return;
+        if (status.accessToken) sessionStorage.setItem('st-embedded-local-token', status.accessToken);
+        const checkedNodes = await Promise.all(status.nodes.map(async (node) => {
+          try {
+            const health = await getEmbeddedNodeHealth(node.id);
+            return { ...node, running: health.status === 'online' };
+          } catch {
+            return { ...node, running: false };
+          }
+        }));
+        if (active) setEmbeddedBackend({ ...status, nodes: checkedNodes, running: checkedNodes.length === 5 && checkedNodes.every((node) => node.running) });
+      })
+      .catch((error) => {
+        if (active) setNotice((language === 'ar' ? 'تعذر تشغيل الخوادم الداخلية: ' : 'Could not start embedded nodes: ') + (error?.message || 'unknown error'));
+      });
+    return () => { active = false; };
+  }, []);
+  
   useEffect(() => { refresh(); const id = window.setInterval(refresh, (preferences.refreshIntervalSeconds || 15) * 1000); return () => clearInterval(id); }, [apiToken, preferences.refreshIntervalSeconds]);
 
   async function loadSecurityStatus() {
@@ -387,11 +449,18 @@ export default function App() {
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
     try {
-      const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
-      setModels(result.items || []);
-      setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
+      const native = Capacitor.isNativePlatform();
+      const [status, result] = native
+        ? await Promise.all([
+            localNodeRequest('A', '/health'),
+            localNodeRequest('A', '/models'),
+          ])
+        : await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
+      const items = Array.isArray(result.items) ? result.items : [];
+      setAssistantStatus({ connected: native ? status.status === 'online' : Boolean(status.connected), loading: false, version: native ? 'llama.cpp / local' : status.version });
+      setModels(items);
+      setSelectedModel((current) => items.some((item) => item.name === current) ? current : (items.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : items[0]?.name || ''));
+      if (!items.length) setNotice(language === 'ar' ? 'محرك روح المحلي متصل، لكن لم يُعثر على نموذج محمّل.' : 'The local Rooh engine is reachable, but no model is loaded.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
       setModels([]);
@@ -408,7 +477,10 @@ export default function App() {
     setChatInput('');
     setSendingChat(true);
     try {
-      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next }) });
+      const payload = { model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next };
+      const result = Capacitor.isNativePlatform() && embeddedBackend.running
+        ? await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(payload) })
+        : await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify(payload) });
       setChatMessages([...next, result.message]);
     } catch (error) {
       setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
@@ -1119,8 +1191,12 @@ export default function App() {
             <article className="stat-card"><span>{language === 'ar' ? 'حالة الخادم' : 'Server status'}</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? (language === 'ar' ? 'متصل' : 'Online') : (language === 'ar' ? 'غير متصل' : 'Offline')}</strong><small>{api.mode || (language === 'ar' ? 'بانتظار تشغيل الخلفية' : 'Backend not running')}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</span><strong>{approvals.filter((item) => item.status === 'pending').length}</strong><small>{language === 'ar' ? 'تنتظر مراجعتك' : 'Awaiting your review'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'المهام النشطة' : 'Active tasks'}</span><strong>{queuedTasks.filter((task) => ['queued','planning','waiting_approval','running'].includes(task.status)).length}</strong><small>{language === 'ar' ? 'في مسار العمل' : 'In the workflow'}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'الخوادم الداخلية' : 'Embedded nodes'}</span><strong className={embeddedBackend.nodes.length === 5 && embeddedBackend.nodes.every((node) => node.running) ? 'good' : 'warn'}>{embeddedBackend.nodes.filter((node) => node.running).length}/5</strong><small>{language === 'ar' ? 'عقد محلية مستقلة' : 'Independent local nodes'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
           </div>
+          {Capacitor.isNativePlatform() && <div className="engine-status-grid embedded-node-grid">
+            {embeddedBackend.nodes.map((node) => <article className="engine-status-card" key={node.id}><div><strong>{language === 'ar' ? 'الخادم ' + node.id : 'Server ' + node.id}</strong><small>{node.name}</small><small>127.0.0.1:{node.port}</small></div><span className={node.running ? 'good' : 'warn'}>{node.running ? (language === 'ar' ? 'يعمل' : 'Running') : (language === 'ar' ? 'متوقف' : 'Stopped')}</span></article>)}
+          </div>}
           <div className="engine-status-grid">
             {[
               { id: 'ollama', label: 'Ollama', description: language === 'ar' ? 'نماذج المحادثة المحلية' : 'Local language models' },
@@ -1253,7 +1329,7 @@ export default function App() {
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
           <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'محرك روح متصل' : 'Rooh engine connected') : (language === 'ar' ? 'محرك روح غير متصل' : 'Rooh engine disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
           <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
@@ -1268,7 +1344,7 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل محرك روح وحمّل نموذجاً محلياً أولاً' : 'Start the local Rooh engine and load a model first')} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
           <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
