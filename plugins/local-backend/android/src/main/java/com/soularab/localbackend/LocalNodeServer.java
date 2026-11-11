@@ -338,14 +338,28 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private String targetFor(String type) {
-        String normalized = type == null ? "" : type.toLowerCase();
+        String normalized = type == null ? "" : type.trim().toLowerCase();
+        // Explicit department routing: every visible workspace section has a
+        // deterministic owner node; keyword matching is only a fallback.
+        switch (normalized) {
+            case "overview": case "hub": case "root": case "orchestrator": return "A";
+            case "assistant": case "agents": case "ai": case "text": return "B";
+            case "design": case "media": case "graphics": case "image": return "C";
+            case "video": case "audio": case "speech": return "D";
+            case "web": case "store": case "apps": case "documents": case "files":
+            case "automation": case "domains": case "security": case "terminal":
+            case "development": case "recovery": return "E";
+            default: break;
+        }
         if (normalized.contains("orchestr") || normalized.contains("root") || normalized.contains("hub")) return "A";
         if (normalized.contains("text") || normalized.contains("chat") || normalized.contains("language") || normalized.contains("agent")) return "B";
         if (normalized.contains("image") || normalized.contains("design") || normalized.contains("logo") || normalized.contains("graphic")) return "C";
         if (normalized.contains("audio") || normalized.contains("video") || normalized.contains("speech") || normalized.contains("transcrib")) return "D";
         if (normalized.contains("code") || normalized.contains("app") || normalized.contains("web") || normalized.contains("build") ||
             normalized.contains("store") || normalized.contains("document") || normalized.contains("automation") ||
-            normalized.contains("backup") || normalized.contains("recovery") || normalized.contains("system")) return "E";
+            normalized.contains("backup") || normalized.contains("recovery") || normalized.contains("system") ||
+            normalized.contains("file") || normalized.contains("domain") || normalized.contains("security") ||
+            normalized.contains("terminal")) return "E";
         return "A";
     }
 
