@@ -154,7 +154,7 @@ final class LocalNodeServer extends NanoHTTPD {
             } else {
                 return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
             }
-            values.put("updated_at", java.time.Instant.now().toString());
+            values.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
             int changed = db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
             if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
             return getTask(String.valueOf(taskId));
