@@ -49,7 +49,6 @@ Java_com_soularab_localbackend_RoohNative_loadModel(JNIEnv *env, jclass, jstring
     llama_backend_init();
     llama_model_params modelParams = llama_model_default_params();
     modelParams.n_gpu_layers = 0;
-    modelParams.use_mmap = true;
     g_model = llama_model_load_from_file(path.c_str(), modelParams);
     if (!g_model) return env->NewStringUTF("تعذر تحميل ملف GGUF. تحقق من سلامة الملف ومساحة الذاكرة.");
     llama_context_params contextParams = llama_context_default_params();
@@ -103,6 +102,7 @@ Java_com_soularab_localbackend_RoohNative_generate(JNIEnv *env, jclass, jstring 
     for (int i = 0; i < limit; ++i) {
         llama_token token = llama_sampler_sample(sampler, g_context, -1);
         if (llama_vocab_is_eog(g_vocab, token)) break;
+        llama_sampler_accept(sampler, token);
         char piece[512];
         int32_t pieceSize = llama_token_to_piece(g_vocab, token, piece, sizeof(piece), 0, false);
         if (pieceSize < 0) {
