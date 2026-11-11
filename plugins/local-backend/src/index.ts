@@ -18,6 +18,7 @@ export interface LocalBackendPlugin {
   start(): Promise<LocalBackendStatus>;
   status(): Promise<LocalBackendStatus>;
   stop(): Promise<{ running: boolean }>;
+  runTermuxCommand(options: { command: string }): Promise<{ accepted: boolean }>;
 }
 
 const LocalBackend = registerPlugin<LocalBackendPlugin>('LocalBackend');
