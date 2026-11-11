@@ -89,12 +89,14 @@ Java_com_soularab_localbackend_RoohNative_generate(JNIEnv *env, jclass, jstring 
     std::vector<llama_token> tokens((size_t) -needed);
     int32_t tokenCount = llama_tokenize(g_vocab, prompt.c_str(), (int32_t) prompt.size(), tokens.data(), (int32_t) tokens.size(), true, false);
     if (tokenCount <= 0) return env->NewStringUTF("تعذر تحويل الرسالة إلى رموز.");
+    if (tokenCount > 1800) return env->NewStringUTF("المحادثة أطول من سعة الذاكرة الحالية. اختصر الرسائل السابقة ثم أعد المحاولة.");
     tokens.resize((size_t) tokenCount);
     if (llama_decode(g_context, llama_batch_get_one(tokens.data(), tokenCount)) != 0)
         return env->NewStringUTF("فشل تحليل مدخلات النموذج.");
 
     llama_sampler_chain_params samplerParams = llama_sampler_chain_default_params();
     llama_sampler *sampler = llama_sampler_chain_init(samplerParams);
+    if (!sampler) return env->NewStringUTF("تعذر تهيئة مولّد الرموز.");
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7f));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     std::string output;
