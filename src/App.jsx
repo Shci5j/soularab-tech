@@ -21,9 +21,10 @@ const modules = [
   { id: 'automation', title: 'الأتمتة والجدولة', icon: '◷', desc: 'مشغلات محلية وطوابير مهام محكومة' },
   { id: 'domains', title: 'النطاقات والاستضافة', icon: '◎', desc: 'إعدادات النطاق والنشر والاستضافة' },
   { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
+  { id: 'terminal', title: 'طرفية Termux', icon: '⌘', desc: 'تنفيذ أوامر محلية عبر Termux على الهاتف' },
 ];
 
-const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Image Generation', 'Generate and edit images through a local engine'], video: ['Video Studio', 'Plan scenes and assemble a video pipeline'], store: ['Online Stores', 'Products, catalog, cart, and order workflows'], apps: ['App Builder', 'Develop and inspect applications'], graphics: ['Graphic Design', 'Create social posts, templates, and print layouts'], documents: ['Documents', 'Create documents and manage project files'], files: ['Projects & Archives', 'Project workspaces, versions, and restore'], agents: ['AI Agents', 'Multi-step plans with explicit approvals'], automation: ['Automation & Scheduling', 'Controlled local triggers and task queues'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
+const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Image Generation', 'Generate and edit images through a local engine'], video: ['Video Studio', 'Plan scenes and assemble a video pipeline'], store: ['Online Stores', 'Products, catalog, cart, and order workflows'], apps: ['App Builder', 'Develop and inspect applications'], graphics: ['Graphic Design', 'Create social posts, templates, and print layouts'], documents: ['Documents', 'Create documents and manage project files'], files: ['Projects & Archives', 'Project workspaces, versions, and restore'], agents: ['AI Agents', 'Multi-step plans with explicit approvals'], automation: ['Automation & Scheduling', 'Controlled local triggers and task queues'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'], terminal: ['Termux Terminal', 'Run local phone commands through the Termux app'] };
 
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
@@ -135,6 +136,9 @@ export default function App() {
   const [loadingTaskHistory, setLoadingTaskHistory] = useState(false);
   const [domainDraft, setDomainDraft] = useState({ domain:'', provider:'Cloudflare Pages', project:'soularab-site' });
   const [domainReport, setDomainReport] = useState('');
+  const [terminalCommand, setTerminalCommand] = useState('pwd');
+  const [terminalHistory, setTerminalHistory] = useState([]);
+  const [terminalBusy, setTerminalBusy] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -470,6 +474,24 @@ export default function App() {
       setModels([]);
       setNotice(error.message);
     }
+  }
+
+  async function runTerminalCommand(event) {
+    event.preventDefault();
+    const command = terminalCommand.trim();
+    if (!command || terminalBusy) return;
+    if (!Capacitor.isNativePlatform() || !LocalBackend.runTermuxCommand) {
+      setNotice(language === 'ar' ? 'طرفية Termux متاحة في نسخة Android فقط.' : 'The Termux bridge is available in the Android app only.');
+      return;
+    }
+    setTerminalBusy(true);
+    try {
+      await LocalBackend.runTermuxCommand({ command });
+      setTerminalHistory((items) => [{ command, at: new Date().toISOString(), status: 'sent' }, ...items].slice(0, 30));
+      setNotice(language === 'ar' ? 'أُرسل الأمر إلى Termux. ستظهر نتيجته في جلسة Termux المفتوحة.' : 'Command sent to Termux. Its output appears in the Termux session.');
+    } catch (error) {
+      setNotice(language === 'ar' ? 'تعذر تشغيل الأمر عبر Termux: ' + error.message : 'Could not run the command through Termux: ' + error.message);
+    } finally { setTerminalBusy(false); }
   }
 
   async function sendChat(event) {
@@ -1420,6 +1442,14 @@ export default function App() {
         <div className="panel-card workspace-note"><strong>{language === 'ar' ? 'حماية الملفات' : 'File protection'}</strong><p>{language === 'ar' ? 'تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.' : 'Uploads and downloads are restricted to the project folder. Path traversal is blocked. Maximum file size is 10 MB.'}</p></div>
       </section>}
 
+      {active === 'terminal' && <section className="content"><div className="panel-card terminal-page">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'طرفية الهاتف — Termux' : 'Phone terminal — Termux'}</h2><p className="muted">{language === 'ar' ? 'واجهة أوامر متصلة بتطبيق Termux المثبت على الهاتف، وليست محاكاة شكلية لسطر الأوامر.' : 'A command bridge to the Termux app installed on this phone, not a fake shell emulator.'}</p></div><span className="pill">Android / Termux</span></div>
+        <div className="notice-inline"><strong>{language === 'ar' ? 'متطلبات الاتصال' : 'Connection requirements'}</strong><p>{language === 'ar' ? 'يجب تثبيت Termux من مصدر موثوق، وتفعيل Allow external apps في إعداداته. عند إرسال الأمر ستُفتح جلسة داخل Termux، وتظهر المخرجات هناك؛ لا يستطيع التطبيق قراءة مخرجات الجلسة تلقائياً حالياً.' : 'Install Termux from a trusted source and enable Allow external apps in its settings. Commands open a Termux session and output appears there; this app cannot currently capture that session output automatically.'}</p></div>
+        <div className="terminal-presets"><strong>{language === 'ar' ? 'أوامر سريعة' : 'Quick commands'}</strong>{[['pwd','المجلد الحالي'],['ls -la','عرض الملفات'],['df -h','مساحة التخزين'],['free -h','الذاكرة'],['uname -a','معلومات النظام'],['ps -ef','العمليات']].map(([cmd,label]) => <button key={cmd} type="button" className="button secondary" onClick={() => setTerminalCommand(cmd)}><code>{cmd}</code><small>{label}</small></button>)}</div>
+        <form className="terminal-command-form" onSubmit={runTerminalCommand}><label>{language === 'ar' ? 'الأمر المراد تنفيذه' : 'Command to execute'}<textarea rows="3" value={terminalCommand} onChange={(e) => setTerminalCommand(e.target.value)} spellCheck="false" autoCapitalize="off" autoCorrect="off" placeholder="pkg update && pkg upgrade"/></label><button className="button primary" disabled={terminalBusy || !terminalCommand.trim()}>{terminalBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال إلى Termux ↗' : 'Send to Termux ↗')}</button></form>
+        <div className="terminal-history"><div className="section-heading"><h3>{language === 'ar' ? 'سجل الأوامر المرسلة' : 'Sent command history'}</h3><button className="text-button" onClick={() => setTerminalHistory([])}>{language === 'ar' ? 'مسح السجل' : 'Clear history'}</button></div>{terminalHistory.length ? terminalHistory.map((item,index)=><article key={item.at+index}><code>{item.command}</code><small>{new Date(item.at).toLocaleString(language === 'ar' ? 'ar' : 'en-US')}</small></article>) : <Empty text={language === 'ar' ? 'لم ترسل أوامر بعد.' : 'No commands sent yet.'}/>}</div>
+        <p className="chat-footnote">{language === 'ar' ? 'تنبيه أمني: الأوامر تُنفذ بصلاحيات مستخدم Termux، وليست بصلاحيات root. راجع الأمر قبل إرساله؛ لا ترسل أوامر مجهولة أو مدمرة.' : 'Security: commands run with the Termux user permissions, not root. Review every command before sending; avoid unknown or destructive commands.'}</p>
+      </div></section>}
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
           <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'تتصل روح بمحرك llama.cpp المحلي الذي يعمل عبر Termux على هذا الهاتف.' : 'Rooh connects to the local llama.cpp engine running through Termux on this phone.') : (language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.')}</p></div>
@@ -1623,7 +1653,7 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {!['overview','security','files','assistant','media','web','design','apps','agents','domains','work','hub','root','settings','vault'].includes(active) && <section className="content">
+      {!['overview','security','files','assistant','media','web','design','apps','agents','domains','work','hub','root','settings','vault','terminal'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
@@ -1649,6 +1679,7 @@ export default function App() {
       <button className={active === 'hub' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('hub')}><span>⌘</span>{language === 'ar' ? 'هوب' : 'Hub'}</button>
       <button className={active === 'root' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('root')}><span>⬡</span>{language === 'ar' ? 'الجذر' : 'Root'}</button>
       <button className={active === 'settings' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('settings')}><span>⚙</span>{language === 'ar' ? 'الإعدادات' : 'Settings'}</button>
+      <button className={active === 'terminal' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('terminal')}><span>⌘</span>{language === 'ar' ? 'الطرفية' : 'Terminal'}</button>
     </nav>      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
