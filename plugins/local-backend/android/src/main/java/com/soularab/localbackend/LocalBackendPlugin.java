@@ -120,7 +120,6 @@ public class LocalBackendPlugin extends Plugin {
 
     @PluginMethod
     public void downloadRoohModel(PluginCall call) {
-        call.setKeepAlive(true);
         new Thread(() -> {
             File target = roohModelFile();
             File partial = new File(target.getParentFile(), target.getName() + ".part");
@@ -195,7 +194,6 @@ public class LocalBackendPlugin extends Plugin {
         String prompt = call.getString("prompt", "");
         int maxTokens = call.getInt("maxTokens", 512);
         if (prompt.trim().isEmpty() || prompt.length() > 50000) { call.reject("نص المحادثة فارغ أو طويل جداً."); return; }
-        call.setKeepAlive(true);
         new Thread(() -> {
             try {
                 String answer = RoohNative.generate(prompt, maxTokens);
