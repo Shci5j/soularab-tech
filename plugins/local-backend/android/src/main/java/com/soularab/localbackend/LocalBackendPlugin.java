@@ -159,6 +159,7 @@ public class LocalBackendPlugin extends Plugin {
                     }
                     output.getFD().sync();
                 }
+                if (total > 0 && partial.length() != total) throw new IOException("انقطع تنزيل النموذج قبل اكتماله؛ أعد المحاولة.");
                 if (partial.length() < 1500000000L) throw new IOException("ملف النموذج أصغر من الحجم المتوقع؛ تم رفضه.");
                 if (target.exists() && !target.delete()) throw new IOException("تعذر استبدال ملف النموذج القديم.");
                 if (!partial.renameTo(target)) throw new IOException("تعذر تثبيت ملف النموذج بعد التنزيل.");
