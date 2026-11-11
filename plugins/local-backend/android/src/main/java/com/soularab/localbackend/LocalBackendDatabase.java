@@ -53,5 +53,8 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN result TEXT NOT NULL DEFAULT ''");
         }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN result TEXT NOT NULL DEFAULT ''");
+        }
     }
 }
