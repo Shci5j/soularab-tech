@@ -1263,9 +1263,9 @@ export default function App() {
       setDepartmentResult(result);
       setDepartmentDraft({ title: '', details: '', risk: 'medium' });
       await refresh();
-      setNotice(language === 'ar'
-        ? 'تم إنشاء خطة القسم وربطها بمركز الموافقات. لم يبدأ أي تنفيذ بعد.'
-        : 'The department plan was created and sent to approvals. No execution has started.');
+      setNotice(Capacitor.isNativePlatform()
+        ? (language === 'ar' ? 'وُجّهت المهمة إلى الخادم المحلي المخصص للقسم وأُضيفت إلى طابور المهام.' : 'The department task was routed to its assigned local node and added to the task queue.')
+        : (language === 'ar' ? 'تم إنشاء خطة القسم وربطها بمركز الموافقات. لم يبدأ أي تنفيذ بعد.' : 'The department plan was created and sent to approvals. No execution has started.'));
     } catch (error) {
       setNotice(error.message);
     } finally {
