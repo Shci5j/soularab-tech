@@ -3,6 +3,10 @@ package com.soularab.localbackend;
 import android.content.SharedPreferences;
 import android.util.Base64;
 import android.content.Intent;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
+import java.util.concurrent.Executor;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -82,6 +86,78 @@ public class LocalBackendPlugin extends Plugin {
         } catch (Exception error) {
             call.reject("Termux command service unavailable. Enable Allow external apps in Termux.", error);
         }
+    }
+
+    @PluginMethod
+    public void biometricAvailability(PluginCall call) {
+        int status = BiometricManager.from(getContext()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+        JSObject result = new JSObject();
+        result.put("available", status == BiometricManager.BIOMETRIC_SUCCESS);
+        result.put("status", status);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void authenticateBiometric(PluginCall call) {
+        int status = BiometricManager.from(getContext()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+        if (status != BiometricManager.BIOMETRIC_SUCCESS) {
+            call.reject("Strong biometric authentication is not available on this device (" + status + ").");
+            return;
+        }
+        Executor executor = ContextCompat.getMainExecutor(getContext());
+        BiometricPrompt prompt = new BiometricPrompt(getActivity(), executor, new BiometricPrompt.AuthenticationCallback() {
+            @Override
+            public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                JSObject response = new JSObject();
+                response.put("authenticated", true);
+                call.resolve(response);
+            }
+
+            @Override
+            public void onAuthenticationError(int errorCode, CharSequence errString) {
+                call.reject(errString == null ? "Biometric authentication failed." : errString.toString());
+            }
+
+            @Override
+            public void onAuthenticationFailed() {
+                // The system prompt remains available for another biometric attempt.
+            }
+        });
+        String title = call.getString("title", "SOULARAB TECH");
+        String subtitle = call.getString("subtitle", "Authenticate to unlock the app");
+        BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            .setNegativeButtonText("Use PIN")
+            .build();
+        prompt.authenticate(info);
+    }
+
+    @PluginMethod
+    public void checkRootAccess(PluginCall call) {
+        new Thread(() -> {
+            Process process = null;
+            try {
+                process = new ProcessBuilder("su", "-c", "id").redirectErrorStream(true).start();
+                byte[] buffer = new byte[2048];
+                int count = process.getInputStream().read(buffer);
+                boolean granted = process.waitFor() == 0;
+                String output = count > 0 ? new String(buffer, 0, count, "UTF-8").trim() : "";
+                JSObject result = new JSObject();
+                result.put("available", granted && output.contains("uid=0"));
+                if (granted && output.contains("uid=0")) result.put("uid", output);
+                else result.put("message", "Root access is not available or was not granted.");
+                call.resolve(result);
+            } catch (Exception error) {
+                JSObject result = new JSObject();
+                result.put("available", false);
+                result.put("message", "This Android device does not provide an accessible su binary.");
+                call.resolve(result);
+            } finally {
+                if (process != null) process.destroy();
+            }
+        }).start();
     }
 
     private static final String[] NODE_IDS = {"A", "B", "C", "D", "E"};
