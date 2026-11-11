@@ -192,12 +192,14 @@ public class LocalBackendPlugin extends Plugin {
         LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken);
         server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
         servers.add(server);
+        if ("B".equals(id)) server.startWorker();
     }
 
     private synchronized void stopNode(String id) {
         for (int i = servers.size() - 1; i >= 0; i--) {
             LocalNodeServer server = servers.get(i);
             if (server.nodeId.equals(id)) {
+                server.stopWorker();
                 try { server.stop(); } catch (Exception ignored) {}
                 servers.remove(i);
             }
@@ -211,6 +213,7 @@ public class LocalBackendPlugin extends Plugin {
 
     private synchronized void stopAll() {
         for (LocalNodeServer server : servers) {
+            server.stopWorker();
             try { server.stop(); } catch (Exception ignored) {}
         }
         servers.clear();
