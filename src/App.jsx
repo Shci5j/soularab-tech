@@ -434,6 +434,10 @@ export default function App() {
       if (path === '/api/assistant/status' || path === '/api/assistant/models') return await localNodeRequest('A', '/models');
       if (path === '/api/assistant/chat' && method === 'POST') return await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(nativeBody) });
       if (path === '/api/tasks' && method === 'GET') return { items: await localNodeRequest('E', '/tasks') };
+      if (path === '/api/agent-plans' && method === 'POST') {
+        const queued = await localNodeRequest('E', '/dispatch', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || active, payload: nativeBody }) });
+        return { id: queued.taskId, status: queued.status, assignedNode: queued.assignedNode, execution: 'queued_on_device' };
+      }
       if (path === '/api/tasks' && method === 'POST') {
         const queued = await localNodeRequest('E', '/dispatch', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
         return { id: queued.taskId, status: queued.status, assignedNode: queued.assignedNode, execution: 'queued_on_device' };
@@ -1251,7 +1255,7 @@ export default function App() {
         'حالة المحرك: ' + config.engineStatus,
         'الحالة: خطة للمراجعة فقط؛ لا يبدأ التنفيذ تلقائياً بعد الموافقة.',
       ].join('\\n');
-      const legacyDepartment = { store: 'work', video: 'jathr', graphics: 'work', documents: 'files', automation: 'system' }[active];
+      const legacyDepartment = ({ store: 'store', video: 'video', graphics: 'graphics', documents: 'documents', automation: 'automation' })[active] || active;
       const result = await request('/api/agent-plans', {
         method: 'POST',
         body: JSON.stringify({ title, description, risk: departmentDraft.risk, department: legacyDepartment }),
