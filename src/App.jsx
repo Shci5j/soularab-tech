@@ -1687,7 +1687,7 @@ export default function App() {
             <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
             <div className="approval-actions">
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
-              {Capacitor.isNativePlatform() && ['queued','running'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
+              {Capacitor.isNativePlatform() && task.status==='queued' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
               {Capacitor.isNativePlatform() && task.status==='paused' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'resume')}>{language==='ar'?'استئناف':'Resume'}</button>}
               {Capacitor.isNativePlatform() && ['queued','paused'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'priority',10)}>{language==='ar'?'أولوية قصوى':'High priority'}</button>}
               {['queued','planning','waiting_approval','paused'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
