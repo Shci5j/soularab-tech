@@ -140,7 +140,7 @@ final class LocalNodeServer extends NanoHTTPD {
             } finally { current.close(); }
             ContentValues values = new ContentValues();
             if ("pause".equals(action)) {
-                if (!("queued".equals(currentStatus) || "running".equals(currentStatus))) return json(Response.Status.CONFLICT, error("task_cannot_be_paused"));
+                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused_without_a_running_worker"));
                 values.put("status", "paused");
             } else if ("resume".equals(action)) {
                 if (!"paused".equals(currentStatus)) return json(Response.Status.CONFLICT, error("task_is_not_paused"));
