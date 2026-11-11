@@ -35,7 +35,21 @@ FetchContent_Declare(
     GIT_TAG v0.9.0
     GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(llama_cpp)
+FetchContent_GetProperties(llama_cpp)
+if(NOT llama_cpp_POPULATED)
+    FetchContent_Populate(llama_cpp)
+    if(ANDROID)
+        # Android bionic exposes madvise(), not the POSIX posix_madvise() API.
+        # Keep llama.cpp mmap advice behavior using the equivalent Android constants.
+        set(LLAMA_MMAP_SOURCE "${llama_cpp_SOURCE_DIR}/src/llama-mmap.cpp")
+        file(READ "${LLAMA_MMAP_SOURCE}" LLAMA_MMAP_CONTENT)
+        string(REPLACE "posix_madvise(" "madvise(" LLAMA_MMAP_CONTENT "${LLAMA_MMAP_CONTENT}")
+        string(REPLACE "POSIX_MADV_WILLNEED" "MADV_WILLNEED" LLAMA_MMAP_CONTENT "${LLAMA_MMAP_CONTENT}")
+        string(REPLACE "POSIX_MADV_RANDOM" "MADV_RANDOM" LLAMA_MMAP_CONTENT "${LLAMA_MMAP_CONTENT}")
+        file(WRITE "${LLAMA_MMAP_SOURCE}" "${LLAMA_MMAP_CONTENT}")
+    endif()
+    add_subdirectory("${llama_cpp_SOURCE_DIR}" "${llama_cpp_BINARY_DIR}")
+endif()
 
 add_library(rooh_engine SHARED rooh_jni.cpp)
 target_include_directories(rooh_engine PRIVATE ${llama_cpp_SOURCE_DIR}/include)
