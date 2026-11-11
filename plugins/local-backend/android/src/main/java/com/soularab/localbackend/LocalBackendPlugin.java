@@ -2,6 +2,7 @@ package com.soularab.localbackend;
 
 import android.content.SharedPreferences;
 import android.util.Base64;
+import android.content.Intent;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -50,9 +51,7 @@ public class LocalBackendPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void status(PluginCall call) {
-        call.resolve(statusObject());
-    }
+    public void status(PluginCall call) { call.resolve(statusObject()); }
 
     @PluginMethod
     public void stop(PluginCall call) {
@@ -60,6 +59,29 @@ public class LocalBackendPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("running", false);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void runTermuxCommand(PluginCall call) {
+        String command = call.getString("command", "").trim();
+        if (command.isEmpty() || command.length() > 12000) {
+            call.reject("A command between 1 and 12000 characters is required");
+            return;
+        }
+        try {
+            Intent intent = new Intent("com.termux.RUN_COMMAND");
+            intent.setClassName("com.termux", "com.termux.app.RunCommandService");
+            intent.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash");
+            intent.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{"-lc", command});
+            intent.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home");
+            intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", false);
+            getContext().startService(intent);
+            JSObject result = new JSObject();
+            result.put("accepted", true);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Termux command service unavailable. Enable Allow external apps in Termux.", error);
+        }
     }
 
     private synchronized void startAll() throws IOException {
