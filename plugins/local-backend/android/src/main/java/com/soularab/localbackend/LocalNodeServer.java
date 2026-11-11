@@ -184,6 +184,8 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("title", title);
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
+            result.put("worker", "B".equals(nodeId) ? (workerActive.get() ? "running" : "stopped") : "not_configured");
+            result.put("taskExecution", "B".equals(nodeId) ? "local_llama_cpp_text" : "engine_dependent");
             return json(Response.Status.OK, result);
         }
         if (("A".equals(nodeId) || "B".equals(nodeId)) && "/models".equals(path) && Method.GET.equals(session.getMethod())) {
