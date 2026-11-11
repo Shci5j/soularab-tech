@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 final class LocalBackendDatabase extends SQLiteOpenHelper {
     private static final String DB_NAME = "soularab_embedded_backend.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 3;
 
     LocalBackendDatabase(Context context) {
         super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
@@ -29,7 +29,8 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
             "status TEXT NOT NULL DEFAULT 'queued'," +
             "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
             "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-            "priority INTEGER NOT NULL DEFAULT 0)");
+            "priority INTEGER NOT NULL DEFAULT 0," +
+            "result TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE INDEX idx_node_tasks_node_status ON node_tasks(node_id, status)");
         db.execSQL("CREATE TABLE local_sections (" +
             "id TEXT PRIMARY KEY," +
@@ -48,6 +49,9 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0");
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN result TEXT NOT NULL DEFAULT ''");
         }
     }
 }
