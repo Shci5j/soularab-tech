@@ -220,3 +220,21 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .skip-link{position:fixed;z-index:2000;top:-64px;left:12px;padding:11px 16px;border:1px solid var(--gold);border-radius:9px;background:var(--surface);color:var(--text);font-weight:700;box-shadow:var(--shadow);transition:top .15s ease}
 .skip-link:focus{top:12px}
 #main-content:focus{outline:none}
+
+
+/* Phase 1: branded top bar and persistent brightness control */
+.app-shell{filter:brightness(var(--app-brightness,1))}
+.topbar-identity{display:flex;align-items:center;gap:14px;min-width:0;flex:1}
+.topbar-logo{width:64px;height:64px;flex:none;object-fit:contain;filter:drop-shadow(0 3px 12px #d7b66b30)}
+.topbar-identity>div{min-width:0}
+.topbar h1.app-brand-title{font-size:clamp(23px,3vw,34px);letter-spacing:1.5px;white-space:nowrap}
+.topbar-tagline{margin:5px 0 0;color:var(--gold);font-size:9px;letter-spacing:2px}
+.topbar-date{display:grid;gap:4px;min-width:145px;padding-inline:12px;border-inline-start:1px solid var(--line)}
+.topbar-date small{font-size:9px;color:var(--muted);letter-spacing:.5px}
+.topbar-date strong{font-size:11px;color:var(--text);white-space:nowrap}
+.brightness-control{display:flex;align-items:center;gap:7px;min-height:40px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--gold)}
+.brightness-control>span{font-size:18px;line-height:1}
+.brightness-control input[type=range]{width:76px;accent-color:var(--gold);cursor:pointer}
+.brightness-control output{min-width:34px;color:var(--muted);font-size:9px;text-align:center}
+@media(max-width:900px){.topbar{align-items:flex-start;flex-wrap:wrap}.topbar-identity{flex:1 1 100%}.top-actions{width:100%;flex-wrap:wrap}.topbar-date{min-width:0;flex:1}.brightness-control input[type=range]{width:62px}}
+@media(max-width:600px){.topbar{padding:18px 14px;gap:12px}.topbar-logo{width:49px;height:49px}.topbar h1.app-brand-title{font-size:22px}.topbar-tagline{font-size:7px;letter-spacing:1.4px}.top-actions{gap:6px}.topbar-date{padding-inline:7px}.topbar-date strong{font-size:9px;white-space:normal}.brightness-control{gap:4px;padding:6px}.brightness-control input[type=range]{width:54px}.brightness-control output{font-size:8px}}
