@@ -44,6 +44,47 @@ export default function App() {
     window.addEventListener('popstate', handleBack);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
+
+  useEffect(() => {
+    let gestureStart = null;
+    const edgeSize = 26;
+    const minimumSwipe = 72;
+    const onPointerDown = (event) => {
+      if (event.pointerType !== 'touch' || active === 'overview') return;
+      if (event.target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
+      const fromLeft = event.clientX <= edgeSize;
+      const fromRight = event.clientX >= window.innerWidth - edgeSize;
+      if (!fromLeft && !fromRight) return;
+      gestureStart = {
+        x: event.clientX,
+        y: event.clientY,
+        pointerId: event.pointerId,
+        fromLeft,
+        fromRight,
+      };
+    };
+    const onPointerUp = (event) => {
+      if (!gestureStart || event.pointerId !== gestureStart.pointerId) return;
+      const deltaX = event.clientX - gestureStart.x;
+      const deltaY = event.clientY - gestureStart.y;
+      const swipeBack =
+        Math.abs(deltaY) < 100 &&
+        ((gestureStart.fromLeft && deltaX >= minimumSwipe) ||
+          (gestureStart.fromRight && deltaX <= -minimumSwipe));
+      gestureStart = null;
+      if (swipeBack) window.history.back();
+    };
+    const clearGesture = () => { gestureStart = null; };
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', clearGesture, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', clearGesture);
+    };
+  }, [active]);
+
   const [api, setApi] = useState({ state: 'checking', version: '—' });
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
