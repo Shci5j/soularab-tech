@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "SOULARAB TECH - Royal Dashboard",
-  "short_name": "SOULARAB",
-  "description": "لوحة تحكم SOULARAB TECH",
+  "name": "SOULARAB TECH",
+  "short_name": "SOULARAB TECH",
+  "description": "SOULARAB TECH — IDEAS INTO DIGITAL REALITY",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",

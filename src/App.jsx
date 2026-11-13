@@ -44,12 +44,57 @@ export default function App() {
     window.addEventListener('popstate', handleBack);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
+
+  useEffect(() => {
+    let gestureStart = null;
+    const edgeSize = 26;
+    const minimumSwipe = 72;
+    const onPointerDown = (event) => {
+      if (event.pointerType !== 'touch' || active === 'overview') return;
+      if (event.target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
+      const fromLeft = event.clientX <= edgeSize;
+      const fromRight = event.clientX >= window.innerWidth - edgeSize;
+      if (!fromLeft && !fromRight) return;
+      gestureStart = {
+        x: event.clientX,
+        y: event.clientY,
+        pointerId: event.pointerId,
+        fromLeft,
+        fromRight,
+      };
+    };
+    const onPointerUp = (event) => {
+      if (!gestureStart || event.pointerId !== gestureStart.pointerId) return;
+      const deltaX = event.clientX - gestureStart.x;
+      const deltaY = event.clientY - gestureStart.y;
+      const swipeBack =
+        Math.abs(deltaY) < 100 &&
+        ((gestureStart.fromLeft && deltaX >= minimumSwipe) ||
+          (gestureStart.fromRight && deltaX <= -minimumSwipe));
+      gestureStart = null;
+      if (swipeBack) window.history.back();
+    };
+    const clearGesture = () => { gestureStart = null; };
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', clearGesture, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', clearGesture);
+    };
+  }, [active]);
+
   const [api, setApi] = useState({ state: 'checking', version: '—' });
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
+  const [brightness, setBrightness] = useState(() => {
+    const saved = Number(localStorage.getItem('st-brightness'));
+    return Number.isFinite(saved) && saved >= 70 && saved <= 130 ? saved : 100;
+  });
   const [preferences, setPreferences] = useState(() => {
     try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
     catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }; }
@@ -241,6 +286,11 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('st-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-brightness', String(brightness / 100));
+    localStorage.setItem('st-brightness', String(brightness));
+  }, [brightness]);
 
   useEffect(() => {
     const minutes = Number(preferences.sessionTimeoutMinutes || 0);
@@ -1090,21 +1140,20 @@ export default function App() {
   };
   const current = useMemo(() => { if (pageTitles[active]) return pageTitles[active]; const item = modules.find((entry) => entry.id === active) || pageTitles.overview; return language === 'en' && englishModules[active] ? { ...item, title: englishModules[active][0], desc: englishModules[active][1] } : item; }, [active, language]);
   const dateOptions = preferences.dateFormat === 'short' ? { year: 'numeric', month: '2-digit', day: '2-digit' } : preferences.dateFormat === 'medium' ? { year: 'numeric', month: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-  if (preferences.dateFormat === 'long') dateOptions.weekday = 'long';
+  dateOptions.weekday = 'long';
   if (preferences.timeZone === 'UTC') dateOptions.timeZone = 'UTC';
   const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', dateOptions).format(new Date());
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{language === 'ar' ? 'تجاوز التنقل إلى المحتوى' : 'Skip navigation and go to content'}</a>
     <main className="main-area" id="main-content" tabIndex={-1}>
-      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button></div></header>
+      <header className="topbar"><div className="topbar-identity"><img className="topbar-logo" src={import.meta.env.BASE_URL + "icon.svg"} alt="SOULARAB TECH" /><div>{active === 'overview' ? <><h1 className="app-brand-title">SOULARAB TECH</h1><p className="topbar-tagline">IDEAS INTO DIGITAL REALITY</p></> : <><p className="eyebrow">SOULARAB TECH</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></>}</div></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<div className="topbar-date" aria-label={todayLabel}><small>{language === 'ar' ? 'اليوم والتاريخ' : 'DAY & DATE'}</small><strong>{todayLabel}</strong></div><label className="brightness-control" title={language === 'ar' ? 'التحكم بسطوع الواجهة' : 'Interface brightness'}><span aria-hidden="true">☼</span><input type="range" min="70" max="130" step="5" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={language === 'ar' ? 'سطوع الواجهة' : 'Interface brightness'} /><output>{brightness}%</output></label><button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"} aria-label={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button></div></header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label={language === 'ar' ? 'إغلاق' : 'Close'}>×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
-        <div className="workspace-calendar" aria-label={todayLabel}><span className="calendar-mark">▦</span><div><small>{language === 'ar' ? 'التاريخ اليوم' : 'TODAY'}</small><strong>{todayLabel}</strong></div><span className="calendar-live">{language === 'ar' ? 'محدّث تلقائياً' : 'LIVE DATE'}</span></div>
         <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label={language === 'ar' ? 'افتح مساعد روح' : 'Open Rooh assistant'}>
           <span className="rooh-emblem" aria-hidden="true"><span className="rooh-orbit orbit-a"></span><span className="rooh-orbit orbit-b"></span><span className="rooh-core">روح</span></span>
-          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'مساعدك الذكي في قلب المنصة' : 'Your intelligent assistant at the heart of the workspace'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
+          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'روح التطبيق وروح العمل' : 'The soul of the app and the work'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
           <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
         </button>
         <div className="primary-destinations">
