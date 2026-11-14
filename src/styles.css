@@ -238,3 +238,35 @@ html[dir="ltr"] .vault-entry{flex-direction:row-reverse}
 .brightness-control output{min-width:34px;color:var(--muted);font-size:9px;text-align:center}
 @media(max-width:900px){.topbar{align-items:flex-start;flex-wrap:wrap}.topbar-identity{flex:1 1 100%}.top-actions{width:100%;flex-wrap:wrap}.topbar-date{min-width:0;flex:1}.brightness-control input[type=range]{width:62px}}
 @media(max-width:600px){.topbar{padding:18px 14px;gap:12px}.topbar-logo{width:49px;height:49px}.topbar h1.app-brand-title{font-size:22px}.topbar-tagline{font-size:7px;letter-spacing:1.4px}.top-actions{gap:6px}.topbar-date{padding-inline:7px}.topbar-date strong{font-size:9px;white-space:normal}.brightness-control{gap:4px;padding:6px}.brightness-control input[type=range]{width:54px}.brightness-control output{font-size:8px}}
+
+
+/* Refined header, collapsible brightness control, and agreed home hierarchy */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.topbar-identity{flex:1 1 260px;min-width:0}
+.topbar-logo{display:block;width:58px;height:58px;object-fit:contain}
+.top-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:1 1 520px;min-width:0}
+.brightness-wrap{position:relative;display:flex;align-items:center}
+.brightness-trigger{width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--gold);font-size:25px;cursor:pointer;transition:background .18s,border-color .18s}
+.brightness-trigger[aria-expanded="true"],.brightness-trigger:hover{border-color:var(--gold);background:var(--surface)}
+.brightness-popover{position:absolute;z-index:50;top:calc(100% + 12px);inset-inline-end:0;width:min(260px,calc(100vw - 36px));display:grid;gap:10px;padding:14px;border:1px solid var(--gold);border-radius:13px;background:var(--surface);box-shadow:0 14px 36px #0008}
+.brightness-popover-arrow{position:absolute;inset-inline-end:14px;top:-7px;width:12px;height:12px;transform:rotate(45deg);border-top:1px solid var(--gold);border-left:1px solid var(--gold);background:var(--surface)}
+.brightness-popover label{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text)}
+.brightness-popover output{color:var(--gold);font-variant-numeric:tabular-nums}
+.brightness-popover input[type="range"]{width:100%;accent-color:var(--gold);cursor:pointer}
+.home-section-label{margin:7px 0 10px;color:var(--gold);font-size:10px;font-weight:700;letter-spacing:1.5px}
+.core-destinations{margin-top:0}
+.secondary-destinations{margin-top:10px}
+.advanced-infrastructure-note{margin-top:20px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.advanced-infrastructure-note strong{color:var(--gold);font-size:13px}
+.advanced-infrastructure-note p{margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.8}
+@media(max-width:600px){
+ .topbar{align-items:center;gap:12px;padding:15px}
+ .topbar-identity{flex:1 1 100%;gap:10px}
+ .topbar-logo{width:48px;height:48px}
+ .top-actions{flex:1 1 100%;display:flex;align-items:center;justify-content:space-between;gap:7px}
+ .topbar-date{min-width:0;flex:1;padding-inline:8px}
+ .topbar-date strong{white-space:normal;font-size:10px}
+ .brightness-trigger{width:39px;height:39px}
+ .top-actions .language-select{max-width:96px}
+ .top-actions>.button{font-size:10px;padding:8px}
+}
