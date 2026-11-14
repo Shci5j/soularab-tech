@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-ROOT="${SOUlARAB_ROOT:-$HOME/soularab-tech}"
+ROOT="${SOULARAB_ROOT:-$HOME/soularab-tech}"
 cd "$ROOT"
 
 SERVER="${LLAMA_SERVER_BIN:-}"
@@ -37,13 +37,14 @@ BASE="http://$HOST:$PORT"
 PID_FILE="$HOME/.soularab-llama-server.pid"
 LOG_FILE="$HOME/.soularab-llama-server.log"
 
-python - "$BASE/health" <<'PY' >/dev/null 2>&1 && {
-import sys, urllib.request
-urllib.request.urlopen(sys.argv[1], timeout=1)
-PY
+engine_is_up() {
+  python -c 'import sys,urllib.request; urllib.request.urlopen(sys.argv[1], timeout=2)' "$BASE/health" >/dev/null 2>&1
+}
+
+if engine_is_up; then
   echo "llama.cpp يعمل بالفعل على $BASE"
   exit 0
-}
+fi
 
 nohup "$SERVER" \
   --model "$MODEL" \
