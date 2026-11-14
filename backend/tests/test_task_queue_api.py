@@ -194,7 +194,7 @@ class TaskQueueApiTests(unittest.TestCase):
                     response = client.get("/api/engines/status")
                     self.assertEqual(response.status_code, 200)
                     result = response.json()
-                    self.assertTrue(result["providers"]["ollama"]["connected"])
+                    self.assertTrue(result["providers"]["llama_cpp"]["connected"])
                     self.assertTrue(result["providers"]["comfyui"]["connected"])
                     self.assertTrue(result["providers"]["whisper_cpp"]["connected"])
                     self.assertEqual(result["network_scope"], "local_only")

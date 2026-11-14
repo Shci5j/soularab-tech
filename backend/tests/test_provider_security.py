@@ -5,27 +5,88 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from app import main
-from app.main import ChatRequest, validate_local_provider_url
+from app.main import ChatRequest, validate_local_llama_url
 
 
 class LocalProviderSecurityTests(unittest.TestCase):
     def test_accepts_loopback_ipv4(self):
-        self.assertEqual(validate_local_provider_url("http://127.0.0.1:11434/"), "http://127.0.0.1:11434")
+        self.assertEqual(validate_local_llama_url("http://127.0.0.1:8081/"), "http://127.0.0.1:8081")
 
     def test_accepts_localhost(self):
-        self.assertEqual(validate_local_provider_url("http://localhost:11434"), "http://localhost:11434")
+        self.assertEqual(validate_local_llama_url("http://localhost:8081"), "http://localhost:8081")
 
     def test_rejects_public_host(self):
-        with self.assertRaises(ValueError):
-            validate_local_provider_url("https://example.com")
+        for value in ("https://example.com", "http://example.com:8081"):
+            with self.assertRaises(ValueError):
+                validate_local_llama_url(value)
 
     def test_rejects_private_lan_ip(self):
         with self.assertRaises(ValueError):
-            validate_local_provider_url("http://192.168.1.10:11434")
+            validate_local_llama_url("http://192.168.1.10:8081")
 
     def test_rejects_credentials(self):
         with self.assertRaises(ValueError):
-            validate_local_provider_url("http://user:pass@127.0.0.1:11434")
+            validate_local_llama_url("http://user:pass@127.0.0.1:8081")
+
+    def test_rejects_non_http_scheme(self):
+        with self.assertRaises(ValueError):
+            validate_local_llama_url("https://127.0.0.1:8081")
+
+
+class LlamaCppApiTests(unittest.TestCase):
+    def test_assistant_status_reports_llama_cpp_provider(self):
+        async def fake_request(path, payload=None):
+            self.assertEqual(path, "/health")
+            return {"status": "ok"}
+
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "llama.sqlite3", API_TOKEN="", APP_ENV="local"), patch.object(main, "llama_cpp_request", fake_request):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/assistant/status")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["provider"], "llama_cpp")
+                    self.assertTrue(response.json()["connected"])
+
+    def test_assistant_models_use_openai_compatible_model_ids(self):
+        async def fake_request(path, payload=None):
+            self.assertEqual(path, "/v1/models")
+            return {"data": [{"id": "rooh-local"}, {"id": "qwen2.5-3b"}]}
+
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "models.sqlite3", API_TOKEN="", APP_ENV="local"), patch.object(main, "llama_cpp_request", fake_request):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/assistant/models")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual([item["name"] for item in response.json()["items"]], ["rooh-local", "qwen2.5-3b"])
+
+    def test_chat_uses_openai_compatible_completion_shape(self):
+        async def fake_request(path, payload=None):
+            if path == "/v1/models":
+                return {"data": [{"id": "rooh-local"}]}
+            self.assertEqual(path, "/v1/chat/completions")
+            self.assertEqual(payload["model"], "rooh-local")
+            return {"choices": [{"message": {"role": "assistant", "content": "أنا روح"}}]}
+
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "chat.sqlite3", API_TOKEN="", APP_ENV="local"), patch.object(main, "llama_cpp_request", fake_request):
+                with TestClient(main.app) as client:
+                    response = client.post("/api/assistant/chat", json={"model": "rooh-local", "messages": [{"role": "user", "content": "من أنت؟"}]})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["message"]["content"], "أنا روح")
+
+    def test_chat_rejects_unknown_model(self):
+        async def fake_request(path, payload=None):
+            return {"data": [{"id": "other-model"}]}
+
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp)
+            with patch.multiple(main, DATA_DIR=data, DB_PATH=data / "missing.sqlite3", API_TOKEN="", APP_ENV="local"), patch.object(main, "llama_cpp_request", fake_request):
+                with TestClient(main.app) as client:
+                    response = client.post("/api/assistant/chat", json={"model": "rooh-local", "messages": [{"role": "user", "content": "hello"}]})
+                    self.assertEqual(response.status_code, 404)
 
 
 import tempfile
