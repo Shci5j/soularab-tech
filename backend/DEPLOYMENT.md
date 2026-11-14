@@ -66,6 +66,6 @@ A missing production token prevents the backend from starting in production mode
 
 ## Current scope and limitations
 
-This deploys the existing API; it does not create user accounts, password recovery, multi-tenant authorization, a worker queue, or the five-node mesh. The current application uses one shared bearer token. Keep it private. Do not expose Ollama, ComfyUI, or whisper.cpp ports publicly. Those engines remain unavailable until installed and connected on the server.
+This deploys the existing API; it does not create user accounts, password recovery, multi-tenant authorization, a worker queue, or the five-node mesh. The current application uses one shared bearer token. Keep it private. Do not expose llama.cpp, ComfyUI, or whisper.cpp ports publicly. The local inference engine remains unavailable until llama-server is installed and connected on the same trusted host.
 
 For Android, configure the app's API base URL as `https://YOUR_API_DOMAIN` and provide the same bearer token through the app's existing access-token setting. A static web build also needs `VITE_API_BASE_URL=https://YOUR_API_DOMAIN` at build time.
