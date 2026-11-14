@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
+import appLogo from '../icon.svg';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
 const modules = [
@@ -91,6 +92,7 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
+  const [brightnessOpen, setBrightnessOpen] = useState(false);
   const [brightness, setBrightness] = useState(() => {
     const saved = Number(localStorage.getItem('st-brightness'));
     return Number.isFinite(saved) && saved >= 70 && saved <= 130 ? saved : 100;
@@ -1128,6 +1130,8 @@ export default function App() {
     work: { title: 'الشروع بالعمل', desc: 'الأقسام المتخصصة وأدوات التنفيذ' },
     hub: { title: 'سولاراب هوب', desc: 'إدارة المستودعات والأكواد والإصدارات' },
     root: { title: 'الجذر', desc: 'إدارة الأجهزة والتشخيص والصيانة' },
+    terminal: { title: 'المحطة الطرفية', desc: 'القسم المستقل للمحطة الطرفية' },
+    more: { title: 'عرض المزيد', desc: 'لوحة التحكم المتقدمة' },
     settings: { title: 'الإعدادات العامة', desc: 'إعدادات المنصة والاتصال والمظهر' },
     vault: { title: 'الخزنة', desc: 'الأعمال المحفوظة والمؤجلة والبيانات المؤقتة' },
   } : {
@@ -1135,6 +1139,8 @@ export default function App() {
     work: { title: 'Get to work', desc: 'Specialized departments and execution tools' },
     hub: { title: 'Soularab Hub', desc: 'Repositories, code, and releases' },
     root: { title: 'Root', desc: 'Devices, diagnostics, and maintenance' },
+    terminal: { title: 'Terminal', desc: 'Independent terminal section' },
+    more: { title: 'More', desc: 'Advanced control panel' },
     settings: { title: 'General settings', desc: 'Workspace, connection, and appearance' },
     vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
@@ -1147,7 +1153,27 @@ export default function App() {
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{language === 'ar' ? 'تجاوز التنقل إلى المحتوى' : 'Skip navigation and go to content'}</a>
     <main className="main-area" id="main-content" tabIndex={-1}>
-      <header className="topbar"><div className="topbar-identity"><img className="topbar-logo" src={import.meta.env.BASE_URL + "icon.svg"} alt="SOULARAB TECH" /><div>{active === 'overview' ? <><h1 className="app-brand-title">SOULARAB TECH</h1><p className="topbar-tagline">IDEAS INTO DIGITAL REALITY</p></> : <><p className="eyebrow">SOULARAB TECH</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></>}</div></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<div className="topbar-date" aria-label={todayLabel}><small>{language === 'ar' ? 'اليوم والتاريخ' : 'DAY & DATE'}</small><strong>{todayLabel}</strong></div><label className="brightness-control" title={language === 'ar' ? 'التحكم بسطوع الواجهة' : 'Interface brightness'}><span aria-hidden="true">☼</span><input type="range" min="70" max="130" step="5" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={language === 'ar' ? 'سطوع الواجهة' : 'Interface brightness'} /><output>{brightness}%</output></label><button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"} aria-label={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button></div></header>
+      <header className="topbar">
+        <div className="topbar-identity">
+          <img className="topbar-logo" src={appLogo} alt="SOULARAB TECH" />
+          <div>{active === 'overview' ? <><h1 className="app-brand-title">SOULARAB TECH</h1><p className="topbar-tagline">IDEAS INTO DIGITAL REALITY</p></> : <><p className="eyebrow">SOULARAB TECH</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></>}</div>
+        </div>
+        <div className="top-actions">
+          <select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>
+          {active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}
+          <div className="topbar-date" aria-label={todayLabel}><small>{language === 'ar' ? 'اليوم والتاريخ' : 'DAY & DATE'}</small><strong>{todayLabel}</strong></div>
+          <div className="brightness-wrap">
+            <button type="button" className="brightness-trigger" aria-expanded={brightnessOpen} aria-label={language === 'ar' ? 'التحكم بالسطوع' : 'Brightness controls'} title={language === 'ar' ? 'التحكم بالسطوع' : 'Brightness controls'} onClick={() => setBrightnessOpen((open) => !open)}>☼</button>
+            {brightnessOpen && <div className="brightness-popover" role="group" aria-label={language === 'ar' ? 'مستوى السطوع' : 'Brightness level'}>
+              <span className="brightness-popover-arrow" aria-hidden="true"></span>
+              <label>{language === 'ar' ? 'سطوع الشاشة' : 'Screen brightness'} <output>{brightness}%</output></label>
+              <input type="range" min="70" max="130" step="5" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={language === 'ar' ? 'رفع أو خفض السطوع' : 'Increase or decrease brightness'} />
+            </div>}
+          </div>
+          <button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"} aria-label={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button>
+          <button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button>
+        </div>
+      </header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label={language === 'ar' ? 'إغلاق' : 'Close'}>×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
@@ -1156,11 +1182,18 @@ export default function App() {
           <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'روح التطبيق وروح العمل' : 'The soul of the app and the work'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
           <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
         </button>
-        <div className="primary-destinations">
+        <div className="home-section-label">{language === 'ar' ? 'الأقسام الأساسية' : 'CORE SECTIONS'}</div>
+        <div className="primary-destinations core-destinations">
+          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>SOULARAB HUB</strong><span>{language === 'ar' ? 'منصة التطوير والمشاريع' : 'Development and project platform'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'ROOT'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('terminal')}><Icon>⌘</Icon><strong>{language === 'ar' ? 'المحطة الطرفية' : 'TERMINAL'}</strong><span>{language === 'ar' ? 'القسم المستقل للمحطة الطرفية' : 'Independent terminal section'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+        </div>
+        <div className="home-section-label">{language === 'ar' ? 'مساحات المنصة' : 'WORKSPACES & CONTROLS'}</div>
+        <div className="primary-destinations secondary-destinations">
           <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</strong><span>{language === 'ar' ? 'الدخول إلى أقسام العمل المتخصصة' : 'Explore specialized work areas'}</span><b>{language === 'ar' ? 'ابدأ الآن ←' : 'Start now ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>Soularab Hub</strong><span>{language === 'ar' ? 'المستودعات والأكواد والإصدارات' : 'Repositories, code, and releases'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'Root'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'Open settings ←' : 'فتح الإعدادات ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'فتح الإعدادات ←' : 'Open settings ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('vault')}><Icon>▣</Icon><strong>{language === 'ar' ? 'الخزنة' : 'VAULT'}</strong><span>{language === 'ar' ? 'مساحة الملفات والبيانات المحفوظة' : 'Private saved files and data space'}</span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('more')}><Icon>⋯</Icon><strong>{language === 'ar' ? 'عرض المزيد' : 'MORE'}</strong><span>{language === 'ar' ? 'لوحة التحكم المتقدمة والأدوات الإضافية' : 'Advanced control panel and additional tools'}</span><b>{language === 'ar' ? 'استكشاف ←' : 'Explore ←'}</b></button>
         </div>
         <div className="operations-center">
           <div className="section-heading"><div><h3>{language === 'ar' ? 'مركز العمليات' : 'Operations center'}</h3><p>{language === 'ar' ? 'ملخص الاتصال والمهام التي تحتاج قرارك' : 'Connection summary and tasks awaiting your decision'}</p></div></div>
@@ -1180,9 +1213,16 @@ export default function App() {
               return <button type="button" className="engine-status-card" key={engine.id} onClick={() => setActive(engine.id === 'ollama' ? 'assistant' : 'media')}><div><strong>{engine.label}</strong><small>{engine.description}</small><small className="engine-open-link">{language === 'ar' ? 'فتح إعدادات المحرك ←' : 'Open engine settings →'}</small></div><span className={status?.connected ? 'good' : 'warn'}>{status ? (status.connected ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')) : (api.state === 'offline' ? (language === 'ar' ? 'الخادم غير متصل' : 'Backend offline') : (language === 'ar' ? 'لم يُفحص بعد' : 'Not checked'))}</span></button>;
             })}
           </div>
-          <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>{language === 'ar' ? 'الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة' : 'Active and deferred work, saved code, and items under review'}</small></span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
         </div>
       </section>}
+      {active === 'terminal' && <section className="content"><div className="panel-card destination-page"><div className="section-heading"><div><h2>{language === 'ar' ? 'المحطة الطرفية' : 'TERMINAL'}</h2><p className="muted">{language === 'ar' ? 'قسم مستقل ضمن بنية SOULARAB TECH.' : 'An independent section within SOULARAB TECH.'}</p></div></div><p className="muted">{language === 'ar' ? 'واجهة القسم جاهزة للربط؛ لم يتم تفعيل أدوات أو أوامر غير معتمدة بعد.' : 'The section entry is ready; no unapproved commands or tools are enabled.'}</p></div></section>}
+      {active === 'more' && <section className="content"><div className="panel-card destination-page"><div className="section-heading"><div><h2>{language === 'ar' ? 'لوحة التحكم المتقدمة' : 'Advanced control panel'}</h2><p className="muted">{language === 'ar' ? 'الوصول إلى البنية التحتية والمحركات وأدوات الإدارة المتقدمة.' : 'Access infrastructure, engines, and advanced administration.'}</p></div></div><div className="module-workspace-grid">
+        <button className="module-action" onClick={() => setActive('security')}><span>⬡</span><div><strong>{language === 'ar' ? 'الأمان والموافقات' : 'Security & approvals'}</strong><small>{language === 'ar' ? 'التحكم في الصلاحيات وسجل العمليات' : 'Permissions and operation history'}</small></div><b>←</b></button>
+        <button className="module-action" onClick={() => setActive('media')}><span>✧</span><div><strong>{language === 'ar' ? 'محركات الوسائط' : 'Media engines'}</strong><small>{language === 'ar' ? 'حالة أدوات الصور والصوت' : 'Image and audio tool status'}</small></div><b>←</b></button>
+        <button className="module-action" onClick={() => setActive('agents')}><span>⌘</span><div><strong>{language === 'ar' ? 'الوكلاء والأتمتة' : 'Agents & automation'}</strong><small>{language === 'ar' ? 'مسارات المهام والموافقات' : 'Task workflows and approvals'}</small></div><b>←</b></button>
+        <button className="module-action" onClick={() => setActive('domains')}><span>◎</span><div><strong>{language === 'ar' ? 'النطاقات والاستضافة' : 'Domains & hosting'}</strong><small>{language === 'ar' ? 'إعدادات النشر والاتصال' : 'Deployment and connection settings'}</small></div><b>←</b></button>
+        <button className="module-action" onClick={() => setActive('files')}><span>▱</span><div><strong>{language === 'ar' ? 'الملفات والمشاريع' : 'Files & projects'}</strong><small>{language === 'ar' ? 'إدارة الملفات والإصدارات' : 'File and version management'}</small></div><b>←</b></button>
+      </div><div className="advanced-infrastructure-note"><strong>{language === 'ar' ? 'البنية التحتية والخوادم' : 'Infrastructure & servers'}</strong><p>{language === 'ar' ? 'مساحة مخصصة لإدارة الخوادم الخمسة ومراقبتها؛ ستظهر تفاصيل كل خادم عند ربطه فعلياً.' : 'Dedicated space for the five servers; each server will appear when actually connected.'}</p></div></div></section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
       {active === 'hub' && <section className="content"><div className="panel-card destination-page">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'سولاراب هوب' : 'Soularab Hub'}</h2><p className="muted">{language === 'ar' ? 'مستكشف مستودعات GitHub للقراءة والمتابعة.' : 'Browse GitHub repositories and inspect their contents.'}</p></div><span className="pill">{language === 'ar' ? 'قراءة آمنة' : 'Read only'}</span></div>
