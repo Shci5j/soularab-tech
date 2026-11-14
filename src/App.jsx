@@ -1183,10 +1183,10 @@ export default function App() {
           <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
         </button>
         <div className="home-section-label">{language === 'ar' ? 'الأقسام الأساسية' : 'CORE SECTIONS'}</div>
-        <div className="primary-destinations core-destinations">
-          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>SOULARAB HUB</strong><span>{language === 'ar' ? 'منصة التطوير والمشاريع' : 'Development and project platform'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'ROOT'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('terminal')}><Icon>⌘</Icon><strong>{language === 'ar' ? 'المحطة الطرفية' : 'TERMINAL'}</strong><span>{language === 'ar' ? 'القسم المستقل للمحطة الطرفية' : 'Independent terminal section'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+        <div className="primary-destinations core-destinations" aria-label={language === 'ar' ? 'الأقسام الأساسية الثلاثة' : 'Three core sections'}>
+          <button className="destination-card core-destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>{language === 'ar' ? 'سولاراب هوب' : 'SOULARAB HUB'}</strong><span>{language === 'ar' ? 'منصة التطوير والمشاريع' : 'Development and project platform'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card core-destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'ROOT'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card core-destination-card" onClick={() => setActive('terminal')}><Icon>›_</Icon><strong>{language === 'ar' ? 'الطرفية' : 'TERMINAL'}</strong><span>{language === 'ar' ? 'القسم المستقل للمحطة الطرفية' : 'Independent terminal section'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
         </div>
         <div className="home-section-label">{language === 'ar' ? 'مساحات المنصة' : 'WORKSPACES & CONTROLS'}</div>
         <div className="primary-destinations secondary-destinations">
