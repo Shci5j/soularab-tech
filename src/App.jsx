@@ -307,10 +307,10 @@ export default function App() {
     if (language !== 'en' || typeof detail !== 'string') return detail;
     const exact = new Map([
       ['رمز الوصول غير صحيح أو غير موجود.', 'The access token is missing or invalid.'],
-      ['خدمة Ollama المحلية غير متصلة. شغّل Ollama على جهاز الخادم.', 'The local Ollama service is offline. Start Ollama on the server.'],
+      ['محرك llama.cpp المحلي غير متصل. شغّل llama-server على المنفذ 8081.', 'The local llama.cpp engine is offline. Start llama-server on port 8081.'],
       ['انتهت مهلة انتظار النموذج المحلي.', 'The local model request timed out.'],
       ['أعاد مزود النموذج استجابة غير صالحة.', 'The model provider returned an invalid response.'],
-      ['النموذج المحدد غير موجود في Ollama المحلية.', 'The selected model is not installed in local Ollama.'],
+      ['النموذج المحدد غير متاح في محرك llama.cpp المحلي.', 'The selected model is not available in the local llama.cpp engine.'],
       ['لم يُرجع النموذج محتوى.', 'The model returned no content.'],
       ['محرك الوسائط المحلي غير متصل. تحقق من تشغيل الخدمة على جهاز الخادم.', 'The local media engine is offline. Check that the service is running on the server.'],
       ['انتهت مهلة انتظار محرك الوسائط المحلي.', 'The local media engine request timed out.'],
@@ -409,7 +409,7 @@ export default function App() {
       setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
-      if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
+      if (!result.items?.length) setNotice(language === 'ar' ? 'محرك llama.cpp متصل، لكن لم يُعلن عن نموذج متاح.' : 'llama.cpp is connected, but it has not exposed an available model.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
       setModels([]);
@@ -1020,7 +1020,7 @@ export default function App() {
         const available = await request('/api/assistant/models');
         model = available.items?.[0]?.name || '';
       }
-      if (!model) throw new Error(language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.');
+      if (!model) throw new Error(language === 'ar' ? 'لا يوجد نموذج محلي متاح. شغّل llama-server مع ملف GGUF أولاً.' : 'No local model is available. Start llama-server with a GGUF model first.');
       const context = agentDraft.steps.trim();
       const prompt = language === 'ar'
         ? 'أنت مساعد تخطيط داخل SOULARAB TECH. اقترح خطوات عملية واضحة ومحددة للمهمة التالية. أعد الخطوات فقط، كل خطوة في سطر مستقل ومرقمة. لا تدّعِ تنفيذ أي إجراء، ولا تقترح تجاوز الموافقات أو تشغيل أوامر تلقائياً. عنوان المهمة: ' + title + (context ? '\nالملاحظات الحالية: ' + context : '')
@@ -1171,12 +1171,12 @@ export default function App() {
           </div>
           <div className="engine-status-grid">
             {[
-              { id: 'ollama', label: 'Ollama', description: language === 'ar' ? 'نماذج المحادثة المحلية' : 'Local language models' },
+              { id: 'llama_cpp', label: 'llama.cpp', description: language === 'ar' ? 'محرك روح والنموذج المحلي GGUF' : 'Rooh engine and local GGUF model' },
               { id: 'comfyui', label: 'ComfyUI', description: language === 'ar' ? 'توليد الصور محلياً' : 'Local image generation' },
               { id: 'whisper_cpp', label: 'whisper.cpp', description: language === 'ar' ? 'تحويل الصوت إلى نص' : 'Speech transcription' },
             ].map((engine) => {
               const status = engineStatuses[engine.id];
-              return <button type="button" className="engine-status-card" key={engine.id} onClick={() => setActive(engine.id === 'ollama' ? 'assistant' : 'media')}><div><strong>{engine.label}</strong><small>{engine.description}</small><small className="engine-open-link">{language === 'ar' ? 'فتح إعدادات المحرك ←' : 'Open engine settings →'}</small></div><span className={status?.connected ? 'good' : 'warn'}>{status ? (status.connected ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')) : (api.state === 'offline' ? (language === 'ar' ? 'الخادم غير متصل' : 'Backend offline') : (language === 'ar' ? 'لم يُفحص بعد' : 'Not checked'))}</span></button>;
+              return <button type="button" className="engine-status-card" key={engine.id} onClick={() => setActive(engine.id === 'llama_cpp' ? 'assistant' : 'media')}><div><strong>{engine.label}</strong><small>{engine.description}</small><small className="engine-open-link">{language === 'ar' ? 'فتح إعدادات المحرك ←' : 'Open engine settings →'}</small></div><span className={status?.connected ? 'good' : 'warn'}>{status ? (status.connected ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')) : (api.state === 'offline' ? (language === 'ar' ? 'الخادم غير متصل' : 'Backend offline') : (language === 'ar' ? 'لم يُفحص بعد' : 'Not checked'))}</span></button>;
             })}
           </div>
         </div>
@@ -1234,7 +1234,7 @@ export default function App() {
           <div className="settings-group"><h3>{language === 'ar' ? 'إعدادات الذكاء الاصطناعي' : 'AI settings'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'النموذج النصي الافتراضي' : 'Default text model'}</strong><small>{language === 'ar' ? 'النموذج المحلي الذي يختاره روح تلقائياً للمحادثات ومساعدات الصياغة' : 'Local model selected by default for chat and AI-assisted drafting'}</small></div><div className="settings-inline"><select aria-label={language === 'ar' ? 'النموذج الافتراضي' : 'Default model'} value={selectedModel} disabled={!models.length} onChange={(e) => { setSelectedModel(e.target.value); updatePreference('defaultModel', e.target.value); }}><option value="">{language === 'ar' ? 'لا توجد نماذج محملة' : 'No models loaded'}</option>{models.map((model) => <option key={model.name} value={model.name}>{model.name}</option>)}</select><button type="button" className="button secondary" onClick={loadAssistant} disabled={assistantStatus.loading}>{language === 'ar' ? 'فحص النماذج' : 'Load models'}</button></div></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'درجة الإبداع للنموذج' : 'Model creativity (temperature)'}</strong><small>{language === 'ar' ? 'توازن بين الإجابات الدقيقة والأفكار المتنوعة في محادثات روح' : 'Balance focused answers and more varied ideas in Rooh chat'}: {Number(preferences.defaultTemperature ?? 0.7).toFixed(1)}</small></div><input aria-label={language === 'ar' ? 'درجة الإبداع' : 'Model temperature'} type="range" min="0" max="2" step="0.1" value={preferences.defaultTemperature ?? 0.7} onChange={(e) => updatePreference('defaultTemperature', Number(e.target.value))}/></div>
-            <p className="chat-footnote">{language === 'ar' ? 'تُجلب قائمة النماذج من Ollama المحلية عند الضغط على فحص النماذج أو فتح المساعد. لا يتم إرسالها إلى خدمة سحابية.' : 'The model list is read from local Ollama when you load models or open the assistant. It is not sent to a cloud service.'}</p>
+            <p className="chat-footnote">{language === 'ar' ? 'تُجلب قائمة النماذج مباشرة من محرك llama.cpp المحلي عند فتح روح. لا يتم إرسالها إلى خدمة سحابية.' : 'The model list is read directly from the local llama.cpp engine when Rooh opens. It is not sent to a cloud service.'}</p>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'تقليل الحركة' : 'Reduce motion'}</strong><small>{language === 'ar' ? 'إيقاف الانتقالات والحركات الزخرفية' : 'Disable transitions and decorative motion'}</small></div><input type="checkbox" checked={preferences.reducedMotion} onChange={(e) => updatePreference('reducedMotion', e.target.checked)}/></div>
@@ -1307,8 +1307,8 @@ export default function App() {
 
       {active === "assistant" && <section className="content">
         <div className="assistant-toolbar panel-card">
-          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
+          <div><h3>{language === 'ar' ? 'روح — المحرك المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى محرك llama.cpp المحلي على الجهاز نفسه فقط.' : 'Messages are sent only to the local llama.cpp engine on this device.'}</p></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'محرك روح متصل' : 'Rooh engine connected') : (language === 'ar' ? 'محرك روح غير متصل' : 'Rooh engine disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
           <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
@@ -1323,10 +1323,10 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل llama-server مع نموذج GGUF أولاً' : 'Start llama-server with a local GGUF model first')} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
-          <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
+          <p className="chat-footnote">{language === 'ar' ? 'يلزم تشغيل llama-server وربطه بملف GGUF المحلي. التطبيق يتصل بالمحرك على الجهاز نفسه.' : 'Run llama-server with the local GGUF model. The app connects to the engine on the same device.'}</p>
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
