@@ -27,7 +27,7 @@ export interface LocalBackendPlugin {
     remoteTransport: false;
   }>;
   stop(): Promise<{ running: boolean }>;
-  runTermuxCommand(options: { command: string }): Promise<{ accepted: boolean }>;
+  runTermuxCommand(options: { command: string; confirmed: true }): Promise<{ accepted: boolean; auditRecorded?: boolean }>;
   controlNode(options: { id: string; action: 'start' | 'stop' }): Promise<LocalBackendStatus>;
   biometricAvailability(): Promise<{ available: boolean; status: number }>;
   authenticateBiometric(options: { title?: string; subtitle?: string }): Promise<{ authenticated: boolean }>; 
