@@ -199,13 +199,7 @@ final class LocalNodeServer extends NanoHTTPD {
             return createAgentPlan(payload);
         }
         if ("/tasks".equals(path) && Method.POST.equals(session.getMethod())) {
-            JSONObject body = readBody(session);
-            String type = body.optString("taskType", "general");
-            JSONObject payload = body.optJSONObject("payload");
-            long id = insertTask(nodeId, type, payload == null ? new JSONObject() : payload);
-            JSONObject result = new JSONObject();
-            result.put("id", id); result.put("node", nodeId); result.put("status", "queued");
-            return json(Response.Status.CREATED, result);
+            return json(Response.Status.FORBIDDEN, error("task_creation_requires_approval_via_orchestrator"));
         }
         if ("/tasks".equals(path) && Method.GET.equals(session.getMethod())) {
             return json(Response.Status.OK, listTasks());
