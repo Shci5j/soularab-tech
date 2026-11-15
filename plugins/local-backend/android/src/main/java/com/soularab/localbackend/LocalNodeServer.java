@@ -498,7 +498,9 @@ final class LocalNodeServer extends NanoHTTPD {
                 JSONObject item = new JSONObject();
                 item.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
                 item.put("node", cursor.getString(cursor.getColumnIndexOrThrow("node_id")));
-                item.put("event", cursor.getString(cursor.getColumnIndexOrThrow("event")));
+                String eventName = cursor.getString(cursor.getColumnIndexOrThrow("event"));
+                item.put("event", eventName);
+                item.put("action", eventName);
                 item.put("details", cursor.getString(cursor.getColumnIndexOrThrow("details")));
                 item.put("created_at", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
                 result.put(item);
