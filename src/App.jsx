@@ -657,11 +657,18 @@ export default function App() {
       setNotice(language === 'ar' ? 'طرفية Termux متاحة في نسخة Android فقط.' : 'The Termux bridge is available in the Android app only.');
       return;
     }
+    const confirmed = window.confirm(language === 'ar'
+      ? 'تأكيد تنفيذ الأمر التالي في الطرفية على هاتفك؟\\n\\n' + command
+      : 'Confirm running this command in your phone terminal?\\n\\n' + command);
+    if (!confirmed) {
+      setNotice(language === 'ar' ? 'أُلغي تنفيذ الأمر بناءً على اختيارك.' : 'Command execution was cancelled.');
+      return;
+    }
     setTerminalBusy(true);
     try {
-      await LocalBackend.runTermuxCommand({ command });
-      setTerminalHistory((items) => [{ command, at: new Date().toISOString(), status: 'sent' }, ...items].slice(0, 30));
-      setNotice(language === 'ar' ? 'أُرسل الأمر إلى Termux. ستظهر نتيجته في جلسة Termux المفتوحة.' : 'Command sent to Termux. Its output appears in the Termux session.');
+      const result = await LocalBackend.runTermuxCommand({ command, confirmed: true });
+      setTerminalHistory((items) => [{ command, at: new Date().toISOString(), status: result.accepted ? 'accepted' : 'sent', auditRecorded: Boolean(result.auditRecorded) }, ...items].slice(0, 30));
+      setNotice(language === 'ar' ? 'تم إرسال الأمر إلى Termux بعد تأكيدك، وسُجلت عملية الإرسال.' : 'Command dispatched to Termux after your confirmation and logged.');
     } catch (error) {
       setNotice(language === 'ar' ? 'تعذر تشغيل الأمر عبر Termux: ' + error.message : 'Could not run the command through Termux: ' + error.message);
     } finally { setTerminalBusy(false); }
