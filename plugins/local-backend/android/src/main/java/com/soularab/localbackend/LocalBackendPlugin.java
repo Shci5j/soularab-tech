@@ -1,6 +1,8 @@
 package com.soularab.localbackend;
 
 import android.content.SharedPreferences;
+import android.content.ContentValues;
+import android.database.sqlite.SQLiteDatabase;
 import android.util.Base64;
 import android.content.Intent;
 import androidx.biometric.BiometricManager;
@@ -38,6 +40,7 @@ public class LocalBackendPlugin extends Plugin {
     public void load() {
         super.load();
         database = new LocalBackendDatabase(getContext());
+        recoverInterruptedTextTasks();
         SharedPreferences prefs = getContext().getSharedPreferences("soularab_local_backend", 0);
         accessToken = prefs.getString("access_token", null);
         if (accessToken == null) {
@@ -112,6 +115,11 @@ public class LocalBackendPlugin extends Plugin {
     @PluginMethod
     public void runTermuxCommand(PluginCall call) {
         String command = call.getString("command", "").trim();
+        boolean confirmed = call.getBoolean("confirmed", false);
+        if (!confirmed) {
+            call.reject("Explicit user confirmation is required before running a terminal command");
+            return;
+        }
         if (command.isEmpty() || command.length() > 12000) {
             call.reject("A command between 1 and 12000 characters is required");
             return;
@@ -124,11 +132,41 @@ public class LocalBackendPlugin extends Plugin {
             intent.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home");
             intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", false);
             getContext().startService(intent);
+            ContentValues event = new ContentValues();
+            event.put("node_id", "E");
+            event.put("event", "terminal_command_dispatched");
+            event.put("details", "{\\"commandLength\\":" + command.length() + ",\\"userConfirmed\\":true}");
+            database.getWritableDatabase().insert("node_events", null, event);
             JSObject result = new JSObject();
             result.put("accepted", true);
+            result.put("auditRecorded", true);
             call.resolve(result);
         } catch (Exception error) {
             call.reject("Termux command service unavailable. Enable Allow external apps in Termux.", error);
+        }
+    }
+
+    private void recoverInterruptedTextTasks() {
+        try {
+            SQLiteDatabase db = database.getWritableDatabase();
+            ContentValues recovery = new ContentValues();
+            recovery.put("status", "queued");
+            recovery.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            int recovered = db.update(
+                "node_tasks",
+                recovery,
+                "node_id=? AND status=? AND task_type IN ('assistant','agents','ai','text')",
+                new String[]{"B", "running"}
+            );
+            if (recovered > 0) {
+                ContentValues event = new ContentValues();
+                event.put("node_id", "B");
+                event.put("event", "worker_recovery");
+                event.put("details", "{\\"requeuedTasks\\":" + recovered + "}");
+                db.insert("node_events", null, event);
+            }
+        } catch (Exception ignored) {
+            // Recovery is best-effort; the local backend must still be able to start.
         }
     }
 
