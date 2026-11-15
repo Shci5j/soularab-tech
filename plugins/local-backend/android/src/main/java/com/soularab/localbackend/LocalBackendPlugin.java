@@ -63,6 +63,44 @@ public class LocalBackendPlugin extends Plugin {
     @PluginMethod
     public void status(PluginCall call) { call.resolve(statusObject()); }
 
+    /**
+     * Returns a deliberately read-only snapshot for the future authenticated control gateway.
+     * This method never starts/stops nodes, executes shell commands, or returns local access tokens.
+     */
+    @PluginMethod
+    public void readOnlyControlSnapshot(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            result.put("schemaVersion", 1);
+            result.put("access", "read-only");
+            result.put("generatedAt", System.currentTimeMillis());
+            result.put("backend", statusObject());
+
+            File model = new File(getContext().getFilesDir(), "rooh/models/qwen2.5-3b-instruct-q4_k_m.gguf");
+            JSObject engine = new JSObject();
+            boolean loaded = false;
+            String version = "unavailable";
+            try {
+                loaded = RoohNative.isLoaded();
+                version = RoohNative.version();
+            } catch (Throwable error) {
+                engine.put("nativeError", error.getClass().getSimpleName());
+            }
+            engine.put("engine", "llama.cpp-native-android");
+            engine.put("version", version);
+            engine.put("loaded", loaded);
+            engine.put("modelPresent", model.isFile() && model.length() > 1500000000L);
+            engine.put("modelBytes", model.isFile() ? model.length() : 0);
+            engine.put("runtime", "on-device-cpu");
+            result.put("engine", engine);
+            result.put("shellExecution", false);
+            result.put("remoteTransport", false);
+            call.resolve(result);
+        } catch (Throwable error) {
+            call.reject("Unable to read the local control snapshot", error instanceof Exception ? (Exception) error : new Exception(error));
+        }
+    }
+
     @PluginMethod
     public void stop(PluginCall call) {
         stopAll();
