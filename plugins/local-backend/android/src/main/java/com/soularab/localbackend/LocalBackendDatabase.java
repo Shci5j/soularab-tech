@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 final class LocalBackendDatabase extends SQLiteOpenHelper {
     private static final String DB_NAME = "soularab_embedded_backend.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 4;
 
     LocalBackendDatabase(Context context) {
         super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
@@ -43,6 +43,17 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
             "event TEXT NOT NULL," +
             "details TEXT NOT NULL DEFAULT '{}'," +
             "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS node_approvals (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "task_id INTEGER REFERENCES node_tasks(id) ON DELETE CASCADE," +
+            "title TEXT NOT NULL," +
+            "description TEXT NOT NULL DEFAULT ''," +
+            "risk TEXT NOT NULL DEFAULT 'medium'," +
+            "status TEXT NOT NULL DEFAULT 'pending'," +
+            "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+            "decided_at TEXT," +
+            "decision_note TEXT NOT NULL DEFAULT '')");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_node_approvals_status ON node_approvals(status, id)");
     }
 
     @Override
@@ -52,6 +63,19 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN result TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 4) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS node_approvals (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "task_id INTEGER REFERENCES node_tasks(id) ON DELETE CASCADE," +
+                "title TEXT NOT NULL," +
+                "description TEXT NOT NULL DEFAULT ''," +
+                "risk TEXT NOT NULL DEFAULT 'medium'," +
+                "status TEXT NOT NULL DEFAULT 'pending'," +
+                "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+                "decided_at TEXT," +
+                "decision_note TEXT NOT NULL DEFAULT '')");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_node_approvals_status ON node_approvals(status, id)");
         }
     }
 }
