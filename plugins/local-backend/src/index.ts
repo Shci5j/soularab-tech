@@ -17,6 +17,15 @@ export interface LocalBackendStatus {
 export interface LocalBackendPlugin {
   start(): Promise<LocalBackendStatus>;
   status(): Promise<LocalBackendStatus>;
+  readOnlyControlSnapshot(): Promise<{
+    schemaVersion: 1;
+    access: 'read-only';
+    generatedAt: number;
+    backend: LocalBackendStatus;
+    engine: { engine: string; version: string; loaded: boolean; modelPresent: boolean; modelBytes: number; runtime: string; nativeError?: string };
+    shellExecution: false;
+    remoteTransport: false;
+  }>;
   stop(): Promise<{ running: boolean }>;
   runTermuxCommand(options: { command: string }): Promise<{ accepted: boolean }>;
   controlNode(options: { id: string; action: 'start' | 'stop' }): Promise<LocalBackendStatus>;
