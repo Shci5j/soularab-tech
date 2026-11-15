@@ -443,7 +443,7 @@ export default function App() {
       }
       if (path === '/api/approvals' && method === 'GET') return { items: await localNodeRequest('E', '/approvals') };
       if (path === '/api/approvals' && method === 'POST') return await localNodeRequest('E', '/approvals', { method: 'POST', body: options.body });
-      const nativeApprovalDecision = path.match(/^\\/api\\/approvals\\/(\\d+)\\/decision$/);
+      const nativeApprovalDecision = path.match(/^\/api\/approvals\/(\d+)\/decision$/);
       if (nativeApprovalDecision && method === 'POST') {
         return await localNodeRequest('E', '/approvals/' + nativeApprovalDecision[1] + '/decision', { method: 'POST', body: options.body });
       }
