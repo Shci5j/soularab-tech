@@ -177,14 +177,26 @@ final class LocalNodeServer extends NanoHTTPD {
             }
             return json(Response.Status.OK, nodes);
         }
+        if ("E".equals(nodeId) && "/approvals".equals(path) && Method.GET.equals(session.getMethod())) {
+            return listApprovals();
+        }
+        if ("E".equals(nodeId) && "/approvals".equals(path) && Method.POST.equals(session.getMethod())) {
+            return createApproval(readBody(session));
+        }
+        if ("E".equals(nodeId) && "/agent-plans".equals(path) && Method.POST.equals(session.getMethod())) {
+            return createAgentPlan(readBody(session));
+        }
+        if ("E".equals(nodeId) && path.startsWith("/approvals/") && Method.POST.equals(session.getMethod())) {
+            return decideApproval(path, readBody(session));
+        }
+        if ("E".equals(nodeId) && "/events".equals(path) && Method.GET.equals(session.getMethod())) {
+            return listEvents();
+        }
         if ("/dispatch".equals(path) && "E".equals(nodeId) && Method.POST.equals(session.getMethod())) {
             JSONObject body = readBody(session);
-            String type = body.optString("taskType", "general").toLowerCase();
-            String target = targetFor(type);
-            long taskId = insertTask(target, type, body.optJSONObject("payload") == null ? new JSONObject() : body.optJSONObject("payload"));
-            JSONObject result = new JSONObject();
-            result.put("status", "queued"); result.put("taskId", taskId); result.put("assignedNode", target);
-            return json(Response.Status.CREATED, result);
+            JSONObject payload = body.optJSONObject("payload") == null ? new JSONObject() : body.optJSONObject("payload");
+            if (!payload.has("department")) payload.put("department", body.optString("taskType", "agents"));
+            return createAgentPlan(payload);
         }
         if ("/tasks".equals(path) && Method.POST.equals(session.getMethod())) {
             JSONObject body = readBody(session);
@@ -330,9 +342,177 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private long insertTask(String target, String type, JSONObject payload) {
+        return insertTask(target, type, payload, "queued");
+    }
+
+    private long insertTask(String target, String type, JSONObject payload, String status) {
         ContentValues values = new ContentValues();
-        values.put("node_id", target); values.put("task_type", type); values.put("payload", payload.toString());
+        values.put("node_id", target);
+        values.put("task_type", type);
+        values.put("payload", payload.toString());
+        values.put("status", status);
         return helper.getWritableDatabase().insertOrThrow("node_tasks", null, values);
+    }
+
+    private Response createApproval(JSONObject body) throws Exception {
+        String title = body.optString("title", "").trim();
+        String description = body.optString("description", "").trim();
+        String risk = body.optString("risk", "medium").trim().toLowerCase();
+        if (title.length() < 3 || title.length() > 240 || description.length() > 12000 ||
+            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk))) {
+            return json(Response.Status.BAD_REQUEST, error("invalid_approval_request"));
+        }
+        ContentValues values = new ContentValues();
+        values.putNull("task_id");
+        values.put("title", title);
+        values.put("description", description);
+        values.put("risk", risk);
+        long id = helper.getWritableDatabase().insertOrThrow("node_approvals", null, values);
+        JSONObject result = new JSONObject();
+        result.put("id", id);
+        result.put("status", "pending");
+        result.put("task_id", JSONObject.NULL);
+        return json(Response.Status.CREATED, result);
+    }
+
+    private Response createAgentPlan(JSONObject body) throws Exception {
+        String title = body.optString("title", "").trim();
+        String description = body.optString("description", "").trim();
+        String risk = body.optString("risk", "medium").trim().toLowerCase();
+        String department = body.optString("department", "agents").trim().toLowerCase();
+        if (title.length() < 3 || title.length() > 240 || description.isEmpty() || description.length() > 12000 ||
+            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk))) {
+            return json(Response.Status.BAD_REQUEST, error("invalid_agent_plan"));
+        }
+        String taskType = "system".equals(department) ? "agents" : department;
+        String target = targetFor(taskType);
+        SQLiteDatabase db = helper.getWritableDatabase();
+        long taskId;
+        long approvalId;
+        db.beginTransaction();
+        try {
+            taskId = insertTask(target, taskType, body, "waiting_approval");
+            ContentValues approval = new ContentValues();
+            approval.put("task_id", taskId);
+            approval.put("title", title);
+            approval.put("description", description);
+            approval.put("risk", risk);
+            approvalId = db.insertOrThrow("node_approvals", null, approval);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        JSONObject result = new JSONObject();
+        result.put("id", taskId);
+        result.put("task_id", taskId);
+        result.put("approval_id", approvalId);
+        result.put("status", "waiting_approval");
+        result.put("assignedNode", target);
+        return json(Response.Status.CREATED, result);
+    }
+
+    private Response listApprovals() throws JSONException {
+        JSONArray result = new JSONArray();
+        Cursor cursor = helper.getReadableDatabase().rawQuery(
+            "SELECT a.id, a.task_id, a.title, a.description, a.risk, a.status, a.created_at, a.decided_at, a.decision_note, t.status AS task_status " +
+            "FROM node_approvals a LEFT JOIN node_tasks t ON t.id=a.task_id ORDER BY a.id DESC LIMIT 200",
+            null
+        );
+        try {
+            while (cursor.moveToNext()) {
+                JSONObject item = new JSONObject();
+                item.put("id", cursor.getLong(0));
+                item.put("task_id", cursor.isNull(1) ? JSONObject.NULL : cursor.getLong(1));
+                item.put("taskId", cursor.isNull(1) ? JSONObject.NULL : cursor.getLong(1));
+                item.put("title", cursor.getString(2));
+                item.put("description", cursor.getString(3));
+                item.put("risk", cursor.getString(4));
+                item.put("status", cursor.getString(5));
+                item.put("created_at", cursor.getString(6));
+                item.put("decided_at", cursor.isNull(7) ? JSONObject.NULL : cursor.getString(7));
+                item.put("decision_note", cursor.getString(8));
+                item.put("task_status", cursor.isNull(9) ? JSONObject.NULL : cursor.getString(9));
+                result.put(item);
+            }
+        } finally {
+            cursor.close();
+        }
+        return json(Response.Status.OK, result);
+    }
+
+    private Response decideApproval(String path, JSONObject body) throws Exception {
+        String[] parts = path.split("/");
+        if (parts.length != 4 || !"decision".equals(parts[3])) return json(Response.Status.NOT_FOUND, error("approval_action_not_found"));
+        long approvalId;
+        try { approvalId = Long.parseLong(parts[2]); }
+        catch (NumberFormatException exception) { return json(Response.Status.BAD_REQUEST, error("invalid_approval_id")); }
+        String decision = body.optString("decision", "").trim().toLowerCase();
+        if (!("approved".equals(decision) || "rejected".equals(decision))) {
+            return json(Response.Status.BAD_REQUEST, error("decision_must_be_approved_or_rejected"));
+        }
+        SQLiteDatabase db = helper.getWritableDatabase();
+        long taskId = -1;
+        String currentStatus;
+        Cursor cursor = db.query("node_approvals", new String[]{"task_id", "status"}, "id=?", new String[]{String.valueOf(approvalId)}, null, null, null, "1");
+        try {
+            if (!cursor.moveToFirst()) return json(Response.Status.NOT_FOUND, error("approval_not_found"));
+            taskId = cursor.isNull(0) ? -1 : cursor.getLong(0);
+            currentStatus = cursor.getString(1);
+        } finally {
+            cursor.close();
+        }
+        if (!"pending".equals(currentStatus)) return json(Response.Status.CONFLICT, error("approval_already_decided"));
+        db.beginTransaction();
+        try {
+            ContentValues approval = new ContentValues();
+            approval.put("status", decision);
+            approval.put("decided_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+            approval.put("decision_note", body.optString("note", ""));
+            int changed = db.update("node_approvals", approval, "id=? AND status='pending'", new String[]{String.valueOf(approvalId)});
+            if (changed != 1) return json(Response.Status.CONFLICT, error("approval_already_decided"));
+            if (taskId >= 0) {
+                ContentValues task = new ContentValues();
+                task.put("status", "approved".equals(decision) ? "queued" : "cancelled");
+                task.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
+            }
+            ContentValues event = new ContentValues();
+            event.put("node_id", "E");
+            event.put("event", "approval_" + decision);
+            JSONObject details = new JSONObject();
+            details.put("approvalId", approvalId);
+            if (taskId >= 0) details.put("taskId", taskId);
+            event.put("details", details.toString());
+            db.insert("node_events", null, event);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        JSONObject result = new JSONObject();
+        result.put("approval_id", approvalId);
+        result.put("task_id", taskId >= 0 ? taskId : JSONObject.NULL);
+        result.put("decision", decision);
+        result.put("status", decision);
+        return json(Response.Status.OK, result);
+    }
+
+    private Response listEvents() throws JSONException {
+        JSONArray result = new JSONArray();
+        Cursor cursor = helper.getReadableDatabase().query("node_events", null, null, null, null, null, "id DESC", "100");
+        try {
+            while (cursor.moveToNext()) {
+                JSONObject item = new JSONObject();
+                item.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                item.put("node", cursor.getString(cursor.getColumnIndexOrThrow("node_id")));
+                item.put("event", cursor.getString(cursor.getColumnIndexOrThrow("event")));
+                item.put("details", cursor.getString(cursor.getColumnIndexOrThrow("details")));
+                item.put("created_at", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
+                result.put(item);
+            }
+        } finally {
+            cursor.close();
+        }
+        return json(Response.Status.OK, result);
     }
 
     private JSONArray listTasks() throws JSONException {
@@ -409,12 +589,13 @@ final class LocalNodeServer extends NanoHTTPD {
         // Explicit department routing: every visible workspace section has a
         // deterministic owner node; keyword matching is only a fallback.
         switch (normalized) {
-            case "overview": case "hub": case "root": case "orchestrator": return "A";
-            case "assistant": case "agents": case "ai": case "text": return "B";
+            case "overview": case "rooh": case "orchestrator": return "A";
+            case "assistant": case "agents": case "ai": case "text": case "system": return "B";
             case "design": case "media": case "graphics": case "image": return "C";
             case "video": case "audio": case "speech": return "D";
-            case "web": case "store": case "apps": case "documents": case "files":
-            case "automation": case "domains": case "security": case "terminal":
+            case "hub": case "github": case "git": case "root": case "jathr":
+            case "terminal": case "web": case "store": case "apps": case "documents":
+            case "files": case "automation": case "domains": case "security":
             case "development": case "recovery": return "E";
             default: break;
         }
