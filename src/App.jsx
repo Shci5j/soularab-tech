@@ -437,13 +437,15 @@ export default function App() {
       if (path === '/api/assistant/status' || path === '/api/assistant/models') return await localNodeRequest('A', '/models');
       if (path === '/api/assistant/chat' && method === 'POST') return await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(nativeBody) });
       if (path === '/api/tasks' && method === 'GET') return { items: await localNodeRequest('E', '/tasks') };
-      if (path === '/api/agent-plans' && method === 'POST') {
-        const queued = await localNodeRequest('E', '/dispatch', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || active, payload: nativeBody }) });
-        return { id: queued.taskId, status: queued.status, assignedNode: queued.assignedNode, execution: 'queued_on_device' };
+      if ((path === '/api/agent-plans' || path === '/api/tasks') && method === 'POST') {
+        const plan = await localNodeRequest('E', '/agent-plans', { method: 'POST', body: JSON.stringify({ ...nativeBody, department: nativeBody.department || active }) });
+        return { ...plan, execution: 'waiting_for_approval' };
       }
-      if (path === '/api/tasks' && method === 'POST') {
-        const queued = await localNodeRequest('E', '/dispatch', { method: 'POST', body: JSON.stringify({ taskType: nativeBody.department || 'general', payload: nativeBody }) });
-        return { id: queued.taskId, status: queued.status, assignedNode: queued.assignedNode, execution: 'queued_on_device' };
+      if (path === '/api/approvals' && method === 'GET') return { items: await localNodeRequest('E', '/approvals') };
+      if (path === '/api/approvals' && method === 'POST') return await localNodeRequest('E', '/approvals', { method: 'POST', body: options.body });
+      const nativeApprovalDecision = path.match(/^\\/api\\/approvals\\/(\\d+)\\/decision$/);
+      if (nativeApprovalDecision && method === 'POST') {
+        return await localNodeRequest('E', '/approvals/' + nativeApprovalDecision[1] + '/decision', { method: 'POST', body: options.body });
       }
       const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
       if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
@@ -459,7 +461,7 @@ export default function App() {
         return { connected: nodes.some((node) => node.status === 'online'), nodes };
       }
       if (path === '/api/approvals') return { items: [] };
-      if (path.startsWith('/api/audit')) return { items: [] };
+      if (path.startsWith('/api/audit')) return { items: await localNodeRequest('E', '/events') };
       if (path === '/api/executions/registry') return { items: [], policy: 'native_allowlist_pending' };
       if (path === '/api/security/status') return { mode: 'embedded-local', authentication: 'device-local', node: await getEmbeddedNodeHealth('E') };
       if (path === '/api/media/image/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('C') };
@@ -522,17 +524,19 @@ export default function App() {
   async function refresh() {
     try {
       if (Capacitor.isNativePlatform()) {
-        const [checks, localTasks] = await Promise.all([
+        const [checks, localTasks, localApprovals, localEvents] = await Promise.all([
           Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
             try { return await getEmbeddedNodeHealth(id); }
             catch { return { status: 'offline', node: id }; }
           })),
           localNodeRequest('E', '/tasks').catch(() => []),
+          localNodeRequest('E', '/approvals').catch(() => []),
+          localNodeRequest('E', '/events').catch(() => []),
         ]);
         const online = checks.filter((item) => item.status === 'online').length;
         setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-android', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
-        setApprovals([]);
-        setEvents([]);
+        setApprovals(Array.isArray(localApprovals) ? localApprovals : []);
+        setEvents(Array.isArray(localEvents) ? localEvents : []);
         setQueuedTasks(Array.isArray(localTasks) ? localTasks : []);
         setEngineStatuses(Object.fromEntries(checks.map((item) => [item.node, { connected: item.status === 'online', provider: 'embedded-android', worker: item.worker, taskExecution: item.taskExecution }])));
         if (online !== 5) setNotice(language === 'ar' ? `بعض الخوادم الداخلية غير متاحة (${online}/5).` : `Some embedded nodes are unavailable (${online}/5).`);
@@ -1320,7 +1324,7 @@ export default function App() {
       setDepartmentDraft({ title: '', details: '', risk: 'medium' });
       await refresh();
       setNotice(Capacitor.isNativePlatform()
-        ? (language === 'ar' ? 'وُجّهت المهمة إلى الخادم المحلي المخصص للقسم وأُضيفت إلى طابور المهام.' : 'The department task was routed to its assigned local node and added to the task queue.')
+        ? (language === 'ar' ? 'أُنشئت المهمة وربطت بطلب موافقة. لن تدخل طابور التنفيذ قبل موافقتك.' : 'The task and approval request were created. It will not enter the execution queue until you approve it.')
         : (language === 'ar' ? 'تم إنشاء خطة القسم وربطها بمركز الموافقات. لم يبدأ أي تنفيذ بعد.' : 'The department plan was created and sent to approvals. No execution has started.'));
     } catch (error) {
       setNotice(error.message);
