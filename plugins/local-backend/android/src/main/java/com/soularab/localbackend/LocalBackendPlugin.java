@@ -135,7 +135,7 @@ public class LocalBackendPlugin extends Plugin {
             ContentValues event = new ContentValues();
             event.put("node_id", "E");
             event.put("event", "terminal_command_dispatched");
-            event.put("details", "{\\"commandLength\\":" + command.length() + ",\\"userConfirmed\\":true}");
+            event.put("details", "{\"commandLength\":" + command.length() + ",\"userConfirmed\":true}");
             database.getWritableDatabase().insert("node_events", null, event);
             JSObject result = new JSObject();
             result.put("accepted", true);
@@ -162,7 +162,7 @@ public class LocalBackendPlugin extends Plugin {
                 ContentValues event = new ContentValues();
                 event.put("node_id", "B");
                 event.put("event", "worker_recovery");
-                event.put("details", "{\\"requeuedTasks\\":" + recovered + "}");
+                event.put("details", "{\"requeuedTasks\":" + recovered + "}");
                 db.insert("node_events", null, event);
             }
         } catch (Exception ignored) {
