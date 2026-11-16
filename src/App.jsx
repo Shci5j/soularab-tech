@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { LocalBackend } from '@soularab/local-backend';
+import { getEmbeddedNodeHealth, localNodeRequest } from './services/localNodes.js';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
 import { installEdgeBackGesture } from './utils/edgeBackGesture.js';
 import appLogo from '../icon.svg';
@@ -9,15 +12,21 @@ const modules = [
   { id: 'assistant', title: 'المساعد الذكي', icon: '✦', desc: 'محادثة مع النماذج المحلية والوكلاء' },
   { id: 'web', title: 'المواقع والمتاجر', icon: '▤', desc: 'إنشاء المواقع وإدارتها وفحصها' },
   { id: 'design', title: 'التصميم والهوية', icon: '◈', desc: 'الشعارات والهوية وتجارب المستخدم' },
-  { id: 'media', title: 'الصور والفيديو', icon: '▧', desc: 'مسارات توليد الوسائط ومعالجتها' },
+  { id: 'media', title: 'توليد الصور', icon: '▧', desc: 'توليد الصور وتحريرها عبر محرك محلي' },
+  { id: 'video', title: 'إنشاء الفيديو', icon: '▶', desc: 'تخطيط المشاهد وخط إنتاج الفيديو' },
+  { id: 'store', title: 'المتاجر الإلكترونية', icon: '▣', desc: 'المنتجات والكتالوج والسلة والطلبات' },
   { id: 'apps', title: 'بناء التطبيقات', icon: '▦', desc: 'تطوير التطبيقات وفحص المشاريع' },
-  { id: 'files', title: 'الملفات والمشاريع', icon: '▱', desc: 'إدارة الملفات والنسخ والإصدارات' },
-  { id: 'agents', title: 'الوكلاء والأتمتة', icon: '⌘', desc: 'مهام متعددة الخطوات بموافقات صريحة' },
+  { id: 'graphics', title: 'التصميم الجرافيكي', icon: '◫', desc: 'المنشورات والقوالب والمطبوعات' },
+  { id: 'documents', title: 'المستندات والملفات', icon: '▱', desc: 'إنشاء المستندات وإدارة ملفات المشاريع' },
+  { id: 'files', title: 'المشاريع والأرشفة', icon: '▤', desc: 'مساحات المشاريع والنسخ والاستعادة' },
+  { id: 'agents', title: 'الوكلاء الذكيون', icon: '⌘', desc: 'خطط متعددة الخطوات بموافقات صريحة' },
+  { id: 'automation', title: 'الأتمتة والجدولة', icon: '◷', desc: 'مشغلات محلية وطوابير مهام محكومة' },
   { id: 'domains', title: 'النطاقات والاستضافة', icon: '◎', desc: 'إعدادات النطاق والنشر والاستضافة' },
   { id: 'security', title: 'الأمان وسجل العمليات', icon: '⬡', desc: 'الموافقات وسجل التدقيق والإعدادات' },
+  { id: 'terminal', title: 'طرفية Termux', icon: '⌘', desc: 'تنفيذ أوامر محلية عبر Termux على الهاتف' },
 ];
 
-const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Images & Video', 'Media generation and processing'], apps: ['App Builder', 'Develop and inspect applications'], files: ['Files & Projects', 'Manage project files and versions'], agents: ['Agents & Automation', 'Multi-step tasks with explicit approvals'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'] };
+const englishModules = { overview: ['Overview', 'Workspace overview and service status'], assistant: ['AI Assistant', 'Chat with local models and agents'], web: ['Websites & Stores', 'Create, manage, and inspect websites'], design: ['Design & Identity', 'Logos, brand identity, and user experience'], media: ['Image Generation', 'Generate and edit images through a local engine'], video: ['Video Studio', 'Plan scenes and assemble a video pipeline'], store: ['Online Stores', 'Products, catalog, cart, and order workflows'], apps: ['App Builder', 'Develop and inspect applications'], graphics: ['Graphic Design', 'Create social posts, templates, and print layouts'], documents: ['Documents', 'Create documents and manage project files'], files: ['Projects & Archives', 'Project workspaces, versions, and restore'], agents: ['AI Agents', 'Multi-step plans with explicit approvals'], automation: ['Automation & Scheduling', 'Controlled local triggers and task queues'], domains: ['Domains & Hosting', 'Domain, deployment, and hosting settings'], security: ['Security & Audit', 'Approvals, audit history, and controls'], terminal: ['Termux Terminal', 'Run local phone commands through the Termux app'] };
 
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
@@ -25,6 +34,9 @@ export default function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('st-language') || 'ar');
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('st-api-base-url') || API);
   const [active, setActiveState] = useState('overview');
+  const [departmentDraft, setDepartmentDraft] = useState({ title: '', details: '', risk: 'medium' });
+  const [departmentSubmitting, setDepartmentSubmitting] = useState(false);
+  const [departmentResult, setDepartmentResult] = useState(null);
   function setActive(next) {
     if (next === active) return;
     window.history.pushState({ soularabPage: next }, '', window.location.pathname + window.location.search);
@@ -53,6 +65,7 @@ export default function App() {
   }), [active]);
 
   const [api, setApi] = useState({ state: 'checking', version: '—' });
+  const [embeddedBackend, setEmbeddedBackend] = useState({ running: false, nodes: [] });
   const [approvals, setApprovals] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState('pending');
   const [events, setEvents] = useState([]);
@@ -84,6 +97,9 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState({ connected: false, loading: false });
+  const [roohEngine, setRoohEngine] = useState({ loaded: false, modelPresent: false, modelBytes: 0, version: '' });
+  const [roohDownloadProgress, setRoohDownloadProgress] = useState({ percent: 0, receivedBytes: 0, totalBytes: 0 });
+  const [roohBusy, setRoohBusy] = useState(false);
   const [mediaStatus, setMediaStatus] = useState({ image: false, speech: false, loading: false });
   const [mediaModels, setMediaModels] = useState([]);
   const [imageDraft, setImageDraft] = useState({ model:'', prompt:'A premium cinematic product photograph, elegant studio lighting, refined composition, ultra-detailed', negative:'blurry, low quality, distorted, watermark, text', width:1024, height:1024, steps:24 });
@@ -136,6 +152,16 @@ export default function App() {
   const [loadingTaskHistory, setLoadingTaskHistory] = useState(false);
   const [domainDraft, setDomainDraft] = useState({ domain:'', provider:'Cloudflare Pages', project:'soularab-site' });
   const [domainReport, setDomainReport] = useState('');
+  const [terminalCommand, setTerminalCommand] = useState('pwd');
+  const [terminalHistory, setTerminalHistory] = useState([]);
+  const [terminalBusy, setTerminalBusy] = useState(false);
+  const [appLockEnabled, setAppLockEnabled] = useState(() => localStorage.getItem('st-app-lock-enabled') === 'true');
+  const [appLocked, setAppLocked] = useState(() => localStorage.getItem('st-app-lock-enabled') === 'true');
+  const [appPin, setAppPin] = useState('');
+  const [appPinConfirm, setAppPinConfirm] = useState('');
+  const [appLockError, setAppLockError] = useState('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [rootAccess, setRootAccess] = useState({ available: false, checked: false, message: '' });
 
   useEffect(() => {
     localStorage.setItem('st-api-base-url', cleanApiBase(apiBaseUrl));
@@ -192,6 +218,80 @@ export default function App() {
     document.documentElement.dataset.highContrast = String(Boolean(preferences.highContrast));
     localStorage.setItem('st-preferences', JSON.stringify(preferences));
   }, [preferences]);
+
+  async function hashAppPin(pin, saltHex) {
+    if (!globalThis.crypto?.subtle) throw new Error(language === 'ar' ? 'التشفير الآمن غير متاح في هذا الجهاز.' : 'Secure cryptography is unavailable on this device.');
+    const salt = new Uint8Array((saltHex.match(/.{2}/g) || []).map((part) => parseInt(part, 16)));
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, key, 256);
+    return Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function saveAppPin() {
+    if (!/^\d{6}$/.test(appPin) || appPin !== appPinConfirm) {
+      setAppLockError(language === 'ar' ? 'أدخل رمزاً من 6 أرقام وتأكد من تطابق الرمزَين.' : 'Enter a 6-digit PIN and make sure both entries match.');
+      return;
+    }
+    try {
+      const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      const hash = await hashAppPin(appPin, salt);
+      localStorage.setItem('st-app-lock-salt', salt);
+      localStorage.setItem('st-app-lock-hash', hash);
+      localStorage.setItem('st-app-lock-enabled', 'true');
+      setAppLockEnabled(true);
+      setAppLocked(false);
+      setAppPin(''); setAppPinConfirm(''); setAppLockError('');
+      setNotice(language === 'ar' ? 'تم تفعيل قفل التطبيق برمز PIN.' : 'App PIN lock enabled.');
+    } catch (error) { setAppLockError(error.message); }
+  }
+
+  async function unlockApp() {
+    try {
+      const salt = localStorage.getItem('st-app-lock-salt') || '';
+      const expected = localStorage.getItem('st-app-lock-hash') || '';
+      const actual = await hashAppPin(appPin, salt);
+      if (actual !== expected) {
+        setAppLockError(language === 'ar' ? 'رمز القفل غير صحيح.' : 'Incorrect PIN.');
+        setAppPin('');
+        return;
+      }
+      setAppLocked(false); setAppPin(''); setAppLockError('');
+    } catch (error) { setAppLockError(error.message); }
+  }
+
+  async function unlockWithBiometric() {
+    try {
+      const availability = await LocalBackend.biometricAvailability();
+      setBiometricAvailable(Boolean(availability.available));
+      if (!availability.available) throw new Error(language === 'ar' ? 'البصمة القوية غير مهيأة أو غير متاحة على هذا الجهاز.' : 'Strong biometrics are not enrolled or available on this device.');
+      await LocalBackend.authenticateBiometric({ title: 'SOULARAB TECH', subtitle: language === 'ar' ? 'تأكيد الهوية لفتح التطبيق' : 'Verify your identity to unlock the app' });
+      setAppLocked(false); setAppPin(''); setAppLockError('');
+    } catch (error) { setAppLockError(error.message || (language === 'ar' ? 'فشل التحقق البيومتري.' : 'Biometric verification failed.')); }
+  }
+
+  async function inspectRootAccess() {
+    if (!Capacitor.isNativePlatform() || !LocalBackend.checkRootAccess) {
+      setRootAccess({ available: false, checked: true, message: language === 'ar' ? 'صلاحيات الجذر متاحة فقط على Android مروّت.' : 'Root access is available only on a rooted Android device.' });
+      return;
+    }
+    try {
+      const result = await LocalBackend.checkRootAccess();
+      setRootAccess({ ...result, checked: true });
+      setNotice(result.available ? (language === 'ar' ? 'تم اكتشاف صلاحيات الجذر UID 0.' : 'Root UID 0 access detected.') : (language === 'ar' ? 'هذا الهاتف لا يمنح التطبيق صلاحيات الجذر.' : 'This phone did not grant root access.'));
+    } catch (error) { setRootAccess({ available: false, checked: true, message: error.message }); }
+  }
+
+  function lockAppNow() {
+    if (appLockEnabled) { setAppLocked(true); setAppPin(''); setAppLockError(''); }
+  }
+
+  function removeAppLock() {
+    localStorage.removeItem('st-app-lock-salt');
+    localStorage.removeItem('st-app-lock-hash');
+    localStorage.removeItem('st-app-lock-enabled');
+    setAppLockEnabled(false); setAppLocked(false); setAppPin(''); setAppPinConfirm(''); setAppLockError('');
+    setNotice(language === 'ar' ? 'تم تعطيل قفل التطبيق.' : 'App lock disabled.');
+  }
 
   function exportSettingsBackup() {
     const backup = {
@@ -348,16 +448,73 @@ export default function App() {
   }
 
   async function request(path, options = {}) {
+    if (Capacitor.isNativePlatform()) {
+      const method = String(options.method || 'GET').toUpperCase();
+      const nativeBody = options.body ? JSON.parse(options.body) : {};
+      if (path === '/api/health') return { ...(await getEmbeddedNodeHealth('A')), version: 'embedded-android', mode: 'local' };
+      if (path === '/api/assistant/status' || path === '/api/assistant/models') return await localNodeRequest('A', '/models');
+      if (path === '/api/assistant/chat' && method === 'POST') return await localNodeRequest('A', '/chat', { method: 'POST', body: JSON.stringify(nativeBody) });
+      if (path === '/api/tasks' && method === 'GET') return { items: await localNodeRequest('E', '/tasks') };
+      if ((path === '/api/agent-plans' || path === '/api/tasks') && method === 'POST') {
+        const plan = await localNodeRequest('E', '/agent-plans', { method: 'POST', body: JSON.stringify({ ...nativeBody, department: nativeBody.department || active }) });
+        return { ...plan, execution: 'waiting_for_approval' };
+      }
+      if (path === '/api/approvals' && method === 'GET') return { items: await localNodeRequest('E', '/approvals') };
+      if (path === '/api/approvals' && method === 'POST') return await localNodeRequest('E', '/approvals', { method: 'POST', body: options.body });
+      const nativeApprovalDecision = path.match(/^\/api\/approvals\/(\d+)\/decision$/);
+      if (nativeApprovalDecision && method === 'POST') {
+        return await localNodeRequest('E', '/approvals/' + nativeApprovalDecision[1] + '/decision', { method: 'POST', body: options.body });
+      }
+      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
+      if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
+      if (/^\/api\/tasks\/\d+\/events$/.test(path)) return { items: [] };
+      if (/^\/api\/tasks\/\d+$/.test(path) && method === 'GET') return await localNodeRequest('E', path.replace('/api', ''));
+      if (path === '/api/engines/status' || path === '/api/mesh/status' || path === '/api/mesh/discover' || path === '/api/mesh/nodes/') {
+        const ids = ['A', 'B', 'C', 'D', 'E'];
+        const nodes = await Promise.all(ids.map(async (id) => {
+          try { return await getEmbeddedNodeHealth(id); }
+          catch { return { node: id, status: 'offline' }; }
+        }));
+        if (path === '/api/engines/status') return { providers: Object.fromEntries(nodes.map((node) => [node.node, { connected: node.status === 'online', provider: 'embedded-android' }])) };
+        return { connected: nodes.some((node) => node.status === 'online'), nodes };
+      }
+      if (path === '/api/approvals') return { items: [] };
+      if (path.startsWith('/api/audit')) return { items: await localNodeRequest('E', '/events') };
+      if (path === '/api/executions/registry') return { items: [], policy: 'native_allowlist_pending' };
+      if (path === '/api/security/status') return { mode: 'embedded-local', authentication: 'device-local', node: await getEmbeddedNodeHealth('E') };
+      if (path === '/api/media/image/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('C') };
+      if (path === '/api/media/speech/status') return { connected: false, provider: 'not_installed', node: await getEmbeddedNodeHealth('D') };
+      if (path === '/api/media/image/models') return { models: [] };
+      throw new Error(language === 'ar'
+        ? 'هذا الإجراء يحتاج محركاً محلياً غير مثبت أو واجهة تنفيذ لم تُفعّل بعد: ' + path
+        : 'This action requires a local engine or execution API that is not installed yet: ' + path);
+    }
     const response = await fetch(safeApiBase(apiBaseUrl) + path, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}), ...options.headers },
     });
+    const contentType = response.headers.get('content-type') || '';
+    const rawBody = await response.text();
+    let body = null;
+    if (rawBody) {
+      try { body = JSON.parse(rawBody); }
+      catch {
+        const detail = contentType.includes('text/html') || /^\s*<!doctype html/i.test(rawBody)
+          ? (language === 'ar'
+              ? 'وصلت صفحة HTML بدلاً من JSON. عنوان الخادم الخلفي أو مسار API غير صحيح.'
+              : 'Received an HTML page instead of JSON. The backend URL or API route is incorrect.')
+          : (language === 'ar' ? 'أعاد الخادم بيانات ليست بصيغة JSON.' : 'The server returned a non-JSON response.');
+        throw new Error(detail);
+      }
+    }
     if (!response.ok) {
       if (response.status === 401) setAuthRequired(true);
-      const body = await response.json().catch(() => ({}));
-      throw new Error(localizeApiError(body.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
+      throw new Error(localizeApiError(body?.detail, response.status) || (language === 'ar' ? `تعذر إكمال الطلب (${response.status})` : `Request failed (${response.status}).`));
     }
-    return response.json();
+    if (!contentType.includes('application/json') && body === null) {
+      throw new Error(language === 'ar' ? 'استجابة الخادم فارغة أو غير صالحة.' : 'The server response is empty or invalid.');
+    }
+    return body;
   }
 
   function unlockWorkspace(event) {
@@ -371,8 +528,38 @@ export default function App() {
     setLoginToken('');
   }
 
+  async function controlEmbeddedNode(id, action) {
+    if (!Capacitor.isNativePlatform() || !LocalBackend.controlNode) return;
+    try {
+      const status = await LocalBackend.controlNode({ id, action });
+      setEmbeddedBackend(status);
+      setNotice(language === 'ar' ? (action === 'start' ? 'تم تشغيل الخادم ' : 'تم إيقاف الخادم ') + id : 'Node ' + id + (action === 'start' ? ' started.' : ' stopped.'));
+    } catch (error) {
+      setNotice(error.message || (language === 'ar' ? 'تعذر التحكم بالخادم.' : 'Could not control the node.'));
+    }
+  }
+
   async function refresh() {
     try {
+      if (Capacitor.isNativePlatform()) {
+        const [checks, localTasks, localApprovals, localEvents] = await Promise.all([
+          Promise.all(['A', 'B', 'C', 'D', 'E'].map(async (id) => {
+            try { return await getEmbeddedNodeHealth(id); }
+            catch { return { status: 'offline', node: id }; }
+          })),
+          localNodeRequest('E', '/tasks').catch(() => []),
+          localNodeRequest('E', '/approvals').catch(() => []),
+          localNodeRequest('E', '/events').catch(() => []),
+        ]);
+        const online = checks.filter((item) => item.status === 'online').length;
+        setApi({ state: online === 5 ? 'online' : 'offline', version: 'embedded-android', mode: language === 'ar' ? `خوادم داخلية: ${online}/5` : `Embedded nodes: ${online}/5` });
+        setApprovals(Array.isArray(localApprovals) ? localApprovals : []);
+        setEvents(Array.isArray(localEvents) ? localEvents : []);
+        setQueuedTasks(Array.isArray(localTasks) ? localTasks : []);
+        setEngineStatuses(Object.fromEntries(checks.map((item) => [item.node, { connected: item.status === 'online', provider: 'embedded-android', worker: item.worker, taskExecution: item.taskExecution }])));
+        if (online !== 5) setNotice(language === 'ar' ? `بعض الخوادم الداخلية غير متاحة (${online}/5).` : `Some embedded nodes are unavailable (${online}/5).`);
+        return;
+      }
       const [health, approvalData, log, taskQueue, engineData] = await Promise.all([
         request('/api/health'), request('/api/approvals'), request('/api/audit?limit=8'), request('/api/tasks'), request('/api/engines/status').catch(() => null),
       ]);
@@ -387,6 +574,29 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    let active = true;
+    LocalBackend.start()
+      .then(async (status) => {
+        if (!active) return;
+        if (status.accessToken) sessionStorage.setItem('st-embedded-local-token', status.accessToken);
+        const checkedNodes = await Promise.all(status.nodes.map(async (node) => {
+          try {
+            const health = await getEmbeddedNodeHealth(node.id);
+            return { ...node, running: health.status === 'online' };
+          } catch {
+            return { ...node, running: false };
+          }
+        }));
+        if (active) setEmbeddedBackend({ ...status, nodes: checkedNodes, running: checkedNodes.length === 5 && checkedNodes.every((node) => node.running) });
+      })
+      .catch((error) => {
+        if (active) setNotice((language === 'ar' ? 'تعذر تشغيل الخوادم الداخلية: ' : 'Could not start embedded nodes: ') + (error?.message || 'unknown error'));
+      });
+    return () => { active = false; };
+  }, []);
+  
   useEffect(() => { refresh(); const id = window.setInterval(refresh, (preferences.refreshIntervalSeconds || 15) * 1000); return () => clearInterval(id); }, [apiToken, preferences.refreshIntervalSeconds]);
 
   async function loadSecurityStatus() {
@@ -405,16 +615,85 @@ export default function App() {
   async function loadAssistant() {
     setAssistantStatus({ connected: false, loading: true });
     try {
+      const nativeApp = Capacitor.isNativePlatform();
+      if (nativeApp) {
+        const engine = await LocalBackend.roohEngineStatus();
+        setRoohEngine(engine);
+        const available = engine.loaded ? [{ name: 'qwen2.5-3b-instruct-q4_k_m' }] : [];
+        setModels(available);
+        setSelectedModel(available[0]?.name || '');
+        setAssistantStatus({ connected: Boolean(engine.loaded), loading: false, version: engine.version || 'llama.cpp native' });
+        if (!engine.loaded) setNotice(engine.modelPresent
+          ? (language === 'ar' ? 'محرك روح مدمج وجاهز، حمّل النموذج إلى الذاكرة من زر تشغيل المحرك.' : 'The native ROOH engine is installed. Load the downloaded model to start.')
+          : (language === 'ar' ? 'محرك روح مدمج داخل التطبيق. نزّل نموذج Qwen مرة واحدة؛ بعد ذلك يعمل دون Termux أو إنترنت.' : 'The ROOH engine is bundled in the app. Download the Qwen model once; inference then works without Termux or internet.'));
+        return;
+      }
       const [status, result] = await Promise.all([request('/api/assistant/status'), request('/api/assistant/models')]);
-      setAssistantStatus({ connected: status.connected, loading: false, version: status.version });
+      setAssistantStatus({ connected: Boolean(status.connected), loading: false, version: status.version });
       setModels(result.items || []);
       setSelectedModel((current) => result.items?.some((item) => item.name === current) ? current : (result.items?.some((item) => item.name === preferences.defaultModel) ? preferences.defaultModel : result.items?.[0]?.name || ''));
       if (!result.items?.length) setNotice(language === 'ar' ? 'Ollama متصلة، لكن لا توجد نماذج مثبتة بعد.' : 'Ollama is connected, but no models are installed yet.');
     } catch (error) {
       setAssistantStatus({ connected: false, loading: false });
+      if (Capacitor.isNativePlatform()) setRoohEngine({ loaded: false, modelPresent: false, modelBytes: 0, version: '' });
       setModels([]);
       setNotice(error.message);
     }
+  }
+
+  async function installRoohModel() {
+    if (roohBusy) return;
+    setRoohBusy(true);
+    setRoohDownloadProgress({ percent: 0, receivedBytes: 0, totalBytes: 0 });
+    let listener;
+    try {
+      listener = await LocalBackend.addListener('roohModelDownloadProgress', (progress) => setRoohDownloadProgress(progress));
+      await LocalBackend.downloadRoohModel();
+      const loaded = await LocalBackend.loadRoohModel();
+      setNotice(language === 'ar' ? 'تم تنزيل نموذج روح وتحميله داخل المحرك المحلي.' : 'The ROOH model downloaded and loaded into the native engine.');
+      await loadAssistant();
+    } catch (error) {
+      setNotice((language === 'ar' ? 'تعذر تجهيز محرك روح: ' : 'Could not prepare ROOH: ') + error.message);
+    } finally {
+      if (listener) listener.remove();
+      setRoohBusy(false);
+    }
+  }
+
+  async function loadDownloadedRoohModel() {
+    if (roohBusy) return;
+    setRoohBusy(true);
+    try {
+      await LocalBackend.loadRoohModel();
+      await loadAssistant();
+      setNotice(language === 'ar' ? 'محرك روح جاهز للعمل دون اتصال.' : 'ROOH is ready for offline inference.');
+    } catch (error) { setNotice(error.message); }
+    finally { setRoohBusy(false); }
+  }
+
+  async function runTerminalCommand(event) {
+    event.preventDefault();
+    const command = terminalCommand.trim();
+    if (!command || terminalBusy) return;
+    if (!Capacitor.isNativePlatform() || !LocalBackend.runTermuxCommand) {
+      setNotice(language === 'ar' ? 'طرفية Termux متاحة في نسخة Android فقط.' : 'The Termux bridge is available in the Android app only.');
+      return;
+    }
+    const confirmed = window.confirm(language === 'ar'
+      ? 'تأكيد تنفيذ الأمر التالي في الطرفية على هاتفك؟\\n\\n' + command
+      : 'Confirm running this command in your phone terminal?\\n\\n' + command);
+    if (!confirmed) {
+      setNotice(language === 'ar' ? 'أُلغي تنفيذ الأمر بناءً على اختيارك.' : 'Command execution was cancelled.');
+      return;
+    }
+    setTerminalBusy(true);
+    try {
+      const result = await LocalBackend.runTermuxCommand({ command, confirmed: true });
+      setTerminalHistory((items) => [{ command, at: new Date().toISOString(), status: result.accepted ? 'accepted' : 'sent', auditRecorded: Boolean(result.auditRecorded) }, ...items].slice(0, 30));
+      setNotice(language === 'ar' ? 'تم إرسال الأمر إلى Termux بعد تأكيدك، وسُجلت عملية الإرسال.' : 'Command dispatched to Termux after your confirmation and logged.');
+    } catch (error) {
+      setNotice(language === 'ar' ? 'تعذر تشغيل الأمر عبر Termux: ' + error.message : 'Could not run the command through Termux: ' + error.message);
+    } finally { setTerminalBusy(false); }
   }
 
   async function sendChat(event) {
@@ -426,7 +705,15 @@ export default function App() {
     setChatInput('');
     setSendingChat(true);
     try {
-      const result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify({ model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next }) });
+      let result;
+      if (Capacitor.isNativePlatform()) {
+        const prompt = '<|im_start|>system\nأنت روح AI، المساعدة الذكية الرسمية لمنصة SOULARAB TECH. تحدث بالعربية افتراضياً وبأسلوب واضح وودود. لا تدّعِ تنفيذ إجراء قبل تأكيد نجاحه.\n<|im_end|>\n' + next.map((message) => '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n').join('') + '<|im_start|>assistant\n';
+        const generated = await LocalBackend.generateRooh({ prompt, maxTokens: 512 });
+        result = { message: { role: 'assistant', content: generated.content } };
+      } else {
+        const payload = { model: selectedModel, temperature: Number(preferences.defaultTemperature ?? 0.7), messages: next };
+        result = await request('/api/assistant/chat', { method: 'POST', body: JSON.stringify(payload) });
+      }
       setChatMessages([...next, result.message]);
     } catch (error) {
       setChatMessages([...next, { role: 'assistant', content: (language === 'ar' ? 'تعذر إكمال الطلب: ' : 'Request failed: ') + error.message }]);
@@ -965,6 +1252,16 @@ export default function App() {
     }
   }
 
+  async function controlQueuedTask(taskId, action, priority) {
+    setTaskActionId(taskId);
+    try {
+      await request('/api/tasks/' + taskId + '/' + action, { method: 'POST', body: action === 'priority' ? JSON.stringify({ priority }) : JSON.stringify({}) });
+      setNotice(language === 'ar' ? 'تم تحديث حالة المهمة في الطابور المحلي.' : 'Local queue task updated.');
+      await refresh();
+    } catch (error) { setNotice(error.message); }
+    finally { setTaskActionId(null); }
+  }
+
   async function cancelQueuedTask(taskId) {
     setTaskActionId(taskId);
     try {
@@ -1010,6 +1307,50 @@ export default function App() {
     if (active === 'agents') { loadTasks(); loadProjects(); loadExecutionRegistry(); }
   }, [active, apiToken]);
 
+  const departmentConfig = {
+    store: { name: 'المتاجر الإلكترونية', node: 'E', engineId: 'workspace-commerce', provider: 'Embedded Node E', engineStatus: 'queue_only', prompt: 'محرك تطوير E يستقبل خطة المتجر ويجهز مهام بناء مساحة العمل؛ لا توجد بعد دورة متجر تنفّذ الطلبات أو الدفع أو الشحن.' },
+    video: { name: 'إنشاء الفيديو', node: 'D', engineId: 'media-pipeline', provider: 'whisper.cpp + media adapters', engineStatus: 'partial', prompt: 'العقدة D مخصصة للصوت والفيديو؛ المتاح حالياً تفريغ الصوت عبر whisper.cpp عند اتصاله، أما توليد الفيديو والمونتاج الآلي فغير مفعّلين بعد.' },
+    graphics: { name: 'التصميم الجرافيكي', node: 'C', engineId: 'comfyui-image-design', provider: 'ComfyUI', engineStatus: 'optional', prompt: 'العقدة C للتصميم والصور. يتاح توليد الصور فقط عند اتصال ComfyUI المحلي؛ تخطيطات الجرافيك القابلة للتحرير تحتاج عاملاً إضافياً.' },
+    documents: { name: 'المستندات والملفات', node: 'E', engineId: 'project-document-tools', provider: 'Local project tools', engineStatus: 'partial', prompt: 'العقدة E تدعم أدوات ملفات المشروع الآمنة وفهرسة الملفات وكتابة الملاحظات عند اختيار الإجراء المعتمد؛ لا تفترض وجود محررات DOCX/PDF متقدمة.' },
+    automation: { name: 'الأتمتة والجدولة', node: 'E', engineId: 'local-automation-queue', provider: 'Embedded Node E', engineStatus: 'queue_only', prompt: 'العقدة E تستقبل مهام الأتمتة في طابور محلي؛ لا يوجد مشغّل جدولة عام مفعّل حالياً، ولا تنفذ إرسالاً أو نشراً أو حذفاً تلقائياً.' },
+  };
+  async function submitDepartmentWorkflow(event) {
+    event.preventDefault();
+    const config = departmentConfig[active];
+    const title = departmentDraft.title.trim();
+    const details = departmentDraft.details.trim();
+    if (!config || title.length < 3 || details.length < 8 || departmentSubmitting) return;
+    setDepartmentSubmitting(true);
+    setDepartmentResult(null);
+    try {
+      const description = [
+        'القسم: ' + config.name,
+        'معرّف المحرك: ' + config.engineId,
+        'الخادم الفعلي: ' + config.node,
+        'المزود: ' + config.provider,
+        'المطلوب: ' + details,
+        'ضوابط القسم: ' + config.prompt,
+        'حالة المحرك: ' + config.engineStatus,
+        'الحالة: خطة للمراجعة فقط؛ لا يبدأ التنفيذ تلقائياً بعد الموافقة.',
+      ].join('\n');
+      const legacyDepartment = ({ store: 'store', video: 'video', graphics: 'graphics', documents: 'documents', automation: 'automation' })[active] || active;
+      const result = await request('/api/agent-plans', {
+        method: 'POST',
+        body: JSON.stringify({ title, description, risk: departmentDraft.risk, department: legacyDepartment }),
+      });
+      setDepartmentResult(result);
+      setDepartmentDraft({ title: '', details: '', risk: 'medium' });
+      await refresh();
+      setNotice(Capacitor.isNativePlatform()
+        ? (language === 'ar' ? 'أُنشئت المهمة وربطت بطلب موافقة. لن تدخل طابور التنفيذ قبل موافقتك.' : 'The task and approval request were created. It will not enter the execution queue until you approve it.')
+        : (language === 'ar' ? 'تم إنشاء خطة القسم وربطها بمركز الموافقات. لم يبدأ أي تنفيذ بعد.' : 'The department plan was created and sent to approvals. No execution has started.'));
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setDepartmentSubmitting(false);
+    }
+  }
+
   async function generateAgentSteps() {
     const title = agentDraft.title.trim();
     if (title.length < 3 || agentGenerating) return;
@@ -1020,7 +1361,7 @@ export default function App() {
         const available = await request('/api/assistant/models');
         model = available.items?.[0]?.name || '';
       }
-      if (!model) throw new Error(language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.');
+      if (!model) throw new Error(Capacitor.isNativePlatform() ? (language === 'ar' ? 'حمّل نموذج روح وشغّله من قسم المساعد المحلي أولاً.' : 'Download and load the ROOH model in the local assistant first.') : (language === 'ar' ? 'لا يوجد نموذج محلي مثبت. شغّل Ollama وثبّت نموذجاً أولاً.' : 'No local model is installed. Start Ollama and install a model first.'));
       const context = agentDraft.steps.trim();
       const prompt = language === 'ar'
         ? 'أنت مساعد تخطيط داخل SOULARAB TECH. اقترح خطوات عملية واضحة ومحددة للمهمة التالية. أعد الخطوات فقط، كل خطوة في سطر مستقل ومرقمة. لا تدّعِ تنفيذ أي إجراء، ولا تقترح تجاوز الموافقات أو تشغيل أوامر تلقائياً. عنوان المهمة: ' + title + (context ? '\nالملاحظات الحالية: ' + context : '')
@@ -1167,8 +1508,12 @@ export default function App() {
             <article className="stat-card"><span>{language === 'ar' ? 'حالة الخادم' : 'Server status'}</span><strong className={api.state === 'online' ? 'good' : 'warn'}>{api.state === 'online' ? (language === 'ar' ? 'متصل' : 'Online') : (language === 'ar' ? 'غير متصل' : 'Offline')}</strong><small>{api.mode || (language === 'ar' ? 'بانتظار تشغيل الخلفية' : 'Backend not running')}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'طلبات الموافقة' : 'Approval requests'}</span><strong>{approvals.filter((item) => item.status === 'pending').length}</strong><small>{language === 'ar' ? 'تنتظر مراجعتك' : 'Awaiting your review'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'المهام النشطة' : 'Active tasks'}</span><strong>{queuedTasks.filter((task) => ['queued','planning','waiting_approval','running'].includes(task.status)).length}</strong><small>{language === 'ar' ? 'في مسار العمل' : 'In the workflow'}</small></article>
+            <article className="stat-card"><span>{language === 'ar' ? 'الخوادم الداخلية' : 'Embedded nodes'}</span><strong className={embeddedBackend.nodes.length === 5 && embeddedBackend.nodes.every((node) => node.running) ? 'good' : 'warn'}>{embeddedBackend.nodes.filter((node) => node.running).length}/5</strong><small>{language === 'ar' ? 'عقد محلية مستقلة' : 'Independent local nodes'}</small></article>
             <article className="stat-card"><span>{language === 'ar' ? 'الاتصال الخارجي' : 'External connections'}</span><strong className="good">مقيّد</strong><small>{language === 'ar' ? 'لا اتصال دون إعداد وموافقة' : 'No connection without setup and approval'}</small></article>
           </div>
+          {Capacitor.isNativePlatform() && <div className="engine-status-grid embedded-node-grid">
+            {embeddedBackend.nodes.map((node) => <article className="engine-status-card node-control-card" key={node.id}><div><strong>{language === 'ar' ? 'الخادم ' + node.id : 'Server ' + node.id}</strong><small>{node.name}</small><small>127.0.0.1:{node.port}</small><small>{node.running ? (language === 'ar' ? 'نشط — يستجيب لفحص الحالة' : 'Active — health check responding') : (language === 'ar' ? 'متوقف — لا يستقبل طلبات' : 'Stopped — not accepting requests')}</small>{node.id === 'B' && <small>{engineStatuses.B?.worker === 'running' ? (language === 'ar' ? 'عامل مهام روح: يعمل' : 'Rooh task worker: running') : (language === 'ar' ? 'عامل مهام روح: متوقف' : 'Rooh task worker: stopped')}</small>}<div className="node-control-actions">{node.running ? <button type="button" className="button danger" onClick={() => controlEmbeddedNode(node.id,'stop')}>{language === 'ar' ? 'إيقاف الخادم' : 'Stop server'}</button> : <button type="button" className="button primary" onClick={() => controlEmbeddedNode(node.id,'start')}>{language === 'ar' ? 'تشغيل الخادم' : 'Start server'}</button>}<button type="button" className="button secondary" onClick={() => refresh()}>{language === 'ar' ? 'فحص الحالة' : 'Check status'}</button></div></div><span className={node.running ? 'good' : 'warn'}>{node.running ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'متوقف' : 'Stopped')}</span></article>)}
+          </div>}
           <div className="engine-status-grid">
             {[
               { id: 'ollama', label: 'Ollama', description: language === 'ar' ? 'نماذج المحادثة المحلية' : 'Local language models' },
@@ -1181,14 +1526,52 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {active === 'terminal' && <section className="content"><div className="panel-card destination-page"><div className="section-heading"><div><h2>{language === 'ar' ? 'المحطة الطرفية' : 'TERMINAL'}</h2><p className="muted">{language === 'ar' ? 'قسم مستقل ضمن بنية SOULARAB TECH.' : 'An independent section within SOULARAB TECH.'}</p></div></div><p className="muted">{language === 'ar' ? 'واجهة القسم جاهزة للربط؛ لم يتم تفعيل أدوات أو أوامر غير معتمدة بعد.' : 'The section entry is ready; no unapproved commands or tools are enabled.'}</p></div></section>}
-      {active === 'more' && <section className="content"><div className="panel-card destination-page"><div className="section-heading"><div><h2>{language === 'ar' ? 'لوحة التحكم المتقدمة' : 'Advanced control panel'}</h2><p className="muted">{language === 'ar' ? 'الوصول إلى البنية التحتية والمحركات وأدوات الإدارة المتقدمة.' : 'Access infrastructure, engines, and advanced administration.'}</p></div></div><div className="module-workspace-grid">
-        <button className="module-action" onClick={() => setActive('security')}><span>⬡</span><div><strong>{language === 'ar' ? 'الأمان والموافقات' : 'Security & approvals'}</strong><small>{language === 'ar' ? 'التحكم في الصلاحيات وسجل العمليات' : 'Permissions and operation history'}</small></div><b>←</b></button>
-        <button className="module-action" onClick={() => setActive('media')}><span>✧</span><div><strong>{language === 'ar' ? 'محركات الوسائط' : 'Media engines'}</strong><small>{language === 'ar' ? 'حالة أدوات الصور والصوت' : 'Image and audio tool status'}</small></div><b>←</b></button>
-        <button className="module-action" onClick={() => setActive('agents')}><span>⌘</span><div><strong>{language === 'ar' ? 'الوكلاء والأتمتة' : 'Agents & automation'}</strong><small>{language === 'ar' ? 'مسارات المهام والموافقات' : 'Task workflows and approvals'}</small></div><b>←</b></button>
-        <button className="module-action" onClick={() => setActive('domains')}><span>◎</span><div><strong>{language === 'ar' ? 'النطاقات والاستضافة' : 'Domains & hosting'}</strong><small>{language === 'ar' ? 'إعدادات النشر والاتصال' : 'Deployment and connection settings'}</small></div><b>←</b></button>
-        <button className="module-action" onClick={() => setActive('files')}><span>▱</span><div><strong>{language === 'ar' ? 'الملفات والمشاريع' : 'Files & projects'}</strong><small>{language === 'ar' ? 'إدارة الملفات والإصدارات' : 'File and version management'}</small></div><b>←</b></button>
-      </div><div className="advanced-infrastructure-note"><strong>{language === 'ar' ? 'البنية التحتية والخوادم' : 'Infrastructure & servers'}</strong><p>{language === 'ar' ? 'مساحة مخصصة لإدارة الخوادم الخمسة ومراقبتها؛ ستظهر تفاصيل كل خادم عند ربطه فعلياً.' : 'Dedicated space for the five servers; each server will appear when actually connected.'}</p></div></div></section>}
+      {['store', 'video', 'graphics', 'documents', 'automation'].includes(active) && <section className="content">
+        <div className="section-heading">
+          <div>
+            <h2>{language === 'ar' ? departmentConfig[active].name : englishModules[active]?.[0]}</h2>
+            <p className="muted">{language === 'ar' ? 'مساحة استقبال مهام القسم وتوجيهها إلى الخادم المختص، مع موافقة منفصلة قبل التنفيذ.' : 'Submit a department brief and route it to the assigned node. Execution requires a separate approval.'}</p>
+          </div>
+          <span className="pill">{language === 'ar' ? 'الخادم ' + departmentConfig[active].node : 'Node ' + departmentConfig[active].node}</span>
+        </div>
+        <div className="two-col">
+          <div className="panel-card">
+            <h3>{language === 'ar' ? 'طلب جديد للقسم' : 'New department request'}</h3>
+            <form className="proposal-form" onSubmit={submitDepartmentWorkflow}>
+              <label>{language === 'ar' ? 'عنوان المهمة' : 'Task title'}
+                <input value={departmentDraft.title} onChange={(e) => setDepartmentDraft({ ...departmentDraft, title: e.target.value })} minLength="3" maxLength="120" required placeholder={language === 'ar' ? 'اكتب عنواناً واضحاً' : 'Enter a clear task title'}/>
+              </label>
+              <label>{language === 'ar' ? 'تفاصيل ومتطلبات المهمة' : 'Task details and requirements'}
+                <textarea rows="7" value={departmentDraft.details} onChange={(e) => setDepartmentDraft({ ...departmentDraft, details: e.target.value })} minLength="8" maxLength="4000" required placeholder={language === 'ar' ? 'اشرح النتيجة المطلوبة والقيود والملفات ذات الصلة…' : 'Describe the desired result, constraints, and relevant files…'}/>
+              </label>
+              <label>{language === 'ar' ? 'مستوى المخاطر' : 'Risk level'}
+                <select value={departmentDraft.risk} onChange={(e) => setDepartmentDraft({ ...departmentDraft, risk: e.target.value })}>
+                  <option value="low">{language === 'ar' ? 'منخفض' : 'Low'}</option>
+                  <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
+                  <option value="high">{language === 'ar' ? 'مرتفع' : 'High'}</option>
+                </select>
+              </label>
+              <button className="button primary" disabled={departmentSubmitting || departmentDraft.title.trim().length < 3 || departmentDraft.details.trim().length < 8}>
+                {departmentSubmitting ? (language === 'ar' ? 'جارٍ إعداد الخطة…' : 'Preparing plan…') : (language === 'ar' ? 'إرسال الخطة للموافقة' : 'Submit plan for approval')}
+              </button>
+            </form>
+          </div>
+          <div className="panel-card">
+            <h3>{language === 'ar' ? 'المحرك المرتبط بالقسم' : 'Department engine binding'}</h3>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'العقدة' : 'Node'}</span><strong>{departmentConfig[active].node}</strong></div>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'معرّف المحرك' : 'Engine ID'}</span><strong>{departmentConfig[active].engineId}</strong></div>
+            <div className="settings-inline"><span className="pill">{language === 'ar' ? 'المزود' : 'Provider'}</span><strong>{departmentConfig[active].provider}</strong></div>
+            <p className="muted">{language === 'ar' ? departmentConfig[active].prompt : 'The engine binding is explicit. Availability and execution depend on the provider being installed and connected.'}</p>
+            <p className="chat-footnote">{language === 'ar' ? 'حالة المحرك: ' + ({ queue_only: 'طابور فقط — لا يوجد عامل تنفيذ مكتمل', partial: 'قدرات جزئية — ليس خط إنتاج كاملاً', optional: 'محرك اختياري — يتطلب اتصال ComfyUI' }[departmentConfig[active].engineStatus]) : 'Engine state: ' + departmentConfig[active].engineStatus}</p>
+            {departmentResult ? <div className="notice-inline" role="status">
+              <strong>{language === 'ar' ? 'تم إنشاء طلب الموافقة' : 'Approval request created'}</strong>
+              <p>{language === 'ar' ? 'رقم المهمة: ' + departmentResult.task_id + ' · رقم الموافقة: ' + departmentResult.approval_id : 'Task #' + departmentResult.task_id + ' · Approval #' + departmentResult.approval_id}</p>
+              <p>{language === 'ar' ? 'الحالة: بانتظار المراجعة. لم يبدأ التنفيذ.' : 'Status: waiting for review. Execution has not started.'}</p>
+              <button type="button" className="button secondary" onClick={() => setActive('security')}>{language === 'ar' ? 'فتح مركز الموافقات' : 'Open approval center'}</button>
+            </div> : <p className="chat-footnote">{language === 'ar' ? 'لن تُنفّذ عمليات شراء أو دفع أو نشر أو حذف أو إرسال خارجي من هذه الشاشة. الموافقة تحفظ القرار فقط، والتنفيذ يحتاج عاملاً فعلياً متصلاً بالقسم.' : 'This screen does not purchase, charge, publish, delete, or send externally. Approval records a decision only; execution requires a connected department worker.'}</p>}
+          </div>
+        </div>
+      </section>}
       {active === 'work' && <section className="content"><div className="section-heading"><div><h3>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</h3><p>{language === 'ar' ? 'كل أدوات التنفيذ ضمن مساحة واحدة' : 'All execution tools in one workspace'}</p></div></div><div className="module-grid">{modules.filter((m) => m.id !== 'overview').map((item) => <button className="module-card" key={item.id} onClick={() => setActive(item.id)}><Icon>{item.icon}</Icon><strong>{language === 'en' && englishModules[item.id] ? englishModules[item.id][0] : item.title}</strong><span>{language === 'en' && englishModules[item.id] ? englishModules[item.id][1] : item.desc}</span><b>{language === 'ar' ? 'فتح القسم ↗' : 'Open section ↗'}</b></button>)}</div></section>}
       {active === 'hub' && <section className="content"><div className="panel-card destination-page">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'سولاراب هوب' : 'Soularab Hub'}</h2><p className="muted">{language === 'ar' ? 'مستكشف مستودعات GitHub للقراءة والمتابعة.' : 'Browse GitHub repositories and inspect their contents.'}</p></div><span className="pill">{language === 'ar' ? 'قراءة آمنة' : 'Read only'}</span></div>
@@ -1200,6 +1583,7 @@ export default function App() {
       </div></section>}
       {active === 'root' && <section className="content"><div className="panel-card destination-page">
         <div className="section-heading"><div><h2>{language === 'ar' ? 'الجذر والتشخيص' : 'Root & diagnostics'}</h2><p className="muted">{language === 'ar' ? 'فحص إمكانات المتصفح والجهاز الذي يعرض مساحة العمل.' : 'Inspect browser and device capabilities for this workspace.'}</p></div><button className="button primary" onClick={inspectDevice}>{language === 'ar' ? 'بدء الفحص' : 'Run diagnostics'}</button></div>
+        <div className="settings-group"><h3>{language === 'ar' ? 'صلاحيات Android Root' : 'Android root access'}</h3><p className="chat-footnote">{language === 'ar' ? 'صلاحيات الجذر لا يمكن تفعيلها برمجياً على هاتف غير مروّت. افحص وجود su وامنح التطبيق الإذن من مدير الجذر إذا ظهر الطلب.' : 'Root cannot be enabled by an app on a non-rooted phone. Check for su and grant access in your root manager if prompted.'}</p><button type="button" className="button secondary" onClick={inspectRootAccess}>{language === 'ar' ? 'فحص صلاحيات الجذر' : 'Check root access'}</button>{rootAccess.checked && <p className={rootAccess.available ? 'good' : 'warn'}>{rootAccess.available ? 'UID 0: ' + rootAccess.uid : (rootAccess.message || (language === 'ar' ? 'صلاحيات الجذر غير متاحة.' : 'Root access unavailable.'))}</p>}</div>
         {deviceInfo ? <><div className="diagnostic-grid">
           <article className="stat-card"><span>{language === 'ar' ? 'حالة الشبكة' : 'Network status'}</span><strong className={deviceInfo.online ? 'good' : 'warn'}>{deviceInfo.online ? (language === 'ar' ? 'متصل' : 'Online') : (language === 'ar' ? 'غير متصل' : 'Offline')}</strong></article>
           <article className="stat-card"><span>{language === 'ar' ? 'دقة الشاشة' : 'Screen resolution'}</span><strong>{deviceInfo.screen}</strong></article><article className="stat-card"><span>{language === 'ar' ? 'مساحة العرض' : 'Viewport'}</span><strong>{deviceInfo.viewport}</strong></article>
@@ -1222,6 +1606,14 @@ export default function App() {
             <div className="settings-row"><div><strong>{language === 'ar' ? 'نوع الخط' : 'Font family'}</strong><small>{language === 'ar' ? 'تغيير عائلة الخط في التطبيق' : 'Change the application font family'}</small></div><select value={preferences.font} onChange={(e) => updatePreference('font', e.target.value)}><option value="ibm">IBM Plex Arabic</option><option value="system">{language === 'ar' ? 'خط النظام' : 'System font'}</option><option value="tahoma">Tahoma</option><option value="georgia">Georgia</option></select></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'حجم الخط' : 'Font size'}</strong><small>{language === 'ar' ? 'تكبير أو تصغير النصوص' : 'Scale text'}: {preferences.fontScale}%</small></div><input aria-label="حجم الخط" type="range" min="85" max="125" step="5" value={preferences.fontScale} onChange={(e) => updatePreference('fontScale', Number(e.target.value))}/></div>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'كثافة الواجهة' : 'Interface density'}</strong><small>{language === 'ar' ? 'المسافات بين البطاقات والعناصر' : 'Spacing between cards and elements'}</small></div><select value={preferences.density} onChange={(e) => updatePreference('density', e.target.value)}><option value="comfortable">{language === 'ar' ? 'مريحة' : 'Comfortable'}</option><option value="compact">{language === 'ar' ? 'مضغوطة' : 'Compact'}</option></select></div>
+          </div>
+          <div className="settings-group"><h3>{language === 'ar' ? 'قفل التطبيق' : 'App lock'}</h3>
+            <div className="settings-row"><div><strong>{language === 'ar' ? 'حالة القفل' : 'Lock status'}</strong><small>{appLockEnabled ? (language === 'ar' ? 'التطبيق محمي برمز PIN عند فتحه مجدداً' : 'The app asks for your PIN when reopened') : (language === 'ar' ? 'لا يوجد قفل محلي مفعّل' : 'No local app lock is enabled')}</small></div>{appLockEnabled ? <div className="settings-inline"><button type="button" className="button secondary" onClick={lockAppNow}>{language === 'ar' ? 'قفل الآن' : 'Lock now'}</button><button type="button" className="button danger" onClick={removeAppLock}>{language === 'ar' ? 'تعطيل القفل' : 'Disable lock'}</button></div> : <span className="pill">{language === 'ar' ? 'غير محمي' : 'Unprotected'}</span>}</div>
+            {!appLockEnabled && <div className="pin-setup"><label>{language === 'ar' ? 'رمز PIN — ستة أرقام' : 'PIN — six digits'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/></label><label>{language === 'ar' ? 'تأكيد الرمز' : 'Confirm PIN'}<input type="password" inputMode="numeric" autoComplete="new-password" maxLength="6" value={appPinConfirm} onChange={(e) => setAppPinConfirm(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/></label><button type="button" className="button primary" onClick={saveAppPin} disabled={appPin.length !== 6 || appPinConfirm.length !== 6}>{language === 'ar' ? 'تفعيل قفل التطبيق' : 'Enable app lock'}</button></div>}
+            <button type="button" className="button secondary" onClick={async () => { try { const result = await LocalBackend.biometricAvailability(); setBiometricAvailable(Boolean(result.available)); setNotice(result.available ? (language === 'ar' ? 'البصمة متاحة.' : 'Biometrics are available.') : (language === 'ar' ? 'سجّل بصمة في إعدادات Android أولاً.' : 'Enroll a biometric in Android settings first.')); } catch (error) { setNotice(error.message); } }}>{language === 'ar' ? 'فحص توفر البصمة' : 'Check biometric availability'}{biometricAvailable ? ' ✓' : ''}</button>
+            {appLockError && !appLocked && <p className="warn">{appLockError}</p>}
+            <p className="chat-footnote">{language === 'ar' ? 'يُخزّن التطبيق تجزئة مشتقة من الرمز مع ملح عشوائي. يمكنك استخدام البصمة القوية المسجلة في Android لفتح التطبيق.' : 'Only a salted PIN hash is stored. Enrolled Android strong biometrics can also unlock the app.'}</p>
+            <button type="button" className="button secondary" onClick={async () => { try { const result = await LocalBackend.biometricAvailability(); setBiometricAvailable(Boolean(result.available)); setNotice(result.available ? (language === 'ar' ? 'البصمة متاحة على هذا الجهاز.' : 'Biometrics are available.') : (language === 'ar' ? 'البصمة غير مهيأة على هذا الجهاز.' : 'Biometrics are not enrolled on this device.')); } catch (error) { setNotice(error.message); } }}>{language === 'ar' ? 'فحص البصمة البيومترية' : 'Check biometric availability'}{biometricAvailable ? ' ✓' : ''}</button>
           </div>
           <div className="settings-group"><h3>{language === 'ar' ? 'الجلسة والأمان' : 'Session & security'}</h3>
             <div className="settings-row"><div><strong>{language === 'ar' ? 'قفل الجلسة عند عدم النشاط' : 'Lock session after inactivity'}</strong><small>{language === 'ar' ? 'إنهاء رمز الوصول وطلب إدخاله مجدداً بعد فترة خمول. يعمل فقط عند استخدام رمز وصول.' : 'Clear the access token and require it again after inactivity. Applies only when an access token is in use.'}</small></div><select value={preferences.sessionTimeoutMinutes || 0} onChange={(e) => updatePreference('sessionTimeoutMinutes', Number(e.target.value))}><option value="0">{language === 'ar' ? 'معطّل' : 'Disabled'}</option><option value="15">{language === 'ar' ? '15 دقيقة' : '15 minutes'}</option><option value="30">{language === 'ar' ? '30 دقيقة' : '30 minutes'}</option><option value="60">{language === 'ar' ? '60 دقيقة' : '60 minutes'}</option></select></div>
@@ -1305,10 +1697,25 @@ export default function App() {
         <div className="panel-card workspace-note"><strong>{language === 'ar' ? 'حماية الملفات' : 'File protection'}</strong><p>{language === 'ar' ? 'تُحصر عمليات الرفع والتنزيل داخل مجلد المشروع، ويُمنع استخدام المسارات للوصول إلى ملفات أخرى. الحد الأقصى للملف الواحد 10 ميغابايت.' : 'Uploads and downloads are restricted to the project folder. Path traversal is blocked. Maximum file size is 10 MB.'}</p></div>
       </section>}
 
+      {active === 'terminal' && <section className="content"><div className="panel-card terminal-page">
+        <div className="section-heading"><div><h2>{language === 'ar' ? 'طرفية الهاتف — Termux' : 'Phone terminal — Termux'}</h2><p className="muted">{language === 'ar' ? 'واجهة أوامر متصلة بتطبيق Termux المثبت على الهاتف، وليست محاكاة شكلية لسطر الأوامر.' : 'A command bridge to the Termux app installed on this phone, not a fake shell emulator.'}</p></div><span className="pill">Android / Termux</span></div>
+        <div className="notice-inline"><strong>{language === 'ar' ? 'متطلبات الاتصال' : 'Connection requirements'}</strong><p>{language === 'ar' ? 'يجب تثبيت Termux من مصدر موثوق، وتفعيل Allow external apps في إعداداته. عند إرسال الأمر ستُفتح جلسة داخل Termux، وتظهر المخرجات هناك؛ لا يستطيع التطبيق قراءة مخرجات الجلسة تلقائياً حالياً.' : 'Install Termux from a trusted source and enable Allow external apps in its settings. Commands open a Termux session and output appears there; this app cannot currently capture that session output automatically.'}</p></div>
+        <div className="terminal-presets"><strong>{language === 'ar' ? 'أوامر سريعة' : 'Quick commands'}</strong>{[['pwd','المجلد الحالي'],['ls -la','عرض الملفات'],['df -h','مساحة التخزين'],['free -h','الذاكرة'],['uname -a','معلومات النظام'],['ps -ef','العمليات']].map(([cmd,label]) => <button key={cmd} type="button" className="button secondary" onClick={() => setTerminalCommand(cmd)}><code>{cmd}</code><small>{label}</small></button>)}</div>
+        <form className="terminal-command-form" onSubmit={runTerminalCommand}><label>{language === 'ar' ? 'الأمر المراد تنفيذه' : 'Command to execute'}<textarea rows="3" value={terminalCommand} onChange={(e) => setTerminalCommand(e.target.value)} spellCheck="false" autoCapitalize="off" autoCorrect="off" placeholder="pkg update && pkg upgrade"/></label><button className="button primary" disabled={terminalBusy || !terminalCommand.trim()}>{terminalBusy ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال إلى Termux ↗' : 'Send to Termux ↗')}</button></form>
+        <div className="terminal-history"><div className="section-heading"><h3>{language === 'ar' ? 'سجل الأوامر المرسلة' : 'Sent command history'}</h3><button className="text-button" onClick={() => setTerminalHistory([])}>{language === 'ar' ? 'مسح السجل' : 'Clear history'}</button></div>{terminalHistory.length ? terminalHistory.map((item,index)=><article key={item.at+index}><code>{item.command}</code><small>{new Date(item.at).toLocaleString(language === 'ar' ? 'ar' : 'en-US')}</small></article>) : <Empty text={language === 'ar' ? 'لم ترسل أوامر بعد.' : 'No commands sent yet.'}/>}</div>
+        <p className="chat-footnote">{language === 'ar' ? 'تنبيه أمني: الأوامر تُنفذ بصلاحيات مستخدم Termux، وليست بصلاحيات root. راجع الأمر قبل إرساله؛ لا ترسل أوامر مجهولة أو مدمرة.' : 'Security: commands run with the Termux user permissions, not root. Review every command before sending; avoid unknown or destructive commands.'}</p>
+      </div></section>}
       {active === "assistant" && <section className="content">
+        {Capacitor.isNativePlatform() && !roohEngine.loaded && <div className="panel-card rooh-engine-setup">
+          <div><h3>{language === 'ar' ? 'محرك روح المحلي المدمج' : 'Embedded ROOH local engine'}</h3><p className="muted">{language === 'ar' ? 'المحرك مبني داخل APK. نزّل نموذج Qwen مرة واحدة إلى مساحة التطبيق الخاصة (يتطلب نحو 2.8 GB مساحة حرة). بعد التنزيل يعمل الاستدلال دون Termux أو اتصال إنترنت.' : 'The inference engine is bundled in the APK. Download the Qwen model once into private app storage (about 2.8 GB free space required). Inference then runs without Termux or internet.'}</p></div>
+          {roohEngine.modelPresent
+            ? <button className="button primary" disabled={roohBusy} onClick={loadDownloadedRoohModel}>{roohBusy ? (language === 'ar' ? 'جارٍ تحميل النموذج…' : 'Loading model…') : (language === 'ar' ? 'تشغيل محرك روح' : 'Load ROOH model')}</button>
+            : <button className="button primary" disabled={roohBusy} onClick={installRoohModel}>{roohBusy ? (language === 'ar' ? 'جارٍ تنزيل النموذج…' : 'Downloading model…') : (language === 'ar' ? 'تنزيل نموذج روح وتشغيله' : 'Download and load ROOH model')}</button>}
+          {roohBusy && <div className="rooh-progress"><progress max="100" value={Math.max(0, roohDownloadProgress.percent)} /><small>{roohDownloadProgress.percent >= 0 ? roohDownloadProgress.percent + '%' : (language === 'ar' ? 'جارٍ التنزيل…' : 'Downloading…')} · {Math.round(roohDownloadProgress.receivedBytes / 1048576)} MB</small></div>}
+        </div>}
         <div className="assistant-toolbar panel-card">
-          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.'}</p></div>
-          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected')}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
+          <div><h3>{language === 'ar' ? 'المساعد المحلي' : 'Local assistant'}</h3><p className="muted">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك llama.cpp مدمج داخل التطبيق ويشغّل نموذج Qwen محلياً على الهاتف دون Termux أو خادم خارجي.' : 'llama.cpp is bundled in the app and runs Qwen locally on this phone without Termux or an external server.') : (language === 'ar' ? 'تُرسل المحادثة إلى Ollama على الجهاز الذي يعمل عليه الخادم فقط.' : 'Messages are sent only to the local Ollama service on the server machine.')}</p></div>
+          <div className="assistant-controls"><span className={assistantStatus.connected ? "pill connected" : "pill"}>{assistantStatus.loading ? (language === 'ar' ? 'جارٍ الفحص…' : 'Checking…') : assistantStatus.connected ? (Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك روح متصل' : 'Rooh engine connected') : (language === 'ar' ? 'Ollama متصلة' : 'Ollama connected')) : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'محرك روح غير متصل' : 'Rooh engine offline') : (language === 'ar' ? 'Ollama غير متصلة' : 'Ollama disconnected'))}</span><button className="button secondary" onClick={loadAssistant}>{language === 'ar' ? 'فحص الاتصال' : 'Check connection'}</button></div>
         </div>
         <div className="chat-panel panel-card">
           <div className="chat-heading"><div><h3>{language === 'ar' ? 'محادثة جديدة' : 'New conversation'}</h3><small>{language === 'ar' ? 'المحادثة محفوظة مؤقتاً في هذه الصفحة فقط.' : 'This conversation is kept temporarily on this page only.'}</small></div>
@@ -1323,10 +1730,10 @@ export default function App() {
             {sendingChat && <div className="chat-thinking">{language === 'ar' ? 'النموذج يفكر…' : 'Model is thinking…'}</div>}
           </div>
           <form className="chat-compose" onSubmit={sendChat}>
-            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first')} disabled={!models.length || sendingChat} />
+            <textarea rows="2" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={models.length ? (language === 'ar' ? 'اكتب رسالتك هنا…' : 'Type your message…') : (Capacitor.isNativePlatform() ? (language === 'ar' ? 'نزّل نموذج روح وشغّله من اللوحة أعلاه أولاً' : 'Download and load the ROOH model above first') : (language === 'ar' ? 'شغّل Ollama وثبّت نموذجاً محلياً أولاً' : 'Start Ollama and install a local model first'))} disabled={!models.length || sendingChat} />
             <button className="button primary" disabled={!models.length || !chatInput.trim() || sendingChat}>{sendingChat ? (language === 'ar' ? 'جارٍ الإرسال…' : 'Sending…') : (language === 'ar' ? 'إرسال ↑' : 'Send ↑')}</button>
           </form>
-          <p className="chat-footnote">{language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.'}</p>
+          <p className="chat-footnote">{Capacitor.isNativePlatform() ? (language === 'ar' ? 'بعد تنزيل نموذج Qwen مرة واحدة، يعمل محرك روح داخل التطبيق دون Termux أو خادم خارجي، ويمكنه الاستدلال دون إنترنت.' : 'After the one-time Qwen download, the ROOH engine runs inside the app without Termux or an external server and can infer offline.') : (language === 'ar' ? 'يلزم تثبيت Ollama والنموذج على جهاز الخادم. الهاتف واجهة تحكم ولا يشغّل النموذج الثقيل بنفسه.' : 'Ollama and a model must be installed on the server machine. The phone is a control interface and does not run the large model itself.')}</p>
         </div>
       </section>}
       {active === 'security' && <section className="content two-col">
@@ -1391,16 +1798,20 @@ export default function App() {
           <div className="panel-card"><h3>{language==='ar'?'ضوابط التنفيذ':'Execution safeguards'}</h3><div className="roadmap-row"><span>{language==='ar'?'حفظ الخطة':'Plan storage'}</span><b className="good">{language==='ar'?'الخزنة المحلية':'Local vault'}</b></div><div className="roadmap-row"><span>{language==='ar'?'مراجعة بشرية':'Human review'}</span><b className="good">{language==='ar'?'مطلوبة':'Required'}</b></div><div className="roadmap-row"><span>{language==='ar'?'التنفيذ التلقائي':'Automatic execution'}</span><b>{language==='ar'?'معطل':'Disabled'}</b></div><p className="chat-footnote">{language==='ar'?'كل خطة تُسجل في طابور المهام وتُرسل أيضاً للموافقة البشرية. إنشاء المهمة أو الموافقة عليها لا يشغّل الأوامر؛ يلزم محرك تنفيذ مستقل ومراجعة أمان.':'Each plan is recorded in the task queue and separately submitted for human approval. Queueing or approving a task never executes commands; a separate execution engine and safety review are required.'}</p><button className="button secondary" onClick={()=>setActive('security')}>{language==='ar'?'فتح قائمة الموافقات':'Open approvals'}</button></div>
         </div>
         <div className="panel-card task-queue-panel">
-          <div className="section-heading"><div><h3>{language==='ar'?'طابور المهام':'Task queue'}</h3><p className="muted">{language==='ar'?'المهام المحفوظة على الخادم. الإلغاء متاح قبل بدء أي تنفيذ.':'Tasks persisted on the server. Cancellation is available before execution starts.'}</p></div><div className="queue-tools"><span className="pill">{queuedTasks.length} {language==='ar'?'مهمة':'tasks'}</span><select className="task-filter" value={taskFilter} onChange={(event)=>setTaskFilter(event.target.value)} aria-label={language==='ar'?'تصفية المهام':'Filter tasks'}><option value="all">{language==='ar'?'كل الحالات':'All statuses'}</option><option value="waiting_approval">{language==='ar'?'بانتظار الموافقة':'Awaiting approval'}</option><option value="queued">{language==='ar'?'في الانتظار':'Queued'}</option><option value="planning">{language==='ar'?'قيد التخطيط':'Planning'}</option><option value="running">{language==='ar'?'قيد التنفيذ':'Running'}</option><option value="completed">{language==='ar'?'مكتملة':'Completed'}</option><option value="failed">{language==='ar'?'فشلت':'Failed'}</option><option value="cancelled">{language==='ar'?'ملغاة':'Cancelled'}</option></select><button className="button secondary" onClick={loadTasks} disabled={loadingTasks}>{loadingTasks?(language==='ar'?'جارٍ التحديث…':'Refreshing…'):(language==='ar'?'تحديث ↻':'Refresh ↻')}</button></div></div>
+          <div className="section-heading"><div><h3>{language==='ar'?'طابور المهام':'Task queue'}</h3><p className="muted">{language==='ar'?'المهام المحفوظة على الخادم. الإلغاء متاح قبل بدء أي تنفيذ.':'Tasks persisted on the server. Cancellation is available before execution starts.'}</p></div><div className="queue-tools"><span className="pill">{queuedTasks.length} {language==='ar'?'مهمة':'tasks'}</span><select className="task-filter" value={taskFilter} onChange={(event)=>setTaskFilter(event.target.value)} aria-label={language==='ar'?'تصفية المهام':'Filter tasks'}><option value="all">{language==='ar'?'كل الحالات':'All statuses'}</option><option value="waiting_approval">{language==='ar'?'بانتظار الموافقة':'Awaiting approval'}</option><option value="queued">{language==='ar'?'في الانتظار':'Queued'}</option><option value="planning">{language==='ar'?'قيد التخطيط':'Planning'}</option><option value="running">{language==='ar'?'قيد التنفيذ':'Running'}</option><option value="paused">{language==='ar'?'متوقفة مؤقتاً':'Paused'}</option><option value="completed">{language==='ar'?'مكتملة':'Completed'}</option><option value="failed">{language==='ar'?'فشلت':'Failed'}</option><option value="cancelled">{language==='ar'?'ملغاة':'Cancelled'}</option></select><button className="button secondary" onClick={loadTasks} disabled={loadingTasks}>{loadingTasks?(language==='ar'?'جارٍ التحديث…':'Refreshing…'):(language==='ar'?'تحديث ↻':'Refresh ↻')}</button></div></div>
           {loadingTasks && !queuedTasks.length ? <Empty text={language==='ar'?'جارٍ تحميل المهام…':'Loading tasks…'}/> : queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).length ? <div className="task-queue-list">{queuedTasks.filter((task)=>taskFilter==='all'||task.status===taskFilter).map((task)=> <article className="approval task-queue-item" key={task.id}>
             <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
             {task.description && <p>{task.description}</p>}
-            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')}</small>
+            {task.result && <div className="notice-inline task-result"><strong>{language==='ar'?'نتيجة التنفيذ المحلي':'Local execution result'}</strong><p>{task.result}</p></div>}
+            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')} · {language==='ar'?'الأولوية':'Priority'} {task.priority || 0}</small>
             <div className="approval-actions">
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
-              {['queued','planning','waiting_approval'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
+              {Capacitor.isNativePlatform() && task.status==='queued' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
+              {Capacitor.isNativePlatform() && task.status==='paused' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'resume')}>{language==='ar'?'استئناف':'Resume'}</button>}
+              {Capacitor.isNativePlatform() && ['queued','paused'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'priority',10)}>{language==='ar'?'أولوية قصوى':'High priority'}</button>}
+              {['queued','planning','waiting_approval','paused'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
             </div>
-            {task.status==='queued' && <div className="task-execution-form">
+            {task.status==='queued' && !Capacitor.isNativePlatform() && <div className="task-execution-form">
               <strong>{language==='ar'?'إجراء آمن ضمن القائمة المسموحة':'Allowlisted safe action'}</strong>
               <label>{language==='ar'?'نوع الإجراء':'Action type'}<select value={executionInputs[task.id]?.action || executionActions[0]?.id || ''} disabled={loadingExecutionActions || !executionActions.length} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],action:event.target.value,filename:event.target.value==='export_project_inventory'?'inventory.md':('task-'+task.id+'.md')}}))}>{executionActions.map(action=><option key={action.id} value={action.id}>{language==='ar'?action.title:action.title_en}</option>)}</select></label>
               <label>{language==='ar'?'مساحة المشروع':'Project workspace'}<select value={executionInputs[task.id]?.projectId || ''} onChange={event=>setExecutionInputs(current=>({...current,[task.id]:{...current[task.id],projectId:event.target.value}}))}><option value="">{language==='ar'?'اختر مشروعاً نشطاً':'Select an active project'}</option>{projects.filter(project=>project.status==='active').map(project=><option key={project.id} value={project.id}>{project.title} · #{project.id}</option>)}</select></label>
@@ -1508,7 +1919,7 @@ export default function App() {
           </div>
         </div>
       </section>}
-      {!['overview','security','files','assistant','media','web','design','apps','agents','domains','work','hub','root','settings','vault'].includes(active) && <section className="content">
+      {!['overview','security','files','assistant','media','web','design','apps','agents','domains','work','hub','root','settings','vault','terminal'].includes(active) && <section className="content">
         <div className="module-intro panel-card"><Icon>{current.icon}</Icon><h2>{current.title}</h2><p>{current.desc}</p><span className="pill">{language === 'ar' ? 'مساحة تجهيز العمل' : 'Work preparation space'}</span></div>
         <div className="module-workspace-grid">
           <div className="panel-card"><h3>{language === 'ar' ? 'إعداد مهمة جديدة' : 'Create a new task'}</h3><p className="muted">{language === 'ar' ? 'اكتب المطلوب واحفظه في الخزنة كتكليف قابل للمتابعة. لن ندّعي تنفيذ خدمة خارجية قبل ربط محركها فعلياً.' : 'Describe the task and save it to the vault for follow-up. External services will not be presented as active until their engines are connected.'}</p>
@@ -1534,7 +1945,9 @@ export default function App() {
       <button className={active === 'hub' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('hub')}><span>⌘</span>{language === 'ar' ? 'هوب' : 'Hub'}</button>
       <button className={active === 'root' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('root')}><span>⬡</span>{language === 'ar' ? 'الجذر' : 'Root'}</button>
       <button className={active === 'settings' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('settings')}><span>⚙</span>{language === 'ar' ? 'الإعدادات' : 'Settings'}</button>
-    </nav>      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button className={active === 'terminal' ? 'dock-item active' : 'dock-item'} onClick={() => setActive('terminal')}><span>⌘</span>{language === 'ar' ? 'الطرفية' : 'Terminal'}</button>
+    </nav>      {appLocked && <div className="app-lock-backdrop" role="dialog" aria-modal="true" aria-labelledby="app-lock-title"><form className="app-lock-card" onSubmit={(event) => { event.preventDefault(); unlockApp(); }}><div className="brand-mark auth-mark">ST</div><p className="eyebrow">SOULARAB TECH / APP LOCK</p><h2 id="app-lock-title">{language === 'ar' ? 'التطبيق مقفل' : 'App locked'}</h2><p>{language === 'ar' ? 'أدخل رمز PIN المكوّن من ستة أرقام للمتابعة.' : 'Enter your six-digit PIN to continue.'}</p><input type="password" inputMode="numeric" autoComplete="current-password" maxLength="6" autoFocus value={appPin} onChange={(e) => setAppPin(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="••••••"/>{appLockError && <small className="warn">{appLockError}</small>}{Capacitor.isNativePlatform() && <button type="button" className="button secondary" onClick={unlockWithBiometric}>{language === 'ar' ? 'فتح بالبصمة' : 'Unlock with biometrics'}</button>}<button className="button primary" disabled={appPin.length !== 6}>{language === 'ar' ? 'فتح التطبيق' : 'Unlock app'}</button></form></div>}
+      {authRequired && <div className="auth-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <form className="auth-card" onSubmit={unlockWorkspace}>
           <div className="brand-mark auth-mark">ST</div>
           <p className="eyebrow">SOULARAB TECH / SECURE ACCESS</p>

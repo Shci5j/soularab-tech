@@ -103,13 +103,18 @@ npm run dev
 - يتطلب المساعد تشغيل Ollama وتثبيت نموذج محلي. عيّن `OLLAMA_BASE_URL` فقط إذا كان عنوان الخدمة على loopback وبروتوكول HTTP.
 - واجهة الهاتف لا تشغّل النموذج بنفسها؛ تستعمل الخادم المحلي كوسيط.
 
-### تشغيل المساعد المحلي
-1. ثبّت Ollama على الجهاز الذي سيشغّل الخادم: https://ollama.com/download
-2. نزّل نموذجاً يناسب الذاكرة المتاحة، مثلاً `ollama pull qwen2.5:3b`، بعد مراجعة بطاقة النموذج وترخيصه وشروط الاستخدام.
-3. شغّل الخادم والواجهة كما سبق، ثم افتح قسم «المساعد الذكي» واختر النموذج.
-4. عنوان Ollama الافتراضي هو `http://127.0.0.1:11434`؛ الاتصال محصور محلياً ولا يدعم مزوداً بعيداً في هذه المرحلة.
-5. عند فتح الواجهة من هاتف عبر الشبكة المحلية، أضف عنوان الواجهة إلى `SOULARAB_CORS_ORIGINS` في بيئة الخادم، مع إبقاء الوصول إلى API محمياً برمز قوي.
+### تشغيل روح محلياً
 
+**داخل تطبيق Android (محرك أصلي مستقل):**
+1. يتضمن APK مكتبة `llama.cpp` مبنية عبر Android NDK ومربوطة مباشرة بالتطبيق باستخدام JNI؛ لا يعتمد مسار Android على Ollama أو Termux أو خادم HTTP خارجي.
+2. افتح قسم «المساعد المحلي» واضغط «تنزيل نموذج روح وتشغيله». ينزّل التطبيق نموذج `Qwen2.5-3B-Instruct Q4_K_M` إلى مساحة التطبيق الخاصة. يحتاج التنزيل إلى اتصال إنترنت أول مرة ومساحة حرة تقارب 2.8 GB.
+3. بعد التحميل يعمل الاستدلال محلياً على CPU الهاتف ويمكن استخدامه دون اتصال إنترنت. عند إعادة فتح التطبيق يُحمّل النموذج من مساحة التطبيق الخاصة.
+4. محرك Android الحالي مخصص لمعمارية `arm64-v8a` ويستخدم CPU؛ لا يتطلب Root ولا Termux. أداء الاستدلال يعتمد على RAM والمعالج، وقد يكون بطيئاً على الأجهزة محدودة الذاكرة.
+
+**على الويب أو الحاسوب:** يستمر دعم Ollama على الجهاز الذي يعمل عليه الخادم، أو مزود `llama.cpp` متوافق مع OpenAI API. هذه المسارات تخص نسخة الويب ولا تدخل في تشغيل محرك Android الأصلي.
+
+السكربت `scripts/start-rooh-llama-termux.sh` محفوظ كأداة تشغيل قديمة للمطورين، لكنه لم يعد مطلوباً لتشغيل روح داخل تطبيق Android.
+ 
 ### محركات الوسائط المحلية
 
 يمكن ربط محركات الوسائط دون استخدام خدمات سحابية:
@@ -152,3 +157,27 @@ npm run dev
 ## التطوير
 
 كل تطوير يتم على فرع مستقل. لا تُدمج التغييرات إلى `main` دون مراجعة وموافقة صاحب المستودع.
+
+
+## Embedded Android backend (five local nodes)
+
+The Android Capacitor build includes an embedded backend plugin under `plugins/local-backend`. When the native app starts, it launches five independent loopback HTTP services on ports 3101–3105 and verifies their health from the WebView:
+
+- A — AI and text task queue
+- B — image and design task queue
+- C — audio and video task queue
+- D — development task queue
+- E — task dispatch, node directory, and recovery coordination
+
+The services bind to `127.0.0.1` only. Requests use a per-install token passed in the `X-Local-Token` header. Android network security permits cleartext only to `localhost`; other cleartext destinations remain blocked. Queues and local section records persist in the app-private SQLite database with WAL enabled.
+
+Install dependencies and sync the native project:
+
+```sh
+npm install
+npx cap add android   # only if the android platform has not been generated
+npx cap sync android
+npm run build
+```
+
+The current milestone provides real independent HTTP listeners, health/metrics endpoints, persistent task queues, section storage, and routing from node E. It does **not** yet include on-device AI models, image/video processing engines, code execution workers, or an Android foreground service. Queued tasks are stored and routed but are not automatically executed yet. The app process must remain alive for the local listeners to remain available.

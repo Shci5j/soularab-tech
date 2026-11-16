@@ -1,0 +1,6 @@
+[
+	{
+		"pkg": "@soularab/local-backend",
+		"classpath": "com.soularab.localbackend.LocalBackendPlugin"
+	}
+]

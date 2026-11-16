@@ -16,10 +16,14 @@
     "vite": "^6.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@capacitor/core": "^6.2.0"
+    "@capacitor/core": "^6.2.0",
+    "@soularab/local-backend": "file:plugins/local-backend"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.0",
     "@capacitor/android": "^6.2.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
   }
 }
