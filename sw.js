@@ -1,6 +1,7 @@
 'use strict';
 
-const CACHE_NAME = 'soularab-tech-v9';
+// Bump this name whenever a deployment must invalidate previously cached assets.
+const CACHE_NAME = 'soularab-tech-v10';
 const BASE_URL = new URL('./', self.location.href);
 const PRECACHE_URLS = [
   BASE_URL.href,
@@ -31,15 +32,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/')) return;
 
+  // Always request the latest document; use the cached document only when offline.
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(BASE_URL.href, copy));
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(BASE_URL.href, copy));
+      }
       return response;
     }).catch(async () => (await caches.match(request)) || (await caches.match(BASE_URL.href))));
     return;
   }
 
+  // Vite emits fingerprinted asset filenames; cache them after the first successful fetch.
   event.respondWith(caches.match(request).then(async (cached) => {
     if (cached) return cached;
     const response = await fetch(request);

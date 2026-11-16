@@ -3,6 +3,8 @@ import { Capacitor } from '@capacitor/core';
 import { LocalBackend } from '@soularab/local-backend';
 import { getEmbeddedNodeHealth, localNodeRequest } from './services/localNodes.js';
 import { cleanApiBase, safeApiBase } from './utils/apiUrl.js';
+import { installEdgeBackGesture } from './utils/edgeBackGesture.js';
+import appLogo from '../icon.svg';
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '');
 const modules = [
@@ -56,6 +58,12 @@ export default function App() {
     window.addEventListener('popstate', handleBack);
     return () => window.removeEventListener('popstate', handleBack);
   }, []);
+
+  useEffect(() => installEdgeBackGesture(window, {
+    enabled: active !== 'overview',
+    onBack: () => window.history.back(),
+  }), [active]);
+
   const [api, setApi] = useState({ state: 'checking', version: '—' });
   const [embeddedBackend, setEmbeddedBackend] = useState({ running: false, nodes: [] });
   const [approvals, setApprovals] = useState([]);
@@ -63,6 +71,11 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [engineStatuses, setEngineStatuses] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('st-theme') || 'dark');
+  const [brightnessOpen, setBrightnessOpen] = useState(false);
+  const [brightness, setBrightness] = useState(() => {
+    const saved = Number(localStorage.getItem('st-brightness'));
+    return Number.isFinite(saved) && saved >= 70 && saved <= 130 ? saved : 100;
+  });
   const [preferences, setPreferences] = useState(() => {
     try { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0, ...JSON.parse(localStorage.getItem('st-preferences') || '{}') }; }
     catch { return { font: 'ibm', fontScale: 100, density: 'comfortable', reducedMotion: false, highContrast: false, defaultModel: '', defaultTemperature: 0.7, dateFormat: 'long', timeZone: 'local', refreshIntervalSeconds: 15, sessionTimeoutMinutes: 0 }; }
@@ -341,6 +354,11 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('st-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-brightness', String(brightness / 100));
+    localStorage.setItem('st-brightness', String(brightness));
+  }, [brightness]);
 
   useEffect(() => {
     const minutes = Number(preferences.sessionTimeoutMinutes || 0);
@@ -1419,6 +1437,8 @@ export default function App() {
     work: { title: 'الشروع بالعمل', desc: 'الأقسام المتخصصة وأدوات التنفيذ' },
     hub: { title: 'سولاراب هوب', desc: 'إدارة المستودعات والأكواد والإصدارات' },
     root: { title: 'الجذر', desc: 'إدارة الأجهزة والتشخيص والصيانة' },
+    terminal: { title: 'المحطة الطرفية', desc: 'القسم المستقل للمحطة الطرفية' },
+    more: { title: 'عرض المزيد', desc: 'لوحة التحكم المتقدمة' },
     settings: { title: 'الإعدادات العامة', desc: 'إعدادات المنصة والاتصال والمظهر' },
     vault: { title: 'الخزنة', desc: 'الأعمال المحفوظة والمؤجلة والبيانات المؤقتة' },
   } : {
@@ -1426,33 +1446,61 @@ export default function App() {
     work: { title: 'Get to work', desc: 'Specialized departments and execution tools' },
     hub: { title: 'Soularab Hub', desc: 'Repositories, code, and releases' },
     root: { title: 'Root', desc: 'Devices, diagnostics, and maintenance' },
+    terminal: { title: 'Terminal', desc: 'Independent terminal section' },
+    more: { title: 'More', desc: 'Advanced control panel' },
     settings: { title: 'General settings', desc: 'Workspace, connection, and appearance' },
     vault: { title: 'Vault', desc: 'Saved work, deferred tasks, and temporary data' },
   };
   const current = useMemo(() => { if (pageTitles[active]) return pageTitles[active]; const item = modules.find((entry) => entry.id === active) || pageTitles.overview; return language === 'en' && englishModules[active] ? { ...item, title: englishModules[active][0], desc: englishModules[active][1] } : item; }, [active, language]);
   const dateOptions = preferences.dateFormat === 'short' ? { year: 'numeric', month: '2-digit', day: '2-digit' } : preferences.dateFormat === 'medium' ? { year: 'numeric', month: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-  if (preferences.dateFormat === 'long') dateOptions.weekday = 'long';
+  dateOptions.weekday = 'long';
   if (preferences.timeZone === 'UTC') dateOptions.timeZone = 'UTC';
   const todayLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : 'en-US', dateOptions).format(new Date());
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{language === 'ar' ? 'تجاوز التنقل إلى المحتوى' : 'Skip navigation and go to content'}</a>
     <main className="main-area" id="main-content" tabIndex={-1}>
-      <header className="topbar"><div><p className="eyebrow">SOULARAB TECH / WORKSPACE</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></div><div className="top-actions"><select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>{active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}<button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button><button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button></div></header>
+      <header className="topbar">
+        <div className="topbar-identity">
+          <img className="topbar-logo" src={appLogo} alt="SOULARAB TECH" />
+          <div>{active === 'overview' ? <><h1 className="app-brand-title">SOULARAB TECH</h1><p className="topbar-tagline">IDEAS INTO DIGITAL REALITY</p></> : <><p className="eyebrow">SOULARAB TECH</p><h1>{current.title}</h1><p className="muted">{current.desc}</p></>}</div>
+        </div>
+        <div className="top-actions">
+          <select className="language-select" aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select>
+          {active !== 'overview' && <button className="button secondary back-button" onClick={() => window.history.back()}>{language === 'ar' ? '→ رجوع' : '← Back'}</button>}
+          <div className="topbar-date" aria-label={todayLabel}><small>{language === 'ar' ? 'اليوم والتاريخ' : 'DAY & DATE'}</small><strong>{todayLabel}</strong></div>
+          <div className="brightness-wrap">
+            <button type="button" className="brightness-trigger" aria-expanded={brightnessOpen} aria-label={language === 'ar' ? 'التحكم بالسطوع' : 'Brightness controls'} title={language === 'ar' ? 'التحكم بالسطوع' : 'Brightness controls'} onClick={() => setBrightnessOpen((open) => !open)}>☼</button>
+            {brightnessOpen && <div className="brightness-popover" role="group" aria-label={language === 'ar' ? 'مستوى السطوع' : 'Brightness level'}>
+              <span className="brightness-popover-arrow" aria-hidden="true"></span>
+              <label>{language === 'ar' ? 'سطوع الشاشة' : 'Screen brightness'} <output>{brightness}%</output></label>
+              <input type="range" min="70" max="130" step="5" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={language === 'ar' ? 'رفع أو خفض السطوع' : 'Increase or decrease brightness'} />
+            </div>}
+          </div>
+          <button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={language === "ar" ? "تبديل المظهر" : "Toggle theme"} aria-label={language === "ar" ? "تبديل المظهر" : "Toggle theme"}>{theme === 'dark' ? '☼' : '☾'}</button>
+          <button className="button secondary" onClick={refresh}>{language === "ar" ? "تحديث الحالة ↻" : "Refresh status ↻"}</button>
+        </div>
+      </header>
       {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label={language === 'ar' ? 'إغلاق' : 'Close'}>×</button></div>}
 
       {active === 'overview' && <section className="content home-content">
-        <div className="workspace-calendar" aria-label={todayLabel}><span className="calendar-mark">▦</span><div><small>{language === 'ar' ? 'التاريخ اليوم' : 'TODAY'}</small><strong>{todayLabel}</strong></div><span className="calendar-live">{language === 'ar' ? 'محدّث تلقائياً' : 'LIVE DATE'}</span></div>
         <button className="rooh-hero" onClick={() => setActive('assistant')} aria-label={language === 'ar' ? 'افتح مساعد روح' : 'Open Rooh assistant'}>
           <span className="rooh-emblem" aria-hidden="true"><span className="rooh-orbit orbit-a"></span><span className="rooh-orbit orbit-b"></span><span className="rooh-core">روح</span></span>
-          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'مساعدك الذكي في قلب المنصة' : 'Your intelligent assistant at the heart of the workspace'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
+          <span className="rooh-copy"><small>SOULARAB INTELLIGENCE</small><strong>{language === 'ar' ? 'روح' : 'Rooh'}</strong><b>{language === 'ar' ? 'روح التطبيق وروح العمل' : 'The soul of the app and the work'}</b><span>{language === 'ar' ? 'اسأل، خطّط، حلّل، وابدأ تنفيذ أفكارك من مكان واحد' : 'Ask, plan, analyze, and bring your ideas to life in one place'}</span><i>{language === 'ar' ? 'ابدأ المحادثة ←' : 'Start conversation ←'}</i></span>
           <span className="rooh-status"><span></span>{language === 'ar' ? 'جاهزة للمساعدة' : 'Ready to help'}</span>
         </button>
-        <div className="primary-destinations">
+        <div className="home-section-label">{language === 'ar' ? 'الأقسام الأساسية' : 'CORE SECTIONS'}</div>
+        <div className="primary-destinations core-destinations" aria-label={language === 'ar' ? 'الأقسام الأساسية الثلاثة' : 'Three core sections'}>
+          <button className="destination-card core-destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>{language === 'ar' ? 'سولاراب هوب' : 'SOULARAB HUB'}</strong><span>{language === 'ar' ? 'منصة التطوير والمشاريع' : 'Development and project platform'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card core-destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'ROOT'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+          <button className="destination-card core-destination-card" onClick={() => setActive('terminal')}><Icon>›_</Icon><strong>{language === 'ar' ? 'الطرفية' : 'TERMINAL'}</strong><span>{language === 'ar' ? 'القسم المستقل للمحطة الطرفية' : 'Independent terminal section'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
+        </div>
+        <div className="home-section-label">{language === 'ar' ? 'مساحات المنصة' : 'WORKSPACES & CONTROLS'}</div>
+        <div className="primary-destinations secondary-destinations">
           <button className="destination-card featured" onClick={() => setActive('work')}><Icon>✦</Icon><strong>{language === 'ar' ? 'الشروع بالعمل' : 'Get to work'}</strong><span>{language === 'ar' ? 'الدخول إلى أقسام العمل المتخصصة' : 'Explore specialized work areas'}</span><b>{language === 'ar' ? 'ابدأ الآن ←' : 'Start now ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('hub')}><Icon>⌘</Icon><strong>Soularab Hub</strong><span>{language === 'ar' ? 'المستودعات والأكواد والإصدارات' : 'Repositories, code, and releases'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('root')}><Icon>⬡</Icon><strong>{language === 'ar' ? 'الجذر' : 'Root'}</strong><span>{language === 'ar' ? 'الأجهزة والتشخيص والصيانة' : 'Devices, diagnostics, and maintenance'}</span><b>{language === 'ar' ? 'فتح القسم ←' : 'Open section ←'}</b></button>
-          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'Open settings ←' : 'فتح الإعدادات ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('settings')}><Icon>⚙</Icon><strong>{language === 'ar' ? 'الإعدادات العامة' : 'General settings'}</strong><span>{language === 'ar' ? 'إعدادات المنصة والاتصال والمظهر' : 'Workspace, connection, and appearance settings'}</span><b>{language === 'ar' ? 'فتح الإعدادات ←' : 'Open settings ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('vault')}><Icon>▣</Icon><strong>{language === 'ar' ? 'الخزنة' : 'VAULT'}</strong><span>{language === 'ar' ? 'مساحة الملفات والبيانات المحفوظة' : 'Private saved files and data space'}</span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
+          <button className="destination-card" onClick={() => setActive('more')}><Icon>⋯</Icon><strong>{language === 'ar' ? 'عرض المزيد' : 'MORE'}</strong><span>{language === 'ar' ? 'لوحة التحكم المتقدمة والأدوات الإضافية' : 'Advanced control panel and additional tools'}</span><b>{language === 'ar' ? 'استكشاف ←' : 'Explore ←'}</b></button>
         </div>
         <div className="operations-center">
           <div className="section-heading"><div><h3>{language === 'ar' ? 'مركز العمليات' : 'Operations center'}</h3><p>{language === 'ar' ? 'ملخص الاتصال والمهام التي تحتاج قرارك' : 'Connection summary and tasks awaiting your decision'}</p></div></div>
@@ -1476,7 +1524,6 @@ export default function App() {
               return <button type="button" className="engine-status-card" key={engine.id} onClick={() => setActive(engine.id === 'ollama' ? 'assistant' : 'media')}><div><strong>{engine.label}</strong><small>{engine.description}</small><small className="engine-open-link">{language === 'ar' ? 'فتح إعدادات المحرك ←' : 'Open engine settings →'}</small></div><span className={status?.connected ? 'good' : 'warn'}>{status ? (status.connected ? (language === 'ar' ? 'متصل' : 'Connected') : (language === 'ar' ? 'غير متصل' : 'Offline')) : (api.state === 'offline' ? (language === 'ar' ? 'الخادم غير متصل' : 'Backend offline') : (language === 'ar' ? 'لم يُفحص بعد' : 'Not checked'))}</span></button>;
             })}
           </div>
-          <button className="vault-entry" onClick={() => setActive('vault')}><span className="vault-symbol">▣</span><span><strong>{language === 'ar' ? 'الخزنة' : 'Vault'}</strong><small>{language === 'ar' ? 'الأعمال القائمة والمؤجلة، الأكواد المحفوظة، والبيانات قيد المراجعة أو المؤقتة' : 'Active and deferred work, saved code, and items under review'}</small></span><b>{language === 'ar' ? 'فتح الخزنة ←' : 'Open vault ←'}</b></button>
         </div>
       </section>}
       {['store', 'video', 'graphics', 'documents', 'automation'].includes(active) && <section className="content">
