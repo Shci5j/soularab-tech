@@ -75,11 +75,7 @@ public class LocalBackendPlugin extends Plugin {
         else if ("whisper".equals(engine)) key = "whisper_cpp_base_url";
         else { call.reject("Engine must be comfyui or whisper"); return; }
         try {
-            URL url = new URL(baseUrl);
-            String host = url.getHost().toLowerCase(java.util.Locale.ROOT);
-            if (!"http".equals(url.getProtocol()) ||
-                !("127.0.0.1".equals(host) || "localhost".equals(host) || "::1".equals(host)) ||
-                url.getPort() < 1 || url.getPort() > 65535 || url.getUserInfo() != null) {
+            if (!LocalEnginePolicy.isLoopbackHttpUrl(baseUrl)) {
                 call.reject("Only an explicit HTTP loopback URL with a valid port is allowed");
                 return;
             }
