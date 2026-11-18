@@ -27,7 +27,7 @@ import java.util.UUID;
  * External engines are loopback-only adapters; no cloud endpoints or shell execution.
  */
 final class LocalDepartmentEngine {
-    private static final String MODEL = "qwen2.5-3b-instruct-q4_k_m";
+    private static final Object ROOH_LOCK = new Object();
     private static final int MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
     private final Context context;
     private final LocalBackendDatabase helper;
@@ -130,15 +130,17 @@ final class LocalDepartmentEngine {
     }
 
     private String runRooh(String task) throws Exception {
-        try {
-            if (!RoohNative.isLoaded()) throw new IOException("محرك روح غير محمّل. نزّل نموذج Qwen وحمّله أولاً.");
-            String prompt = "<|im_start|>system\\nأنت مساعد محلي ضمن SOULARAB TECH. لا تدّع تنفيذ أعمال خارجية أو ملفات لم تنفذها.\\n<|im_end|>\\n"
-                + "<|im_start|>user\\n" + task + "<|im_end|>\\n<|im_start|>assistant\\n";
-            String answer = RoohNative.generate(prompt, 768);
-            if (answer == null || answer.trim().isEmpty()) throw new IOException("native_model_empty_response");
-            return answer.trim();
-        } catch (Throwable unavailable) {
-            throw new IOException("تعذر تحميل أو تشغيل محرك روح الأصلي: " + unavailable.getClass().getSimpleName(), unavailable);
+        synchronized (ROOH_LOCK) {
+            try {
+                if (!RoohNative.isLoaded()) throw new IOException("محرك روح غير محمّل. نزّل نموذج Qwen وحمّله أولاً.");
+                String prompt = "<|im_start|>system\\nأنت مساعد محلي ضمن SOULARAB TECH. لا تدّع تنفيذ أعمال خارجية أو ملفات لم تنفذها.\\n<|im_end|>\\n"
+                    + "<|im_start|>user\\n" + task + "<|im_end|>\\n<|im_start|>assistant\\n";
+                String answer = RoohNative.generate(prompt, 768);
+                if (answer == null || answer.trim().isEmpty()) throw new IOException("native_model_empty_response");
+                return answer.trim();
+            } catch (Throwable unavailable) {
+                throw new IOException("تعذر تحميل أو تشغيل محرك روح الأصلي: " + unavailable.getClass().getSimpleName(), unavailable);
+            }
         }
     }
 
