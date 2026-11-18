@@ -106,6 +106,7 @@ final class LocalNodeServer extends NanoHTTPD {
                 : "D".equals(nodeId) ? "whisper_cpp_loopback_transcription"
                 : "E".equals(nodeId) ? "allowlisted_app_private_files" : "unavailable";
             result.put("taskExecution", execution);
+            result.put("engineReady", new LocalDepartmentEngine(context, helper, nodeId).isReady());
             result.put("roohEngineLoaded", "B".equals(nodeId) || "A".equals(nodeId) ? safeRoohLoaded() : false);
             return json(Response.Status.OK, result);
         }
