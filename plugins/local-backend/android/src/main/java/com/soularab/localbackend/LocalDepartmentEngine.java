@@ -116,12 +116,25 @@ final class LocalDepartmentEngine {
 
     private String runComfyUi(JSONObject payload) throws Exception {
         Object workflow = payload.opt("workflow");
-        if (!(workflow instanceof JSONObject) && !(workflow instanceof JSONArray)) {
-            throw new IOException("محرك الصور C يحتاج مخطط ComfyUI API داخل الحقل workflow.");
+        if (!(workflow instanceof JSONObject)) {
+            throw new IOException("محرك الصور C يحتاج مخطط ComfyUI API ككائن داخل الحقل workflow.");
+        }
+        JSONObject graph = (JSONObject) workflow;
+        java.util.Iterator<String> nodeIds = graph.keys();
+        java.util.Set<String> allowedNodes = new java.util.HashSet<>(java.util.Arrays.asList(
+            "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage", "KSampler",
+            "VAEDecode", "SaveImage", "LoraLoader", "VAEEncode", "LoadImage",
+            "ImageScale", "PreviewImage"
+        ));
+        if (graph.length() == 0 || graph.length() > 80) throw new IOException("ComfyUI workflow node count is outside the safe limit.");
+        while (nodeIds.hasNext()) {
+            JSONObject node = graph.optJSONObject(nodeIds.next());
+            String classType = node == null ? "" : node.optString("class_type", "");
+            if (!allowedNodes.contains(classType)) throw new IOException("ComfyUI node is not in the built-in allowlist: " + classType);
         }
         String base = loopbackBase("comfyui_base_url", "http://127.0.0.1:8188");
         JSONObject request = new JSONObject();
-        request.put("prompt", workflow);
+        request.put("prompt", graph);
         String submitted = http(base + "/prompt", "POST", request.toString(), "application/json", 20000);
         JSONObject response = new JSONObject(submitted);
         String promptId = response.optString("prompt_id", "");
