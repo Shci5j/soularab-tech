@@ -10,5 +10,5 @@ final class RoohNative {
     static native boolean isLoaded();
     static native String version();
     static native String loadModel(String path);
-    static native String generate(String prompt, int maxTokens);
+    static synchronized native String generate(String prompt, int maxTokens);
 }
