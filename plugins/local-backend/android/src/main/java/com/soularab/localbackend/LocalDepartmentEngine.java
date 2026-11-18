@@ -205,10 +205,14 @@ final class LocalDepartmentEngine {
         }
         if (content.isEmpty() || content.length() > 500000) throw new IOException("محتوى الملف فارغ أو يتجاوز 500KB.");
         File root = new File(context.getFilesDir(), "soularab-workspaces");
+        if (!root.exists() && !root.mkdirs()) throw new IOException("workspace_root_create_failed");
         File directory = new File(root, workspace);
         if (!directory.exists() && !directory.mkdirs()) throw new IOException("workspace_create_failed");
+        String canonicalWorkspaces = root.getCanonicalPath() + File.separator;
+        String canonicalDirectory = directory.getCanonicalPath();
+        if (!canonicalDirectory.startsWith(canonicalWorkspaces)) throw new IOException("workspace_directory_escape_blocked");
         File target = new File(directory, filename);
-        String canonicalRoot = directory.getCanonicalPath() + File.separator;
+        String canonicalRoot = canonicalDirectory + File.separator;
         if (!target.getCanonicalPath().startsWith(canonicalRoot)) throw new IOException("workspace_path_escape_blocked");
         if (target.exists()) throw new IOException("الملف موجود مسبقاً؛ لن يتم استبداله أو حذفه.");
         try (FileOutputStream output = new FileOutputStream(target, false)) {
