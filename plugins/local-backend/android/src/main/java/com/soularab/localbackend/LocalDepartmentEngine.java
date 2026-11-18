@@ -39,6 +39,29 @@ final class LocalDepartmentEngine {
         this.nodeId = nodeId;
     }
 
+    boolean isReady() {
+        if ("E".equals(nodeId)) return true;
+        if ("A".equals(nodeId) || "B".equals(nodeId)) {
+            try { return RoohNative.isLoaded(); } catch (Throwable unavailable) { return false; }
+        }
+        HttpURLConnection connection = null;
+        try {
+            String base = "C".equals(nodeId)
+                ? loopbackBase("comfyui_base_url", "http://127.0.0.1:8188")
+                : loopbackBase("whisper_cpp_base_url", "http://127.0.0.1:8080");
+            String path = "C".equals(nodeId) ? "/system_stats" : "/health";
+            connection = (HttpURLConnection) new URL(base + path).openConnection();
+            connection.setConnectTimeout(1200);
+            connection.setReadTimeout(1200);
+            int status = connection.getResponseCode();
+            return status >= 200 && status < 300;
+        } catch (Exception unavailable) {
+            return false;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     boolean processOne() throws Exception {
         SQLiteDatabase db = helper.getWritableDatabase();
         long taskId;
@@ -60,6 +83,7 @@ final class LocalDepartmentEngine {
             cursor.close();
         }
 
+        if (!isReady()) return false;
         ContentValues claim = new ContentValues();
         claim.put("status", "running");
         claim.put("updated_at", now());
