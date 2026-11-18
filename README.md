@@ -161,23 +161,42 @@ npm run dev
 
 ## Embedded Android backend (five local nodes)
 
-The Android Capacitor build includes an embedded backend plugin under `plugins/local-backend`. When the native app starts, it launches five independent loopback HTTP services on ports 3101–3105 and verifies their health from the WebView:
+The Android Capacitor plugin starts five independent loopback HTTP services on ports 3101–3105:
 
-- A — AI and text task queue
-- B — image and design task queue
-- C — audio and video task queue
-- D — development task queue
-- E — task dispatch, node directory, and recovery coordination
+- **A — ROOH orchestration:** creates a reviewable execution plan using the bundled llama.cpp JNI runtime and Qwen model.
+- **B — AI and text:** executes approved text tasks using the same on-device model.
+- **C — image and design:** sends approved built-in ComfyUI API workflows to a ComfyUI service running on the same device.
+- **D — audio and speech:** sends approved audio transcription tasks to a whisper.cpp service running on the same device.
+- **E — development and recovery:** creates allowlisted new files in app-private workspaces. It does not run shell commands, deploy, delete, or execute generated code.
 
-The services bind to `127.0.0.1` only. Requests use a per-install token passed in the `X-Local-Token` header. Android network security permits cleartext only to `localhost`; other cleartext destinations remain blocked. Queues and local section records persist in the app-private SQLite database with WAL enabled.
+All nodes bind to `127.0.0.1`, require the per-install `X-Local-Token`, and share an app-private SQLite database with WAL enabled. Workers only claim tasks linked to an approval record whose status is `approved`; rejected tasks are cancelled. Task lifecycle events are recorded, and interrupted running tasks across A–E are requeued on plugin startup.
 
-Install dependencies and sync the native project:
+### Media engine configuration
+
+ComfyUI and whisper.cpp are adapters, not bundled binaries or model weights. Install and run the corresponding service locally on the Android device, then configure the loopback URL through the plugin:
+
+```ts
+await LocalBackend.configureLocalEngine({
+  engine: 'comfyui',
+  baseUrl: 'http://127.0.0.1:8188'
+});
+await LocalBackend.configureLocalEngine({
+  engine: 'whisper',
+  baseUrl: 'http://127.0.0.1:8080'
+});
+const status = await LocalBackend.localEngineStatus();
+```
+
+C accepts ComfyUI API graphs restricted to built-in nodes. D accepts bounded base64 audio for whisper.cpp transcription; it does not transcode or generate video. E only creates new TXT/MD/JSON/HTML/CSS/JS/PY files inside app-private workspace directories and refuses overwrites or path traversal.
+
+### Build and verification
 
 ```sh
 npm install
-npx cap add android   # only if the android platform has not been generated
 npx cap sync android
 npm run build
+cd android
+./gradlew assembleDebug
 ```
 
-The current milestone provides real independent HTTP listeners, health/metrics endpoints, persistent task queues, section storage, and routing from node E. It does **not** yet include on-device AI models, image/video processing engines, code execution workers, or an Android foreground service. Queued tasks are stored and routed but are not automatically executed yet. The app process must remain alive for the local listeners to remain available.
+The plugin currently uses worker threads rather than an Android foreground service. Android may stop the app process in the background. A successful CI build proves compilation only; it does not prove that Qwen, ComfyUI, whisper.cpp, or all five workers have run on a physical phone. Physical-device acceptance must verify model loading, approved task execution, results, and restart recovery.
