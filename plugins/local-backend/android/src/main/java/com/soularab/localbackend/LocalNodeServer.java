@@ -42,16 +42,20 @@ final class LocalNodeServer extends NanoHTTPD {
     void startWorker() {
         if (!workerActive.compareAndSet(false, true)) return;
         workerThread = new Thread(() -> {
-            while (workerActive.get()) {
-                try {
-                    new LocalDepartmentEngine(context, helper, nodeId).processOne();
-                    Thread.sleep(1200);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    break;
-                } catch (Exception ignored) {
-                    try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+            try {
+                while (workerActive.get()) {
+                    try {
+                        new LocalDepartmentEngine(context, helper, nodeId).processOne();
+                        Thread.sleep(1200);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception ignored) {
+                        try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                    }
                 }
+            } finally {
+                workerActive.set(false);
             }
         }, "soularab-node-" + nodeId + "-worker");
         workerThread.setDaemon(true);
