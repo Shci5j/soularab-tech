@@ -125,16 +125,11 @@ final class LocalDepartmentEngine {
         }
         JSONObject graph = (JSONObject) workflow;
         java.util.Iterator<String> nodeIds = graph.keys();
-        java.util.Set<String> allowedNodes = new java.util.HashSet<>(java.util.Arrays.asList(
-            "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage", "KSampler",
-            "VAEDecode", "SaveImage", "LoraLoader", "VAEEncode", "LoadImage",
-            "ImageScale", "PreviewImage"
-        ));
         if (graph.length() == 0 || graph.length() > 80) throw new IOException("ComfyUI workflow node count is outside the safe limit.");
         while (nodeIds.hasNext()) {
             JSONObject node = graph.optJSONObject(nodeIds.next());
             String classType = node == null ? "" : node.optString("class_type", "");
-            if (!allowedNodes.contains(classType)) throw new IOException("ComfyUI node is not in the built-in allowlist: " + classType);
+            if (!LocalEnginePolicy.isAllowedComfyNode(classType)) throw new IOException("ComfyUI node is not in the built-in allowlist: " + classType);
         }
         String base = loopbackBase("comfyui_base_url", "http://127.0.0.1:8188");
         JSONObject request = new JSONObject();
@@ -204,8 +199,8 @@ final class LocalDepartmentEngine {
         String workspace = payload.optString("workspaceId", "default").trim();
         String filename = payload.optString("filename", "").trim();
         String content = payload.optString("content", "");
-        if (!workspace.matches("[A-Za-z0-9_-]{1,64}")) throw new IOException("workspace_id_invalid");
-        if (!filename.matches("[A-Za-z0-9_-][A-Za-z0-9_.-]{0,119}\\.(txt|md|json|html|css|js|py)")) {
+        if (!LocalEnginePolicy.isSafeWorkspaceId(workspace)) throw new IOException("workspace_id_invalid");
+        if (!LocalEnginePolicy.isSafeWorkspaceFilename(filename)) {
             throw new IOException("اسم الملف أو امتداده غير مسموح.");
         }
         if (content.isEmpty() || content.length() > 500000) throw new IOException("محتوى الملف فارغ أو يتجاوز 500KB.");
