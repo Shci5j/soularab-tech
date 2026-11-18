@@ -211,20 +211,33 @@ public class LocalBackendPlugin extends Plugin {
     private void recoverInterruptedTextTasks() {
         try {
             SQLiteDatabase db = database.getWritableDatabase();
-            ContentValues recovery = new ContentValues();
-            recovery.put("status", "queued");
-            recovery.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            int recovered = db.update(
-                "node_tasks",
-                recovery,
-                "status=? AND node_id IN ('A','B','C','D','E')",
-                new String[]{"running"}
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date());
+            ContentValues retrySafe = new ContentValues();
+            retrySafe.put("status", "queued");
+            retrySafe.put("updated_at", timestamp);
+            int requeued = db.update(
+                "node_tasks", retrySafe,
+                "status='running' AND node_id IN ('A','B','D')", null
             );
-            if (recovered > 0) {
+
+            ContentValues reviewRequired = new ContentValues();
+            reviewRequired.put("status", "failed");
+            reviewRequired.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً لتجنب تكرار توليد الوسائط أو الكتابة؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
+            reviewRequired.put("updated_at", timestamp);
+            int held = db.update(
+                "node_tasks", reviewRequired,
+                "status='running' AND node_id IN ('C','E')", null
+            );
+
+            if (requeued > 0 || held > 0) {
                 ContentValues event = new ContentValues();
                 event.put("node_id", "E");
                 event.put("event", "worker_recovery");
-                event.put("details", new org.json.JSONObject().put("requeuedTasks", recovered).put("scope", "all_nodes").toString());
+                event.put("details", new org.json.JSONObject()
+                    .put("requeuedRetrySafe", requeued)
+                    .put("manualReviewRequired", held)
+                    .put("retrySafeNodes", "A,B,D")
+                    .put("reviewNodes", "C,E").toString());
                 db.insert("node_events", null, event);
             }
         } catch (Exception ignored) {
