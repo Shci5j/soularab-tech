@@ -25,3 +25,7 @@ export const dispatchEmbeddedTask = (taskType, payload = {}) =>
 export const saveLocalSection = (id, sectionName, content) =>
   localNodeRequest('A', '/sections', { method: 'POST', body: JSON.stringify({ id, sectionName, content }) });
 export const getLocalSections = () => localNodeRequest('A', '/sections');
+
+export const configureLocalMediaEngine = (engine, baseUrl) =>
+  LocalBackend.configureLocalEngine({ engine, baseUrl });
+export const getLocalMediaEngineStatus = () => LocalBackend.localEngineStatus();
