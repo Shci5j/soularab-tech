@@ -539,7 +539,7 @@ final class LocalNodeServer extends NanoHTTPD {
         session.parseBody(files);
         String body = files.get("postData");
         if (body == null || body.trim().isEmpty()) return new JSONObject();
-        if (body.length() > 1024 * 1024) throw new IOException("Request body too large");
+        if (body.length() > 36 * 1024 * 1024) throw new IOException("Request body too large (36 MB limit)");
         return new JSONObject(body);
     }
 
