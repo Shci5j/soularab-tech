@@ -106,12 +106,16 @@ final class LocalDepartmentEngine {
     }
 
     private String runRooh(String task) throws Exception {
-        if (!RoohNative.isLoaded()) throw new IOException("محرك روح غير محمّل. نزّل نموذج Qwen وحمّله أولاً.");
-        String prompt = "<|im_start|>system\nأنت مساعد محلي ضمن SOULARAB TECH. لا تدّع تنفيذ أعمال خارجية أو ملفات لم تنفذها.\n<|im_end|>\n"
-            + "<|im_start|>user\n" + task + "<|im_end|>\n<|im_start|>assistant\n";
-        String answer = RoohNative.generate(prompt, 768);
-        if (answer == null || answer.trim().isEmpty()) throw new IOException("native_model_empty_response");
-        return answer.trim();
+        try {
+            if (!RoohNative.isLoaded()) throw new IOException("محرك روح غير محمّل. نزّل نموذج Qwen وحمّله أولاً.");
+            String prompt = "<|im_start|>system\\nأنت مساعد محلي ضمن SOULARAB TECH. لا تدّع تنفيذ أعمال خارجية أو ملفات لم تنفذها.\\n<|im_end|>\\n"
+                + "<|im_start|>user\\n" + task + "<|im_end|>\\n<|im_start|>assistant\\n";
+            String answer = RoohNative.generate(prompt, 768);
+            if (answer == null || answer.trim().isEmpty()) throw new IOException("native_model_empty_response");
+            return answer.trim();
+        } catch (Throwable unavailable) {
+            throw new IOException("تعذر تحميل أو تشغيل محرك روح الأصلي: " + unavailable.getClass().getSimpleName(), unavailable);
+        }
     }
 
     private String runComfyUi(JSONObject payload) throws Exception {
