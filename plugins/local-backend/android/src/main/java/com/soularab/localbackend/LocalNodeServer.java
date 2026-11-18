@@ -64,51 +64,6 @@ final class LocalNodeServer extends NanoHTTPD {
         workerThread = null;
     }
 
-    private void processNextTextTask() throws Exception {
-        if (!"B".equals(nodeId) || !RoohNative.isLoaded()) return;
-        SQLiteDatabase db = helper.getWritableDatabase();
-        Cursor cursor = db.query("node_tasks", new String[]{"id", "payload"}, "node_id=? AND status='queued' AND task_type IN ('assistant','agents','ai','text')",
-            new String[]{nodeId}, null, null, "priority DESC, id ASC", "1");
-        long taskId;
-        JSONObject payload;
-        try {
-            if (!cursor.moveToFirst()) return;
-            taskId = cursor.getLong(0);
-            payload = new JSONObject(cursor.getString(1));
-        } finally { cursor.close(); }
-        ContentValues claim = new ContentValues();
-        claim.put("status", "running");
-        claim.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-        if (db.update("node_tasks", claim, "id=? AND node_id=? AND status='queued'", new String[]{String.valueOf(taskId), nodeId}) != 1) return;
-
-        String prompt = payload.optString("description", "").trim();
-        if (prompt.isEmpty()) prompt = payload.optString("details", "").trim();
-        if (prompt.isEmpty()) prompt = payload.optString("title", "اكتب خطة عمل واضحة ومختصرة.");
-        try {
-            String answer = executeRoohTextTask(prompt);
-            ContentValues completed = new ContentValues();
-            completed.put("status", "completed");
-            completed.put("result", answer);
-            completed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
-        } catch (Exception error) {
-            ContentValues failed = new ContentValues();
-            failed.put("status", "failed");
-            failed.put("result", "تعذر تنفيذ المهمة عبر محرك روح المحلي: " + error.getClass().getSimpleName());
-            failed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
-        }
-    }
-
-    private String executeRoohTextTask(String prompt) throws Exception {
-        if (!RoohNative.isLoaded()) throw new IOException("rooh_native_engine_not_loaded");
-        String formatted = "<|im_start|>system\nأنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها.<|im_end|>\n"
-            + "<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
-        String answer = RoohNative.generate(formatted, 512);
-        if (answer == null || answer.trim().isEmpty()) throw new IOException("empty_native_model_response");
-        return answer.trim();
-    }
-
     @Override
     public Response serve(IHTTPSession session) {
         String origin = session.getHeaders().get("origin");
@@ -144,8 +99,13 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("title", title);
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
-            result.put("worker", "B".equals(nodeId) ? (workerActive.get() ? "running" : "stopped") : "not_configured");
-            result.put("taskExecution", "B".equals(nodeId) ? "native_llama_cpp_text" : "engine_dependent");
+            result.put("worker", workerActive.get() ? "running" : "stopped");
+            String execution = "A".equals(nodeId) ? "native_rooh_orchestration"
+                : "B".equals(nodeId) ? "native_llama_cpp_text"
+                : "C".equals(nodeId) ? "comfyui_loopback_workflows"
+                : "D".equals(nodeId) ? "whisper_cpp_loopback_transcription"
+                : "E".equals(nodeId) ? "allowlisted_app_private_files" : "unavailable";
+            result.put("taskExecution", execution);
             result.put("roohEngineLoaded", "B".equals(nodeId) || "A".equals(nodeId) ? safeRoohLoaded() : false);
             return json(Response.Status.OK, result);
         }
