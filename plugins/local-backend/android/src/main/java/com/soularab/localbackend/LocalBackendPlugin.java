@@ -456,7 +456,10 @@ public class LocalBackendPlugin extends Plugin {
         int index = nodeIndex(id);
         if (index < 0) throw new IllegalArgumentException("Unknown node: " + id);
         for (LocalNodeServer server : servers) {
-            if (server.nodeId.equals(id) && server.isAlive()) return;
+            if (server.nodeId.equals(id) && server.isAlive()) {
+                server.startWorker();
+                return;
+            }
         }
         stopNode(id);
         LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken, getContext());
