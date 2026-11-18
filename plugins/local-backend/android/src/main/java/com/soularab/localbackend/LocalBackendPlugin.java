@@ -66,6 +66,72 @@ public class LocalBackendPlugin extends Plugin {
     @PluginMethod
     public void status(PluginCall call) { call.resolve(statusObject()); }
 
+    @PluginMethod
+    public void configureLocalEngine(PluginCall call) {
+        String engine = call.getString("engine", "").trim().toLowerCase();
+        String baseUrl = call.getString("baseUrl", "").trim();
+        String key;
+        if ("comfyui".equals(engine)) key = "comfyui_base_url";
+        else if ("whisper".equals(engine)) key = "whisper_cpp_base_url";
+        else { call.reject("Engine must be comfyui or whisper"); return; }
+        try {
+            URL url = new URL(baseUrl);
+            String host = url.getHost().toLowerCase(java.util.Locale.ROOT);
+            if (!"http".equals(url.getProtocol()) ||
+                !("127.0.0.1".equals(host) || "localhost".equals(host) || "::1".equals(host)) ||
+                url.getPort() < 1 || url.getPort() > 65535 || url.getUserInfo() != null) {
+                call.reject("Only an explicit HTTP loopback URL with a valid port is allowed");
+                return;
+            }
+            getContext().getSharedPreferences("soularab_local_engines", 0)
+                .edit().putString(key, baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl).apply();
+            JSObject result = new JSObject();
+            result.put("engine", engine);
+            result.put("configured", true);
+            result.put("baseUrl", baseUrl);
+            result.put("execution", "local_only");
+            call.resolve(result);
+        } catch (Exception invalid) {
+            call.reject("Invalid local engine URL", invalid);
+        }
+    }
+
+    @PluginMethod
+    public void localEngineStatus(PluginCall call) {
+        new Thread(() -> {
+            JSObject result = new JSObject();
+            checkLocalEngine(result, "comfyui", "comfyui_base_url", "http://127.0.0.1:8188", "/system_stats");
+            checkLocalEngine(result, "whisper", "whisper_cpp_base_url", "http://127.0.0.1:8080", "/health");
+            call.resolve(result);
+        }, "soularab-local-engine-health").start();
+    }
+
+    private void checkLocalEngine(JSObject result, String name, String key, String fallback, String path) {
+        HttpURLConnection connection = null;
+        try {
+            String base = getContext().getSharedPreferences("soularab_local_engines", 0).getString(key, fallback);
+            URL url = new URL(base + path);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(2500);
+            connection.setReadTimeout(2500);
+            int status = connection.getResponseCode();
+            JSObject item = new JSObject();
+            item.put("configured", true);
+            item.put("baseUrl", base);
+            item.put("online", status >= 200 && status < 300);
+            item.put("httpStatus", status);
+            result.put(name, item);
+        } catch (Exception unavailable) {
+            JSObject item = new JSObject();
+            item.put("configured", false);
+            item.put("online", false);
+            item.put("reason", unavailable.getClass().getSimpleName());
+            result.put(name, item);
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     /**
      * Returns a deliberately read-only snapshot for the future authenticated control gateway.
      * This method never starts/stops nodes, executes shell commands, or returns local access tokens.
