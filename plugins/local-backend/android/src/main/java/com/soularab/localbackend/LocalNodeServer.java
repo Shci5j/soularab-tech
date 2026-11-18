@@ -1,5 +1,6 @@
 package com.soularab.localbackend;
 
+import android.content.Context;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -24,24 +25,26 @@ final class LocalNodeServer extends NanoHTTPD {
     final String nodeId;
     final String title;
     private final LocalBackendDatabase helper;
+    private final Context context;
     private final String accessToken;
     private final AtomicBoolean workerActive = new AtomicBoolean(false);
     private Thread workerThread;
 
-    LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken) {
+    LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken, Context context) {
         super("127.0.0.1", port);
         this.nodeId = nodeId;
         this.title = title;
         this.helper = helper;
         this.accessToken = accessToken;
+        this.context = context.getApplicationContext();
     }
 
     void startWorker() {
-        if (!"B".equals(nodeId) || !workerActive.compareAndSet(false, true)) return;
+        if (!workerActive.compareAndSet(false, true)) return;
         workerThread = new Thread(() -> {
             while (workerActive.get()) {
                 try {
-                    processNextTextTask();
+                    new LocalDepartmentEngine(context, helper, nodeId).processOne();
                     Thread.sleep(1200);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
