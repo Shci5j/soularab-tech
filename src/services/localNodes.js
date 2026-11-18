@@ -1,3 +1,5 @@
+import { LocalBackend } from '@soularab/local-backend';
+
 const NODE_PORTS = Object.freeze({ A: 3101, B: 3102, C: 3103, D: 3104, E: 3105 });
 
 export async function localNodeRequest(nodeId, path, options = {}) {
