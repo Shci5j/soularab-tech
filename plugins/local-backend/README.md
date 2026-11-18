@@ -28,7 +28,7 @@ The local media adapters never accept public or LAN URLs. Their configured endpo
 3. The owning node worker selects only queued tasks with an approved linked approval.
 4. A conditional update claims the task as `running`.
 5. The worker records `task_started`, then either `task_completed` or `task_failed` with a bounded result.
-6. On plugin startup, interrupted `running` tasks across A–E are requeued and a recovery event is recorded. This is process-restart recovery, not a guarantee of uninterrupted background execution.
+6. On plugin startup, interrupted inference/transcription tasks on A, B, and D are requeued. C (media generation) and E (file creation) are marked failed for manual review instead of being blindly repeated, preventing duplicate media jobs or file side effects. A recovery event records both counts. This is process-restart recovery, not a guarantee of uninterrupted background execution.
 
 ## Security and operational limits
 
