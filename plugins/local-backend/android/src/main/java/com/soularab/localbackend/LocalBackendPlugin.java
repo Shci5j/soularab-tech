@@ -155,14 +155,14 @@ public class LocalBackendPlugin extends Plugin {
             int recovered = db.update(
                 "node_tasks",
                 recovery,
-                "node_id=? AND status=? AND task_type IN ('assistant','agents','ai','text')",
-                new String[]{"B", "running"}
+                "status=? AND node_id IN ('A','B','C','D','E')",
+                new String[]{"running"}
             );
             if (recovered > 0) {
                 ContentValues event = new ContentValues();
-                event.put("node_id", "B");
+                event.put("node_id", "E");
                 event.put("event", "worker_recovery");
-                event.put("details", "{\"requeuedTasks\":" + recovered + "}");
+                event.put("details", new org.json.JSONObject().put("requeuedTasks", recovered).put("scope", "all_nodes").toString());
                 db.insert("node_events", null, event);
             }
         } catch (Exception ignored) {
@@ -384,10 +384,10 @@ public class LocalBackendPlugin extends Plugin {
             if (server.nodeId.equals(id) && server.isAlive()) return;
         }
         stopNode(id);
-        LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken);
+        LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken, getContext());
         server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
         servers.add(server);
-        if ("B".equals(id)) server.startWorker();
+        server.startWorker();
     }
 
     private synchronized void stopNode(String id) {
