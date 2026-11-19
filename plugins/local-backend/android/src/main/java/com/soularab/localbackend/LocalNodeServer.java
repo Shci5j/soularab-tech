@@ -244,9 +244,16 @@ final class LocalNodeServer extends NanoHTTPD {
                 if ("cancel".equals(action)) {
                     ContentValues event = new ContentValues();
                     event.put("node_id", nodeId);
-                    event.put("event", "task_cancel_requested");
+                    event.put("event", "running".equals(currentStatus) ? "task_cancel_requested" : "task_cancelled");
                     event.put("details", new JSONObject().put("taskId", taskId).put("wasRunning", "running".equals(currentStatus)).toString());
                     db.insertOrThrow("node_events", null, event);
+                    if ("waiting_approval".equals(currentStatus)) {
+                        ContentValues revoke = new ContentValues();
+                        revoke.put("status", "rejected");
+                        revoke.put("decided_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                        revoke.put("decision_note", "cancelled_by_user");
+                        db.update("node_approvals", revoke, "task_id=? AND status='pending'", new String[]{String.valueOf(taskId)});
+                    }
                 } else if ("retry".equals(action)) {
                     ContentValues event = new ContentValues();
                     event.put("node_id", nodeId);
@@ -483,6 +490,7 @@ final class LocalNodeServer extends NanoHTTPD {
                 ContentValues task = new ContentValues();
                 task.put("status", "approved".equals(decision) ? "queued" : "cancelled");
                 task.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                if ("rejected".equals(decision)) task.put("finished_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
                 int taskChanged = db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
                 if (taskChanged != 1) return json(Response.Status.CONFLICT, error("task_no_longer_waiting_for_approval"));
             }
