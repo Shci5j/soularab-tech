@@ -465,7 +465,7 @@ export default function App() {
       if (nativeApprovalDecision && method === 'POST') {
         return await localNodeRequest('E', '/approvals/' + nativeApprovalDecision[1] + '/decision', { method: 'POST', body: options.body });
       }
-      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
+      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority|retry)$/);
       if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
       if (/^\/api\/tasks\/\d+\/events$/.test(path)) return { items: [] };
       if (/^\/api\/tasks\/\d+$/.test(path) && method === 'GET') return await localNodeRequest('E', path.replace('/api', ''));
