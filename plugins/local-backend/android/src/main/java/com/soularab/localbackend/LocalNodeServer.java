@@ -190,14 +190,36 @@ final class LocalNodeServer extends NanoHTTPD {
             } finally { current.close(); }
             ContentValues values = new ContentValues();
             if ("pause".equals(action)) {
-                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused_without_a_running_worker"));
+                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused"));
                 values.put("status", "paused");
             } else if ("resume".equals(action)) {
                 if (!"paused".equals(currentStatus)) return json(Response.Status.CONFLICT, error("task_is_not_paused"));
                 values.put("status", "queued");
             } else if ("cancel".equals(action)) {
-                if (!("queued".equals(currentStatus) || "paused".equals(currentStatus))) return json(Response.Status.CONFLICT, error("running_task_cannot_be_cancelled_without_worker_support"));
-                values.put("status", "cancelled");
+                if ("running".equals(currentStatus)) {
+                    values.put("cancel_requested", 1);
+                } else if ("queued".equals(currentStatus) || "paused".equals(currentStatus)) {
+                    values.put("status", "cancelled");
+                    values.put("finished_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                } else {
+                    return json(Response.Status.CONFLICT, error("task_cannot_be_cancelled_in_current_state"));
+                }
+            } else if ("retry".equals(action)) {
+                if (!"failed".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_failed_tasks_can_be_retried"));
+                Cursor retry = db.rawQuery(
+                    "SELECT t.attempt_count, t.max_attempts, EXISTS(SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
+                    "FROM node_tasks t WHERE t.id=?",
+                    new String[]{String.valueOf(taskId)}
+                );
+                try {
+                    if (!retry.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
+                    if (retry.getInt(0) >= retry.getInt(1)) return json(Response.Status.CONFLICT, error("task_retry_limit_reached"));
+                    if (retry.getInt(2) != 1) return json(Response.Status.FORBIDDEN, error("approved_task_approval_required"));
+                } finally { retry.close(); }
+                values.put("status", "queued");
+                values.put("cancel_requested", 0);
+                values.putNull("finished_at");
+                values.put("result", "");
             } else if ("priority".equals(action)) {
                 JSONObject body = readBody(session);
                 int priority = body.optInt("priority", 0);
@@ -516,6 +538,13 @@ final class LocalNodeServer extends NanoHTTPD {
         item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
         item.put("result", cursor.getString(cursor.getColumnIndexOrThrow("result")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
+        item.put("attemptCount", cursor.getInt(cursor.getColumnIndexOrThrow("attempt_count")));
+        item.put("maxAttempts", cursor.getInt(cursor.getColumnIndexOrThrow("max_attempts")));
+        item.put("cancelRequested", cursor.getInt(cursor.getColumnIndexOrThrow("cancel_requested")) == 1);
+        int startedIndex = cursor.getColumnIndexOrThrow("started_at");
+        int finishedIndex = cursor.getColumnIndexOrThrow("finished_at");
+        item.put("startedAt", cursor.isNull(startedIndex) ? JSONObject.NULL : cursor.getString(startedIndex));
+        item.put("finishedAt", cursor.isNull(finishedIndex) ? JSONObject.NULL : cursor.getString(finishedIndex));
         String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
         String updatedAt = cursor.getString(cursor.getColumnIndexOrThrow("updated_at"));
         item.put("createdAt", createdAt); item.put("created_at", createdAt);
@@ -540,6 +569,15 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private JSONObject readBody(IHTTPSession session) throws Exception {
+        String declaredLength = session.getHeaders().get("content-length");
+        if (declaredLength != null) {
+            try {
+                long length = Long.parseLong(declaredLength);
+                if (length < 0 || length > 36L * 1024L * 1024L) throw new IOException("Request body too large (36 MB limit)");
+            } catch (NumberFormatException invalidLength) {
+                throw new IOException("Invalid Content-Length header");
+            }
+        }
         Map<String, String> files = new HashMap<>();
         session.parseBody(files);
         String body = files.get("postData");
