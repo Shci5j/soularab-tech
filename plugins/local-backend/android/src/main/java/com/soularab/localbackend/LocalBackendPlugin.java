@@ -2,6 +2,7 @@ package com.soularab.localbackend;
 
 import android.content.SharedPreferences;
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Base64;
 import android.content.Intent;
