@@ -127,7 +127,7 @@ final class LocalDepartmentEngine {
                     state.close();
                 }
                 ContentValues completed = new ContentValues();
-                completed.put("status", cancelRequested ? "cancelled" : "completed");
+                completed.put("status", LocalTaskState.completionStatus(cancelRequested));
                 completed.put("result", result);
                 completed.put("updated_at", now());
                 completed.put("finished_at", now());
@@ -141,14 +141,24 @@ final class LocalDepartmentEngine {
         } catch (Exception failure) {
             db.beginTransaction();
             try {
+                Cursor cancellation = db.query("node_tasks", new String[]{"cancel_requested"},
+                    "id=? AND node_id=? AND status='running'",
+                    new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
+                boolean cancelRequested;
+                try {
+                    if (!cancellation.moveToFirst()) return true;
+                    cancelRequested = cancellation.getInt(0) == 1;
+                } finally {
+                    cancellation.close();
+                }
                 ContentValues failed = new ContentValues();
-                failed.put("status", "failed");
+                failed.put("status", LocalTaskState.failureStatus(cancelRequested));
                 failed.put("result", safeMessage(failure));
                 failed.put("updated_at", now());
                 failed.put("finished_at", now());
                 db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'",
                     new String[]{String.valueOf(taskId), nodeId});
-                insertEvent(db, "task_failed", taskId, failure.getClass().getSimpleName());
+                insertEvent(db, cancelRequested ? "task_cancelled_after_failure" : "task_failed", taskId, failure.getClass().getSimpleName());
                 db.setTransactionSuccessful();
             } finally {
                 db.endTransaction();
