@@ -237,20 +237,26 @@ final class LocalNodeServer extends NanoHTTPD {
                 where += " AND node_id=?";
                 whereArgs = new String[]{String.valueOf(taskId), currentStatus, nodeId};
             }
-            int changed = db.update("node_tasks", values, where, whereArgs);
-            if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
-            if ("cancel".equals(action)) {
-                ContentValues event = new ContentValues();
-                event.put("node_id", nodeId);
-                event.put("event", "task_cancel_requested");
-                event.put("details", new JSONObject().put("taskId", taskId).put("wasRunning", "running".equals(currentStatus)).toString());
-                db.insert("node_events", null, event);
-            } else if ("retry".equals(action)) {
-                ContentValues event = new ContentValues();
-                event.put("node_id", nodeId);
-                event.put("event", "task_retry_queued");
-                event.put("details", new JSONObject().put("taskId", taskId).toString());
-                db.insert("node_events", null, event);
+            db.beginTransaction();
+            try {
+                int changed = db.update("node_tasks", values, where, whereArgs);
+                if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+                if ("cancel".equals(action)) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", nodeId);
+                    event.put("event", "task_cancel_requested");
+                    event.put("details", new JSONObject().put("taskId", taskId).put("wasRunning", "running".equals(currentStatus)).toString());
+                    db.insertOrThrow("node_events", null, event);
+                } else if ("retry".equals(action)) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", nodeId);
+                    event.put("event", "task_retry_queued");
+                    event.put("details", new JSONObject().put("taskId", taskId).toString());
+                    db.insertOrThrow("node_events", null, event);
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
             }
             return getTask(String.valueOf(taskId));
         }
