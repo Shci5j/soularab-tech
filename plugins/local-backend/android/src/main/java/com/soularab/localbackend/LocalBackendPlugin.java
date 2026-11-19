@@ -209,39 +209,68 @@ public class LocalBackendPlugin extends Plugin {
     }
 
     private void recoverInterruptedTextTasks() {
+        SQLiteDatabase db = null;
         try {
-            SQLiteDatabase db = database.getWritableDatabase();
+            db = database.getWritableDatabase();
             String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date());
-            ContentValues retrySafe = new ContentValues();
-            retrySafe.put("status", "queued");
-            retrySafe.put("updated_at", timestamp);
-            int requeued = db.update(
-                "node_tasks", retrySafe,
-                "status='running' AND node_id IN ('A','B','D')", null
-            );
+            int requeued;
+            int reviewRequired;
+            int cancelled;
+            db.beginTransaction();
+            try {
+                ContentValues retrySafe = new ContentValues();
+                retrySafe.put("status", "queued");
+                retrySafe.put("updated_at", timestamp);
+                retrySafe.putNull("started_at");
+                requeued = db.update(
+                    "node_tasks", retrySafe,
+                    "status='running' AND node_id IN ('A','B','D') AND cancel_requested=0 " +
+                    "AND attempt_count < max_attempts " +
+                    "AND EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=node_tasks.id AND a.status='approved')",
+                    null
+                );
 
-            ContentValues reviewRequired = new ContentValues();
-            reviewRequired.put("status", "failed");
-            reviewRequired.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً لتجنب تكرار توليد الوسائط أو الكتابة؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
-            reviewRequired.put("updated_at", timestamp);
-            int held = db.update(
-                "node_tasks", reviewRequired,
-                "status='running' AND node_id IN ('C','E')", null
-            );
+                ContentValues review = new ContentValues();
+                review.put("status", "failed");
+                review.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً لتجنب تكرار الآثار الجانبية؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
+                review.put("updated_at", timestamp);
+                review.put("finished_at", timestamp);
+                reviewRequired = db.update(
+                    "node_tasks", review,
+                    "status='running' AND (node_id IN ('C','E') OR attempt_count >= max_attempts OR " +
+                    "NOT EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=node_tasks.id AND a.status='approved'))",
+                    null
+                );
 
-            if (requeued > 0 || held > 0) {
-                ContentValues event = new ContentValues();
-                event.put("node_id", "E");
-                event.put("event", "worker_recovery");
-                event.put("details", new org.json.JSONObject()
-                    .put("requeuedRetrySafe", requeued)
-                    .put("manualReviewRequired", held)
-                    .put("retrySafeNodes", "A,B,D")
-                    .put("reviewNodes", "C,E").toString());
-                db.insert("node_events", null, event);
+                ContentValues stop = new ContentValues();
+                stop.put("status", "cancelled");
+                stop.put("result", "تم إلغاء المهمة أثناء توقف التطبيق بناءً على طلب الإلغاء المحفوظ.");
+                stop.put("updated_at", timestamp);
+                stop.put("finished_at", timestamp);
+                cancelled = db.update(
+                    "node_tasks", stop,
+                    "status='running' AND cancel_requested=1",
+                    null
+                );
+
+                if (requeued > 0 || reviewRequired > 0 || cancelled > 0) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", "E");
+                    event.put("event", "worker_recovery");
+                    event.put("details", new org.json.JSONObject()
+                        .put("requeuedRetrySafe", requeued)
+                        .put("manualReviewRequired", reviewRequired)
+                        .put("cancelled", cancelled)
+                        .put("retrySafeNodes", "A,B,D")
+                        .put("reviewNodes", "C,E").toString());
+                    db.insertOrThrow("node_events", null, event);
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
             }
-        } catch (Exception ignored) {
-            // Recovery is best-effort; the local backend must still be able to start.
+        } catch (Exception error) {
+            android.util.Log.e("SOULARAB_LOCAL", "Interrupted-task recovery failed", error);
         }
     }
 
