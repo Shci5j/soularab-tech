@@ -93,7 +93,6 @@ final class LocalDepartmentEngine {
 
             ContentValues claim = new ContentValues();
             claim.put("status", "running");
-            claim.put("attempt_count", "attempt_count + 1");
             claim.put("updated_at", now());
             claim.put("started_at", now());
             claim.putNull("finished_at");
