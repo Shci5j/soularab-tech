@@ -40,7 +40,7 @@ public class LocalBackendPlugin extends Plugin {
     public void load() {
         super.load();
         database = new LocalBackendDatabase(getContext());
-        recoverInterruptedTextTasks();
+        recoverInterruptedTasks();
         SharedPreferences prefs = getContext().getSharedPreferences("soularab_local_backend", 0);
         accessToken = prefs.getString("access_token", null);
         if (accessToken == null) {
@@ -208,7 +208,7 @@ public class LocalBackendPlugin extends Plugin {
         }
     }
 
-    private void recoverInterruptedTextTasks() {
+    private void recoverInterruptedTasks() {
         SQLiteDatabase db = null;
         try {
             db = database.getWritableDatabase();
