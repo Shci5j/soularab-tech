@@ -237,7 +237,7 @@ public class LocalBackendPlugin extends Plugin {
                 review.put("finished_at", timestamp);
                 reviewRequired = db.update(
                     "node_tasks", review,
-                    "status='running' AND (node_id IN ('C','E') OR attempt_count >= max_attempts OR " +
+                    "status='running' AND cancel_requested=0 AND (node_id IN ('C','E') OR attempt_count >= max_attempts OR " +
                     "NOT EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=node_tasks.id AND a.status='approved'))",
                     null
                 );
