@@ -209,49 +209,51 @@ public class LocalBackendPlugin extends Plugin {
     }
 
     private void recoverInterruptedTasks() {
-        SQLiteDatabase db = null;
         try {
-            db = database.getWritableDatabase();
+            SQLiteDatabase db = database.getWritableDatabase();
             String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date());
-            int requeued;
-            int reviewRequired;
-            int cancelled;
+            int requeued = 0;
+            int reviewRequired = 0;
+            int cancelled = 0;
             db.beginTransaction();
             try {
-                ContentValues retrySafe = new ContentValues();
-                retrySafe.put("status", "queued");
-                retrySafe.put("updated_at", timestamp);
-                retrySafe.putNull("started_at");
-                requeued = db.update(
-                    "node_tasks", retrySafe,
-                    "status='running' AND node_id IN ('A','B','D') AND cancel_requested=0 " +
-                    "AND attempt_count < max_attempts " +
-                    "AND EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=node_tasks.id AND a.status='approved')",
+                Cursor cursor = db.rawQuery(
+                    "SELECT t.id, t.node_id, t.cancel_requested, t.attempt_count, t.max_attempts, " +
+                    "EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
+                    "FROM node_tasks t WHERE t.status='running' ORDER BY t.id ASC",
                     null
                 );
+                try {
+                    while (cursor.moveToNext()) {
+                        long taskId = cursor.getLong(0);
+                        String nodeId = cursor.getString(1);
+                        boolean cancelRequested = cursor.getInt(2) == 1;
+                        int attempts = cursor.getInt(3);
+                        int maxAttempts = cursor.getInt(4);
+                        boolean approved = cursor.getInt(5) == 1;
+                        String next = LocalTaskState.recoveryStatus(nodeId, cancelRequested, attempts, maxAttempts, approved);
 
-                ContentValues review = new ContentValues();
-                review.put("status", "failed");
-                review.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً لتجنب تكرار الآثار الجانبية؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
-                review.put("updated_at", timestamp);
-                review.put("finished_at", timestamp);
-                reviewRequired = db.update(
-                    "node_tasks", review,
-                    "status='running' AND cancel_requested=0 AND (node_id IN ('C','E') OR attempt_count >= max_attempts OR " +
-                    "NOT EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=node_tasks.id AND a.status='approved'))",
-                    null
-                );
-
-                ContentValues stop = new ContentValues();
-                stop.put("status", "cancelled");
-                stop.put("result", "تم إلغاء المهمة أثناء توقف التطبيق بناءً على طلب الإلغاء المحفوظ.");
-                stop.put("updated_at", timestamp);
-                stop.put("finished_at", timestamp);
-                cancelled = db.update(
-                    "node_tasks", stop,
-                    "status='running' AND cancel_requested=1",
-                    null
-                );
+                        ContentValues recovered = new ContentValues();
+                        recovered.put("status", next);
+                        recovered.put("updated_at", timestamp);
+                        if ("queued".equals(next)) {
+                            recovered.putNull("started_at");
+                            requeued++;
+                        } else {
+                            recovered.put("finished_at", timestamp);
+                            if ("cancelled".equals(next)) {
+                                recovered.put("result", "تم إلغاء المهمة أثناء توقف التطبيق بناءً على طلب الإلغاء المحفوظ.");
+                                cancelled++;
+                            } else {
+                                recovered.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
+                                reviewRequired++;
+                            }
+                        }
+                        db.update("node_tasks", recovered, "id=? AND status='running'", new String[]{String.valueOf(taskId)});
+                    }
+                } finally {
+                    cursor.close();
+                }
 
                 if (requeued > 0 || reviewRequired > 0 || cancelled > 0) {
                     ContentValues event = new ContentValues();
