@@ -1,30 +1,52 @@
-# SOULARAB Embedded Local Backend
+# SOULARAB TECH — Embedded Android Department Runtime
 
-This Capacitor 6 Android plugin starts five independent HTTP server instances bound only to 127.0.0.1:
+The Capacitor Android plugin starts five independent HTTP listeners bound only to `127.0.0.1`:
 
-| Node | Port | Responsibility |
-|---|---:|---|
-| A | 3101 | AI and text task queue |
-| B | 3102 | Image and design task queue |
-| C | 3103 | Audio and video task queue |
-| D | 3104 | Development task queue |
-| E | 3105 | Scheduling, routing and recovery status |
+| Node | Port | Owner | Worker capability |
+|---|---:|---|---|
+| A | 3101 | ROOH orchestration | Local Qwen plan drafting through the native llama.cpp runtime |
+| B | 3102 | AI and text | Local Qwen text task execution through the native llama.cpp runtime |
+| C | 3103 | Image and design | ComfyUI API adapter for built-in image workflows |
+| D | 3104 | Audio and speech | whisper.cpp HTTP adapter for audio transcription |
+| E | 3105 | Development and recovery | Allowlisted app-private workspace file creation; no shell or code execution |
 
-All nodes persist their queues in the app-private Android SQLite database. Node E exposes `GET /nodes` and `POST /dispatch`; task types are routed to the relevant node queue. Each node exposes `GET /health`, `GET /metrics`, `GET /tasks`, `POST /tasks`, and task lookup. The local section store is also available through `GET/POST /sections`.
+All nodes share the app-private SQLite database with WAL enabled. A task is eligible for a worker only when it is `queued` and has a linked `node_approvals` row in `approved` state. Workers claim tasks with a conditional state update, write task results, and append start/completion/failure events. Rejected tasks are cancelled and are never picked up.
 
-Requests must include the `X-Local-Token` returned by the Capacitor `start()` method. The servers accept Capacitor localhost origins only and bind to loopback.
+## Local engine prerequisites
 
-## Install and sync
+- **A and B:** bundled llama.cpp JNI runtime plus the Qwen2.5-3B-Instruct Q4_K_M GGUF model. Download/load the model from the app before submitting model-backed tasks.
+- **C:** ComfyUI must be running on the same Android device at `http://127.0.0.1:8188` by default. Configure another loopback port with `LocalBackend.configureLocalEngine({ engine: 'comfyui', baseUrl: 'http://127.0.0.1:8188' })`. The adapter accepts ComfyUI API prompt graphs containing built-in node types only; custom nodes are rejected. It polls the prompt history for completion.
+- **D:** whisper.cpp server must be running on the same Android device at `http://127.0.0.1:8080` by default. Configure it with `LocalBackend.configureLocalEngine({ engine: 'whisper', baseUrl: 'http://127.0.0.1:8080' })`. Audio tasks must contain `audioBase64`, an optional safe filename, and optional language code. Audio payloads are bounded; the adapter does not transcode video or claim video generation.
+- **E:** `write_note` and `write_artifact` tasks may create new TXT, MD, JSON, HTML, CSS, JS, or PY files below the app-private `soularab-workspaces/<workspaceId>` directory. Existing files are never overwritten. Paths are canonicalized and traversal is rejected. Shell execution, terminal commands, deployment, network access, deletion, and arbitrary code execution are not part of this worker.
 
-The root app depends on this package through a local file dependency. Run:
+The local media adapters never accept public or LAN URLs. Their configured endpoints must use HTTP loopback hosts only. Use `LocalBackend.localEngineStatus()` to check ComfyUI and whisper.cpp health. An online HTTP endpoint proves service reachability, not that its model/checkpoint is installed or that a task succeeded.
+
+## Queue lifecycle and recovery
+
+1. Node E creates a task and its pending approval in one SQLite transaction.
+2. An explicit approval decision changes the task to `queued`; rejection changes it to `cancelled`.
+3. The owning node worker selects only queued tasks with an approved linked approval.
+4. A conditional update claims the task as `running`.
+5. The worker records `task_started`, then either `task_completed` or `task_failed` with a bounded result.
+6. On plugin startup, interrupted inference/transcription tasks on A, B, and D are requeued. C (media generation) and E (file creation) are marked failed for manual review instead of being blindly repeated, preventing duplicate media jobs or file side effects. A recovery event records both counts. This is process-restart recovery, not a guarantee of uninterrupted background execution.
+
+## Security and operational limits
+
+- Each HTTP node binds to loopback and requires the per-install `X-Local-Token`.
+- The worker adapters do not invoke a shell and do not contact cloud inference APIs.
+- ComfyUI graphs are restricted to a built-in node allowlist; custom nodes are not accepted.
+- E writes only new files within app-private storage and refuses overwrites.
+- The app currently uses worker threads, not an Android foreground service. Android may stop the process in the background; do not treat this as an always-on server.
+- CI compilation does not prove a physical-device run. A real Android acceptance test must install the APK, load Qwen, start the local media services where applicable, submit and approve test tasks, verify completed results, then force-stop/restart the app and verify recovery.
+
+## Install and build
 
 ```sh
 npm install
 npx cap sync android
-```
+npm run build
+cd android
+./gradlew assembleDebug
+``
 
-The Android project must be generated with `npx cap add android` if it does not exist yet.
-
-## Scope
-
-The plugin now bundles the llama.cpp v0.9.0 native runtime for arm64 Android through the Android NDK and JNI. The ROOH text assistant and the AI/text task worker use this in-process native runtime; they do not call Ollama, Termux, localhost model servers, or cloud inference. On first use, the app downloads the Qwen2.5-3B-Instruct Q4_K_M GGUF model into private app storage (about 2 GB; allow at least 2.8 GB free). After the one-time download, text inference is fully offline. The five HTTP nodes remain local orchestration/department APIs; image generation, speech/video processing, and development builds still require their own real on-device engines and are not provided by llama.cpp. Android may stop the app process in the background; the plugin does not claim an always-on Android foreground service.
+The plugin is an adapter framework, not a bundle of ComfyUI or whisper.cpp. Those media runtimes, their model files, and their device resource requirements must be installed separately on the same Android device before C or D can execute real media tasks.

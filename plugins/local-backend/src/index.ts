@@ -17,6 +17,11 @@ export interface LocalBackendStatus {
 export interface LocalBackendPlugin {
   start(): Promise<LocalBackendStatus>;
   status(): Promise<LocalBackendStatus>;
+  configureLocalEngine(options: { engine: 'comfyui' | 'whisper'; baseUrl: string }): Promise<{ engine: string; configured: boolean; baseUrl: string; execution: 'local_only' }>;
+  localEngineStatus(): Promise<{
+    comfyui: { configured: boolean; baseUrl?: string; online: boolean; httpStatus?: number; reason?: string };
+    whisper: { configured: boolean; baseUrl?: string; online: boolean; httpStatus?: number; reason?: string };
+  }>;
   readOnlyControlSnapshot(): Promise<{
     schemaVersion: 1;
     access: 'read-only';

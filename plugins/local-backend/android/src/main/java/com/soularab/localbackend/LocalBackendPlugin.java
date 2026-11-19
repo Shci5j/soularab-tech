@@ -2,6 +2,7 @@ package com.soularab.localbackend;
 
 import android.content.SharedPreferences;
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Base64;
 import android.content.Intent;
@@ -40,7 +41,7 @@ public class LocalBackendPlugin extends Plugin {
     public void load() {
         super.load();
         database = new LocalBackendDatabase(getContext());
-        recoverInterruptedTextTasks();
+        recoverInterruptedTasks();
         SharedPreferences prefs = getContext().getSharedPreferences("soularab_local_backend", 0);
         accessToken = prefs.getString("access_token", null);
         if (accessToken == null) {
@@ -65,6 +66,68 @@ public class LocalBackendPlugin extends Plugin {
 
     @PluginMethod
     public void status(PluginCall call) { call.resolve(statusObject()); }
+
+    @PluginMethod
+    public void configureLocalEngine(PluginCall call) {
+        String engine = call.getString("engine", "").trim().toLowerCase();
+        String baseUrl = call.getString("baseUrl", "").trim();
+        String key;
+        if ("comfyui".equals(engine)) key = "comfyui_base_url";
+        else if ("whisper".equals(engine)) key = "whisper_cpp_base_url";
+        else { call.reject("Engine must be comfyui or whisper"); return; }
+        try {
+            if (!LocalEnginePolicy.isLoopbackHttpUrl(baseUrl)) {
+                call.reject("Only an explicit HTTP loopback URL with a valid port is allowed");
+                return;
+            }
+            getContext().getSharedPreferences("soularab_local_engines", 0)
+                .edit().putString(key, baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl).apply();
+            JSObject result = new JSObject();
+            result.put("engine", engine);
+            result.put("configured", true);
+            result.put("baseUrl", baseUrl);
+            result.put("execution", "local_only");
+            call.resolve(result);
+        } catch (Exception invalid) {
+            call.reject("Invalid local engine URL", invalid);
+        }
+    }
+
+    @PluginMethod
+    public void localEngineStatus(PluginCall call) {
+        new Thread(() -> {
+            JSObject result = new JSObject();
+            checkLocalEngine(result, "comfyui", "comfyui_base_url", "http://127.0.0.1:8188", "/system_stats");
+            checkLocalEngine(result, "whisper", "whisper_cpp_base_url", "http://127.0.0.1:8080", "/health");
+            call.resolve(result);
+        }, "soularab-local-engine-health").start();
+    }
+
+    private void checkLocalEngine(JSObject result, String name, String key, String fallback, String path) {
+        HttpURLConnection connection = null;
+        try {
+            String base = getContext().getSharedPreferences("soularab_local_engines", 0).getString(key, fallback);
+            URL url = new URL(base + path);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(2500);
+            connection.setReadTimeout(2500);
+            int status = connection.getResponseCode();
+            JSObject item = new JSObject();
+            item.put("configured", true);
+            item.put("baseUrl", base);
+            item.put("online", status >= 200 && status < 300);
+            item.put("httpStatus", status);
+            result.put(name, item);
+        } catch (Exception unavailable) {
+            JSObject item = new JSObject();
+            item.put("configured", false);
+            item.put("online", false);
+            item.put("reason", unavailable.getClass().getSimpleName());
+            result.put(name, item);
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
 
     /**
      * Returns a deliberately read-only snapshot for the future authenticated control gateway.
@@ -146,27 +209,71 @@ public class LocalBackendPlugin extends Plugin {
         }
     }
 
-    private void recoverInterruptedTextTasks() {
+    private void recoverInterruptedTasks() {
         try {
             SQLiteDatabase db = database.getWritableDatabase();
-            ContentValues recovery = new ContentValues();
-            recovery.put("status", "queued");
-            recovery.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            int recovered = db.update(
-                "node_tasks",
-                recovery,
-                "node_id=? AND status=? AND task_type IN ('assistant','agents','ai','text')",
-                new String[]{"B", "running"}
-            );
-            if (recovered > 0) {
-                ContentValues event = new ContentValues();
-                event.put("node_id", "B");
-                event.put("event", "worker_recovery");
-                event.put("details", "{\"requeuedTasks\":" + recovered + "}");
-                db.insert("node_events", null, event);
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date());
+            int requeued = 0;
+            int reviewRequired = 0;
+            int cancelled = 0;
+            db.beginTransaction();
+            try {
+                Cursor cursor = db.rawQuery(
+                    "SELECT t.id, t.node_id, t.cancel_requested, t.attempt_count, t.max_attempts, " +
+                    "EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
+                    "FROM node_tasks t WHERE t.status='running' ORDER BY t.id ASC",
+                    null
+                );
+                try {
+                    while (cursor.moveToNext()) {
+                        long taskId = cursor.getLong(0);
+                        String nodeId = cursor.getString(1);
+                        boolean cancelRequested = cursor.getInt(2) == 1;
+                        int attempts = cursor.getInt(3);
+                        int maxAttempts = cursor.getInt(4);
+                        boolean approved = cursor.getInt(5) == 1;
+                        String next = LocalTaskState.recoveryStatus(nodeId, cancelRequested, attempts, maxAttempts, approved);
+
+                        ContentValues recovered = new ContentValues();
+                        recovered.put("status", next);
+                        recovered.put("updated_at", timestamp);
+                        if ("queued".equals(next)) {
+                            recovered.putNull("started_at");
+                            requeued++;
+                        } else {
+                            recovered.put("finished_at", timestamp);
+                            if ("cancelled".equals(next)) {
+                                recovered.put("result", "تم إلغاء المهمة أثناء توقف التطبيق بناءً على طلب الإلغاء المحفوظ.");
+                                cancelled++;
+                            } else {
+                                recovered.put("result", "توقف التطبيق أثناء التنفيذ. لم تتم إعادة المهمة تلقائياً؛ راجع النتيجة المحلية قبل إعادة المحاولة.");
+                                reviewRequired++;
+                            }
+                        }
+                        db.update("node_tasks", recovered, "id=? AND status='running'", new String[]{String.valueOf(taskId)});
+                    }
+                } finally {
+                    cursor.close();
+                }
+
+                if (requeued > 0 || reviewRequired > 0 || cancelled > 0) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", "E");
+                    event.put("event", "worker_recovery");
+                    event.put("details", new org.json.JSONObject()
+                        .put("requeuedRetrySafe", requeued)
+                        .put("manualReviewRequired", reviewRequired)
+                        .put("cancelled", cancelled)
+                        .put("retrySafeNodes", "A,B,D")
+                        .put("reviewNodes", "C,E").toString());
+                    db.insertOrThrow("node_events", null, event);
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
             }
-        } catch (Exception ignored) {
-            // Recovery is best-effort; the local backend must still be able to start.
+        } catch (Exception error) {
+            android.util.Log.e("SOULARAB_LOCAL", "Interrupted-task recovery failed", error);
         }
     }
 
@@ -381,13 +488,16 @@ public class LocalBackendPlugin extends Plugin {
         int index = nodeIndex(id);
         if (index < 0) throw new IllegalArgumentException("Unknown node: " + id);
         for (LocalNodeServer server : servers) {
-            if (server.nodeId.equals(id) && server.isAlive()) return;
+            if (server.nodeId.equals(id) && server.isAlive()) {
+                server.startWorker();
+                return;
+            }
         }
         stopNode(id);
-        LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken);
+        LocalNodeServer server = new LocalNodeServer(id, NODE_NAMES[index], NODE_PORTS[index], database, accessToken, getContext());
         server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
         servers.add(server);
-        if ("B".equals(id)) server.startWorker();
+        server.startWorker();
     }
 
     private synchronized void stopNode(String id) {

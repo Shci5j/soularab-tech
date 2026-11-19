@@ -465,7 +465,7 @@ export default function App() {
       if (nativeApprovalDecision && method === 'POST') {
         return await localNodeRequest('E', '/approvals/' + nativeApprovalDecision[1] + '/decision', { method: 'POST', body: options.body });
       }
-      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority)$/);
+      const nativeTaskAction = path.match(/^\/api\/tasks\/(\d+)\/(cancel|pause|resume|priority|retry)$/);
       if (nativeTaskAction && method === 'POST') return await localNodeRequest('E', '/tasks/' + nativeTaskAction[1] + '/' + nativeTaskAction[2], { method: 'POST', body: options.body || JSON.stringify({}) });
       if (/^\/api\/tasks\/\d+\/events$/.test(path)) return { items: [] };
       if (/^\/api\/tasks\/\d+$/.test(path) && method === 'GET') return await localNodeRequest('E', path.replace('/api', ''));
@@ -1266,7 +1266,7 @@ export default function App() {
     setTaskActionId(taskId);
     try {
       await request('/api/tasks/' + taskId + '/cancel', { method: 'POST' });
-      setNotice(language === 'ar' ? 'تم إلغاء المهمة من قائمة الانتظار.' : 'Task cancelled from the queue.');
+      setNotice(language === 'ar' ? 'تم تسجيل طلب الإلغاء. إذا كانت المهمة قيد التنفيذ فسيُعتمد الإلغاء عند وصول العامل إلى نقطة الإنهاء الآمنة.' : 'Cancellation was recorded. A running worker will apply it when it reaches its safe completion point.');
       await refresh();
     } catch (error) {
       setNotice(error.message);
@@ -1803,13 +1803,14 @@ export default function App() {
             <div className="approval-top"><strong>{task.title}</strong><span className="pill">{task.status==='queued'?(language==='ar'?'في الانتظار':'Queued'):task.status==='waiting_approval'?(language==='ar'?'بانتظار الموافقة':'Awaiting approval'):task.status==='running'?(language==='ar'?'قيد التنفيذ':'Running'):task.status==='completed'?(language==='ar'?'مكتملة':'Completed'):task.status==='cancelled'?(language==='ar'?'ملغاة':'Cancelled'):task.status==='failed'?(language==='ar'?'فشلت':'Failed'):task.status}</span></div>
             {task.description && <p>{task.description}</p>}
             {task.result && <div className="notice-inline task-result"><strong>{language==='ar'?'نتيجة التنفيذ المحلي':'Local execution result'}</strong><p>{task.result}</p></div>}
-            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')} · {language==='ar'?'الأولوية':'Priority'} {task.priority || 0}</small>
+            <small>{new Date(task.created_at).toLocaleString(language==='ar'?'ar':'en-US')} · {language==='ar'?'الأولوية':'Priority'} {task.priority || 0}{Number.isInteger(task.attemptCount) ? ' · ' + (language==='ar'?'المحاولات':'Attempts') + ' ' + task.attemptCount + '/' + (task.maxAttempts || 3) : ''}{task.cancelRequested ? ' · ' + (language==='ar'?'طلب إلغاء مسجل':'Cancellation requested') : ''}</small>
             <div className="approval-actions">
               <button className="button secondary" onClick={()=>toggleTaskHistory(task.id)}>{taskHistoryId===task.id?(language==='ar'?'إخفاء السجل':'Hide history'):(language==='ar'?'سجل المهمة':'Task history')}</button>
               {Capacitor.isNativePlatform() && task.status==='queued' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'pause')}>{language==='ar'?'إيقاف مؤقت':'Pause'}</button>}
               {Capacitor.isNativePlatform() && task.status==='paused' && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'resume')}>{language==='ar'?'استئناف':'Resume'}</button>}
               {Capacitor.isNativePlatform() && ['queued','paused'].includes(task.status) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'priority',10)}>{language==='ar'?'أولوية قصوى':'High priority'}</button>}
-              {['queued','planning','waiting_approval','paused'].includes(task.status) && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ الإلغاء…':'Cancelling…'):(language==='ar'?'إلغاء المهمة':'Cancel task')}</button>}
+              {(['queued','planning','waiting_approval','paused'].includes(task.status) || (Capacitor.isNativePlatform() && task.status==='running')) && !task.cancelRequested && <button className="button danger" disabled={taskActionId===task.id} onClick={()=>cancelQueuedTask(task.id)}>{taskActionId===task.id?(language==='ar'?'جارٍ تسجيل الإلغاء…':'Recording cancellation…'):(task.status==='running'?(language==='ar'?'طلب إيقاف آمن':'Request safe stop'):(language==='ar'?'إلغاء المهمة':'Cancel task'))}</button>}
+              {Capacitor.isNativePlatform() && task.status==='failed' && (task.attemptCount || 0) < (task.maxAttempts || 3) && <button className="button secondary" disabled={taskActionId===task.id} onClick={()=>controlQueuedTask(task.id,'retry')}>{language==='ar'?'إعادة المحاولة':'Retry task'}</button>}
             </div>
             {task.status==='queued' && !Capacitor.isNativePlatform() && <div className="task-execution-form">
               <strong>{language==='ar'?'إجراء آمن ضمن القائمة المسموحة':'Allowlisted safe action'}</strong>

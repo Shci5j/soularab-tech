@@ -1,3 +1,5 @@
+import { LocalBackend } from '@soularab/local-backend';
+
 const NODE_PORTS = Object.freeze({ A: 3101, B: 3102, C: 3103, D: 3104, E: 3105 });
 
 export async function localNodeRequest(nodeId, path, options = {}) {
@@ -25,3 +27,7 @@ export const dispatchEmbeddedTask = (taskType, payload = {}) =>
 export const saveLocalSection = (id, sectionName, content) =>
   localNodeRequest('A', '/sections', { method: 'POST', body: JSON.stringify({ id, sectionName, content }) });
 export const getLocalSections = () => localNodeRequest('A', '/sections');
+
+export const configureLocalMediaEngine = (engine, baseUrl) =>
+  LocalBackend.configureLocalEngine({ engine, baseUrl });
+export const getLocalMediaEngineStatus = () => LocalBackend.localEngineStatus();

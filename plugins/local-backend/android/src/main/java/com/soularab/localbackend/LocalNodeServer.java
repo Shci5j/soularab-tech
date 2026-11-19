@@ -1,5 +1,6 @@
 package com.soularab.localbackend;
 
+import android.content.Context;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -24,31 +25,37 @@ final class LocalNodeServer extends NanoHTTPD {
     final String nodeId;
     final String title;
     private final LocalBackendDatabase helper;
+    private final Context context;
     private final String accessToken;
     private final AtomicBoolean workerActive = new AtomicBoolean(false);
     private Thread workerThread;
 
-    LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken) {
+    LocalNodeServer(String nodeId, String title, int port, LocalBackendDatabase helper, String accessToken, Context context) {
         super("127.0.0.1", port);
         this.nodeId = nodeId;
         this.title = title;
         this.helper = helper;
         this.accessToken = accessToken;
+        this.context = context.getApplicationContext();
     }
 
     void startWorker() {
-        if (!"B".equals(nodeId) || !workerActive.compareAndSet(false, true)) return;
+        if (!workerActive.compareAndSet(false, true)) return;
         workerThread = new Thread(() -> {
-            while (workerActive.get()) {
-                try {
-                    processNextTextTask();
-                    Thread.sleep(1200);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    break;
-                } catch (Exception ignored) {
-                    try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+            try {
+                while (workerActive.get()) {
+                    try {
+                        new LocalDepartmentEngine(context, helper, nodeId).processOne();
+                        Thread.sleep(1200);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception ignored) {
+                        try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                    }
                 }
+            } finally {
+                workerActive.set(false);
             }
         }, "soularab-node-" + nodeId + "-worker");
         workerThread.setDaemon(true);
@@ -59,51 +66,6 @@ final class LocalNodeServer extends NanoHTTPD {
         workerActive.set(false);
         if (workerThread != null) workerThread.interrupt();
         workerThread = null;
-    }
-
-    private void processNextTextTask() throws Exception {
-        if (!"B".equals(nodeId) || !RoohNative.isLoaded()) return;
-        SQLiteDatabase db = helper.getWritableDatabase();
-        Cursor cursor = db.query("node_tasks", new String[]{"id", "payload"}, "node_id=? AND status='queued' AND task_type IN ('assistant','agents','ai','text')",
-            new String[]{nodeId}, null, null, "priority DESC, id ASC", "1");
-        long taskId;
-        JSONObject payload;
-        try {
-            if (!cursor.moveToFirst()) return;
-            taskId = cursor.getLong(0);
-            payload = new JSONObject(cursor.getString(1));
-        } finally { cursor.close(); }
-        ContentValues claim = new ContentValues();
-        claim.put("status", "running");
-        claim.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-        if (db.update("node_tasks", claim, "id=? AND node_id=? AND status='queued'", new String[]{String.valueOf(taskId), nodeId}) != 1) return;
-
-        String prompt = payload.optString("description", "").trim();
-        if (prompt.isEmpty()) prompt = payload.optString("details", "").trim();
-        if (prompt.isEmpty()) prompt = payload.optString("title", "اكتب خطة عمل واضحة ومختصرة.");
-        try {
-            String answer = executeRoohTextTask(prompt);
-            ContentValues completed = new ContentValues();
-            completed.put("status", "completed");
-            completed.put("result", answer);
-            completed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
-        } catch (Exception error) {
-            ContentValues failed = new ContentValues();
-            failed.put("status", "failed");
-            failed.put("result", "تعذر تنفيذ المهمة عبر محرك روح المحلي: " + error.getClass().getSimpleName());
-            failed.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'", new String[]{String.valueOf(taskId), nodeId});
-        }
-    }
-
-    private String executeRoohTextTask(String prompt) throws Exception {
-        if (!RoohNative.isLoaded()) throw new IOException("rooh_native_engine_not_loaded");
-        String formatted = "<|im_start|>system\nأنت روح AI ضمن SOULARAB TECH. نفّذ المهمة النصية المطلوبة بدقة، واكتب النتيجة بالعربية، ولا تدّعِ تنفيذ أعمال خارجية أو ملفات لم تنفذها.<|im_end|>\n"
-            + "<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
-        String answer = RoohNative.generate(formatted, 512);
-        if (answer == null || answer.trim().isEmpty()) throw new IOException("empty_native_model_response");
-        return answer.trim();
     }
 
     @Override
@@ -141,8 +103,14 @@ final class LocalNodeServer extends NanoHTTPD {
             result.put("title", title);
             result.put("port", getListeningPort());
             result.put("backend", "embedded-android");
-            result.put("worker", "B".equals(nodeId) ? (workerActive.get() ? "running" : "stopped") : "not_configured");
-            result.put("taskExecution", "B".equals(nodeId) ? "native_llama_cpp_text" : "engine_dependent");
+            result.put("worker", workerActive.get() ? "running" : "stopped");
+            String execution = "A".equals(nodeId) ? "native_rooh_orchestration"
+                : "B".equals(nodeId) ? "native_llama_cpp_text"
+                : "C".equals(nodeId) ? "comfyui_loopback_workflows"
+                : "D".equals(nodeId) ? "whisper_cpp_loopback_transcription"
+                : "E".equals(nodeId) ? "allowlisted_app_private_files" : "unavailable";
+            result.put("taskExecution", execution);
+            result.put("engineReady", new LocalDepartmentEngine(context, helper, nodeId).isReady());
             result.put("roohEngineLoaded", "B".equals(nodeId) || "A".equals(nodeId) ? safeRoohLoaded() : false);
             return json(Response.Status.OK, result);
         }
@@ -222,14 +190,38 @@ final class LocalNodeServer extends NanoHTTPD {
             } finally { current.close(); }
             ContentValues values = new ContentValues();
             if ("pause".equals(action)) {
-                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused_without_a_running_worker"));
+                if (!"queued".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_queued_tasks_can_be_paused"));
                 values.put("status", "paused");
             } else if ("resume".equals(action)) {
                 if (!"paused".equals(currentStatus)) return json(Response.Status.CONFLICT, error("task_is_not_paused"));
                 values.put("status", "queued");
             } else if ("cancel".equals(action)) {
-                if (!("queued".equals(currentStatus) || "paused".equals(currentStatus))) return json(Response.Status.CONFLICT, error("running_task_cannot_be_cancelled_without_worker_support"));
-                values.put("status", "cancelled");
+                if ("running".equals(currentStatus)) {
+                    values.put("cancel_requested", 1);
+                } else if ("queued".equals(currentStatus) || "paused".equals(currentStatus)) {
+                    values.put("status", "cancelled");
+                    values.put("finished_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                } else {
+                    return json(Response.Status.CONFLICT, error("task_cannot_be_cancelled_in_current_state"));
+                }
+            } else if ("retry".equals(action)) {
+                if (!"failed".equals(currentStatus)) return json(Response.Status.CONFLICT, error("only_failed_tasks_can_be_retried"));
+                Cursor retry = db.rawQuery(
+                    "SELECT t.attempt_count, t.max_attempts, EXISTS(SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
+                    "FROM node_tasks t WHERE t.id=?",
+                    new String[]{String.valueOf(taskId)}
+                );
+                try {
+                    if (!retry.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
+                    if (!LocalTaskState.mayRetry(currentStatus, retry.getInt(0), retry.getInt(1), retry.getInt(2) == 1)) {
+                        if (retry.getInt(2) != 1) return json(Response.Status.FORBIDDEN, error("approved_task_approval_required"));
+                        return json(Response.Status.CONFLICT, error("task_retry_limit_reached_or_invalid_state"));
+                    }
+                } finally { retry.close(); }
+                values.put("status", "queued");
+                values.put("cancel_requested", 0);
+                values.putNull("finished_at");
+                values.put("result", "");
             } else if ("priority".equals(action)) {
                 JSONObject body = readBody(session);
                 int priority = body.optInt("priority", 0);
@@ -239,10 +231,40 @@ final class LocalNodeServer extends NanoHTTPD {
                 return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
             }
             values.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            int changed = "E".equals(nodeId)
-                ? db.update("node_tasks", values, "id=?", new String[]{String.valueOf(taskId)})
-                : db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
-            if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+            String where = "id=? AND status=?";
+            String[] whereArgs = new String[]{String.valueOf(taskId), currentStatus};
+            if (!"E".equals(nodeId)) {
+                where += " AND node_id=?";
+                whereArgs = new String[]{String.valueOf(taskId), currentStatus, nodeId};
+            }
+            db.beginTransaction();
+            try {
+                int changed = db.update("node_tasks", values, where, whereArgs);
+                if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+                if ("cancel".equals(action)) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", nodeId);
+                    event.put("event", "running".equals(currentStatus) ? "task_cancel_requested" : "task_cancelled");
+                    event.put("details", new JSONObject().put("taskId", taskId).put("wasRunning", "running".equals(currentStatus)).toString());
+                    db.insertOrThrow("node_events", null, event);
+                    if ("waiting_approval".equals(currentStatus)) {
+                        ContentValues revoke = new ContentValues();
+                        revoke.put("status", "rejected");
+                        revoke.put("decided_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                        revoke.put("decision_note", "cancelled_by_user");
+                        db.update("node_approvals", revoke, "task_id=? AND status='pending'", new String[]{String.valueOf(taskId)});
+                    }
+                } else if ("retry".equals(action)) {
+                    ContentValues event = new ContentValues();
+                    event.put("node_id", nodeId);
+                    event.put("event", "task_retry_queued");
+                    event.put("details", new JSONObject().put("taskId", taskId).toString());
+                    db.insertOrThrow("node_events", null, event);
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
             return getTask(String.valueOf(taskId));
         }
         if (path.startsWith("/tasks/") && Method.GET.equals(session.getMethod())) {
@@ -375,8 +397,8 @@ final class LocalNodeServer extends NanoHTTPD {
         String risk = body.optString("risk", "medium").trim().toLowerCase();
         String department = body.optString("department", "agents").trim().toLowerCase();
         if (title.length() < 3 || title.length() > 240 || description.isEmpty() || description.length() > 12000 ||
-            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk))) {
-            return json(Response.Status.BAD_REQUEST, error("invalid_agent_plan"));
+            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk)) || !isSupportedDepartment(department)) {
+            return json(Response.Status.BAD_REQUEST, error("invalid_agent_plan_or_unsupported_department"));
         }
         String taskType = "system".equals(department) ? "agents" : department;
         String target = targetFor(taskType);
@@ -468,7 +490,9 @@ final class LocalNodeServer extends NanoHTTPD {
                 ContentValues task = new ContentValues();
                 task.put("status", "approved".equals(decision) ? "queued" : "cancelled");
                 task.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-                db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
+                if ("rejected".equals(decision)) task.put("finished_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
+                int taskChanged = db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
+                if (taskChanged != 1) return json(Response.Status.CONFLICT, error("task_no_longer_waiting_for_approval"));
             }
             ContentValues event = new ContentValues();
             event.put("node_id", "E");
@@ -548,6 +572,13 @@ final class LocalNodeServer extends NanoHTTPD {
         item.put("priority", cursor.getInt(cursor.getColumnIndexOrThrow("priority")));
         item.put("result", cursor.getString(cursor.getColumnIndexOrThrow("result")));
         item.put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")));
+        item.put("attemptCount", cursor.getInt(cursor.getColumnIndexOrThrow("attempt_count")));
+        item.put("maxAttempts", cursor.getInt(cursor.getColumnIndexOrThrow("max_attempts")));
+        item.put("cancelRequested", cursor.getInt(cursor.getColumnIndexOrThrow("cancel_requested")) == 1);
+        int startedIndex = cursor.getColumnIndexOrThrow("started_at");
+        int finishedIndex = cursor.getColumnIndexOrThrow("finished_at");
+        item.put("startedAt", cursor.isNull(startedIndex) ? JSONObject.NULL : cursor.getString(startedIndex));
+        item.put("finishedAt", cursor.isNull(finishedIndex) ? JSONObject.NULL : cursor.getString(finishedIndex));
         String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
         String updatedAt = cursor.getString(cursor.getColumnIndexOrThrow("updated_at"));
         item.put("createdAt", createdAt); item.put("created_at", createdAt);
@@ -572,12 +603,37 @@ final class LocalNodeServer extends NanoHTTPD {
     }
 
     private JSONObject readBody(IHTTPSession session) throws Exception {
+        String declaredLength = session.getHeaders().get("content-length");
+        if (declaredLength != null) {
+            try {
+                long length = Long.parseLong(declaredLength);
+                if (length < 0 || length > 36L * 1024L * 1024L) throw new IOException("Request body too large (36 MB limit)");
+            } catch (NumberFormatException invalidLength) {
+                throw new IOException("Invalid Content-Length header");
+            }
+        }
         Map<String, String> files = new HashMap<>();
         session.parseBody(files);
         String body = files.get("postData");
         if (body == null || body.trim().isEmpty()) return new JSONObject();
-        if (body.length() > 1024 * 1024) throw new IOException("Request body too large");
+        if (body.length() > 36 * 1024 * 1024) throw new IOException("Request body too large (36 MB limit)");
         return new JSONObject(body);
+    }
+
+    private boolean isSupportedDepartment(String department) {
+        switch (department) {
+            case "overview": case "rooh": case "orchestrator":
+            case "assistant": case "agents": case "ai": case "text": case "system":
+            case "design": case "media": case "graphics": case "image":
+            case "video": case "audio": case "speech":
+            case "hub": case "github": case "git": case "root": case "jathr":
+            case "terminal": case "web": case "store": case "apps": case "documents":
+            case "files": case "automation": case "domains": case "security":
+            case "development": case "recovery":
+                return true;
+            default:
+                return false;
+        }
     }
 
     private String targetFor(String type) {
