@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 final class LocalBackendDatabase extends SQLiteOpenHelper {
     private static final String DB_NAME = "soularab_embedded_backend.db";
-    private static final int DB_VERSION = 4;
+    private static final int DB_VERSION = 5;
 
     LocalBackendDatabase(Context context) {
         super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
@@ -30,7 +30,12 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
             "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
             "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP," +
             "priority INTEGER NOT NULL DEFAULT 0," +
-            "result TEXT NOT NULL DEFAULT '')");
+            "result TEXT NOT NULL DEFAULT ''," +
+            "attempt_count INTEGER NOT NULL DEFAULT 0," +
+            "max_attempts INTEGER NOT NULL DEFAULT 3," +
+            "cancel_requested INTEGER NOT NULL DEFAULT 0," +
+            "started_at TEXT," +
+            "finished_at TEXT)");
         db.execSQL("CREATE INDEX idx_node_tasks_node_status ON node_tasks(node_id, status)");
         db.execSQL("CREATE TABLE local_sections (" +
             "id TEXT PRIMARY KEY," +
@@ -63,6 +68,13 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN result TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3");
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN started_at TEXT");
+            db.execSQL("ALTER TABLE node_tasks ADD COLUMN finished_at TEXT");
         }
         if (oldVersion < 4) {
             db.execSQL("CREATE TABLE IF NOT EXISTS node_approvals (" +
