@@ -37,6 +37,7 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
             "started_at TEXT," +
             "finished_at TEXT)");
         db.execSQL("CREATE INDEX idx_node_tasks_node_status ON node_tasks(node_id, status)");
+        db.execSQL("CREATE INDEX idx_node_tasks_queue ON node_tasks(node_id, status, priority, id)");
         db.execSQL("CREATE TABLE local_sections (" +
             "id TEXT PRIMARY KEY," +
             "section_name TEXT NOT NULL," +
@@ -75,6 +76,7 @@ final class LocalBackendDatabase extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0");
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN started_at TEXT");
             db.execSQL("ALTER TABLE node_tasks ADD COLUMN finished_at TEXT");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_node_tasks_queue ON node_tasks(node_id, status, priority, id)");
         }
         if (oldVersion < 4) {
             db.execSQL("CREATE TABLE IF NOT EXISTS node_approvals (" +
