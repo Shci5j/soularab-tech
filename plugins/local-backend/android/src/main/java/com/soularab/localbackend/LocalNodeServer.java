@@ -229,10 +229,27 @@ final class LocalNodeServer extends NanoHTTPD {
                 return json(Response.Status.NOT_FOUND, error("task_action_not_found"));
             }
             values.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-            int changed = "E".equals(nodeId)
-                ? db.update("node_tasks", values, "id=?", new String[]{String.valueOf(taskId)})
-                : db.update("node_tasks", values, "id=? AND node_id=?", new String[]{String.valueOf(taskId), nodeId});
+            String where = "id=? AND status=?";
+            String[] whereArgs = new String[]{String.valueOf(taskId), currentStatus};
+            if (!"E".equals(nodeId)) {
+                where += " AND node_id=?";
+                whereArgs = new String[]{String.valueOf(taskId), currentStatus, nodeId};
+            }
+            int changed = db.update("node_tasks", values, where, whereArgs);
             if (changed != 1) return json(Response.Status.CONFLICT, error("task_state_changed"));
+            if ("cancel".equals(action)) {
+                ContentValues event = new ContentValues();
+                event.put("node_id", nodeId);
+                event.put("event", "task_cancel_requested");
+                event.put("details", new JSONObject().put("taskId", taskId).put("wasRunning", "running".equals(currentStatus)).toString());
+                db.insert("node_events", null, event);
+            } else if ("retry".equals(action)) {
+                ContentValues event = new ContentValues();
+                event.put("node_id", nodeId);
+                event.put("event", "task_retry_queued");
+                event.put("details", new JSONObject().put("taskId", taskId).toString());
+                db.insert("node_events", null, event);
+            }
             return getTask(String.valueOf(taskId));
         }
         if (path.startsWith("/tasks/") && Method.GET.equals(session.getMethod())) {
@@ -365,8 +382,8 @@ final class LocalNodeServer extends NanoHTTPD {
         String risk = body.optString("risk", "medium").trim().toLowerCase();
         String department = body.optString("department", "agents").trim().toLowerCase();
         if (title.length() < 3 || title.length() > 240 || description.isEmpty() || description.length() > 12000 ||
-            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk))) {
-            return json(Response.Status.BAD_REQUEST, error("invalid_agent_plan"));
+            !("low".equals(risk) || "medium".equals(risk) || "high".equals(risk)) || !isSupportedDepartment(department)) {
+            return json(Response.Status.BAD_REQUEST, error("invalid_agent_plan_or_unsupported_department"));
         }
         String taskType = "system".equals(department) ? "agents" : department;
         String target = targetFor(taskType);
@@ -458,7 +475,8 @@ final class LocalNodeServer extends NanoHTTPD {
                 ContentValues task = new ContentValues();
                 task.put("status", "approved".equals(decision) ? "queued" : "cancelled");
                 task.put("updated_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(new java.util.Date()));
-                db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
+                int taskChanged = db.update("node_tasks", task, "id=? AND status='waiting_approval'", new String[]{String.valueOf(taskId)});
+                if (taskChanged != 1) return json(Response.Status.CONFLICT, error("task_no_longer_waiting_for_approval"));
             }
             ContentValues event = new ContentValues();
             event.put("node_id", "E");
@@ -584,6 +602,22 @@ final class LocalNodeServer extends NanoHTTPD {
         if (body == null || body.trim().isEmpty()) return new JSONObject();
         if (body.length() > 36 * 1024 * 1024) throw new IOException("Request body too large (36 MB limit)");
         return new JSONObject(body);
+    }
+
+    private boolean isSupportedDepartment(String department) {
+        switch (department) {
+            case "overview": case "rooh": case "orchestrator":
+            case "assistant": case "agents": case "ai": case "text": case "system":
+            case "design": case "media": case "graphics": case "image":
+            case "video": case "audio": case "speech":
+            case "hub": case "github": case "git": case "root": case "jathr":
+            case "terminal": case "web": case "store": case "apps": case "documents":
+            case "files": case "automation": case "domains": case "security":
+            case "development": case "recovery":
+                return true;
+            default:
+                return false;
+        }
     }
 
     private String targetFor(String type) {
