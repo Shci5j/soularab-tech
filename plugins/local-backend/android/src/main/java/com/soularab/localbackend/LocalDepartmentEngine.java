@@ -63,53 +63,111 @@ final class LocalDepartmentEngine {
     }
 
     boolean processOne() throws Exception {
-        SQLiteDatabase db = helper.getWritableDatabase();
-        long taskId;
-        String taskType;
-        JSONObject payload;
-        Cursor cursor = db.rawQuery(
-            "SELECT t.id, t.task_type, t.payload FROM node_tasks t " +
-            "WHERE t.node_id=? AND t.status='queued' " +
-            "AND EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
-            "ORDER BY t.priority DESC, t.id ASC LIMIT 1",
-            new String[]{nodeId}
-        );
-        try {
-            if (!cursor.moveToFirst()) return false;
-            taskId = cursor.getLong(0);
-            taskType = cursor.getString(1);
-            payload = new JSONObject(cursor.getString(2));
-        } finally {
-            cursor.close();
-        }
-
         if (!isReady()) return false;
-        ContentValues claim = new ContentValues();
-        claim.put("status", "running");
-        claim.put("updated_at", now());
-        if (db.update("node_tasks", claim, "id=? AND node_id=? AND status='queued'",
-            new String[]{String.valueOf(taskId), nodeId}) != 1) return false;
-        event("task_started", taskId, taskType);
+        SQLiteDatabase db = helper.getWritableDatabase();
+        long taskId = -1L;
+        String taskType = null;
+        JSONObject payload = null;
+        boolean claimed = false;
+
+        // Select and claim under one SQLite write transaction. This prevents two
+        // worker instances from executing the same queued task.
+        db.beginTransaction();
+        try {
+            Cursor cursor = db.rawQuery(
+                "SELECT t.id, t.task_type, t.payload FROM node_tasks t " +
+                "WHERE t.node_id=? AND t.status='queued' AND t.cancel_requested=0 " +
+                "AND t.attempt_count < t.max_attempts " +
+                "AND EXISTS (SELECT 1 FROM node_approvals a WHERE a.task_id=t.id AND a.status='approved') " +
+                "ORDER BY t.priority DESC, t.id ASC LIMIT 1",
+                new String[]{nodeId}
+            );
+            try {
+                if (!cursor.moveToFirst()) return false;
+                taskId = cursor.getLong(0);
+                taskType = cursor.getString(1);
+                payload = new JSONObject(cursor.getString(2));
+            } finally {
+                cursor.close();
+            }
+
+            ContentValues claim = new ContentValues();
+            claim.put("status", "running");
+            claim.put("attempt_count", "attempt_count + 1");
+            claim.put("updated_at", now());
+            claim.put("started_at", now());
+            claim.putNull("finished_at");
+            int changed = db.update("node_tasks", claim,
+                "id=? AND node_id=? AND status='queued' AND cancel_requested=0 AND attempt_count < max_attempts",
+                new String[]{String.valueOf(taskId), nodeId});
+            // ContentValues stores values, not SQL expressions. Increment atomically below if
+            // the row was claimed by this transaction.
+            if (changed != 1) return false;
+            db.execSQL("UPDATE node_tasks SET attempt_count=attempt_count+1 WHERE id=?",
+                new Object[]{taskId});
+            insertEvent(db, "task_started", taskId, taskType);
+            db.setTransactionSuccessful();
+            claimed = true;
+        } finally {
+            db.endTransaction();
+        }
+        if (!claimed) return false;
 
         try {
             String result = execute(taskType, payload);
-            ContentValues completed = new ContentValues();
-            completed.put("status", "completed");
-            completed.put("result", result);
-            completed.put("updated_at", now());
-            db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'",
-                new String[]{String.valueOf(taskId), nodeId});
-            event("task_completed", taskId, taskType);
+            db.beginTransaction();
+            try {
+                Cursor state = db.query("node_tasks", new String[]{"cancel_requested"},
+                    "id=? AND node_id=? AND status='running'",
+                    new String[]{String.valueOf(taskId), nodeId}, null, null, null, "1");
+                boolean cancelRequested;
+                try {
+                    if (!state.moveToFirst()) return true;
+                    cancelRequested = state.getInt(0) == 1;
+                } finally {
+                    state.close();
+                }
+                ContentValues completed = new ContentValues();
+                completed.put("status", cancelRequested ? "cancelled" : "completed");
+                completed.put("result", result);
+                completed.put("updated_at", now());
+                completed.put("finished_at", now());
+                db.update("node_tasks", completed, "id=? AND node_id=? AND status='running'",
+                    new String[]{String.valueOf(taskId), nodeId});
+                insertEvent(db, cancelRequested ? "task_cancelled_after_execution" : "task_completed", taskId, taskType);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
         } catch (Exception failure) {
-            ContentValues failed = new ContentValues();
-            failed.put("status", "failed");
-            failed.put("result", safeMessage(failure));
-            failed.put("updated_at", now());
-            db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'",
-                new String[]{String.valueOf(taskId), nodeId});
-            event("task_failed", taskId, failure.getClass().getSimpleName());
+            db.beginTransaction();
+            try {
+                ContentValues failed = new ContentValues();
+                failed.put("status", "failed");
+                failed.put("result", safeMessage(failure));
+                failed.put("updated_at", now());
+                failed.put("finished_at", now());
+                db.update("node_tasks", failed, "id=? AND node_id=? AND status='running'",
+                    new String[]{String.valueOf(taskId), nodeId});
+                insertEvent(db, "task_failed", taskId, failure.getClass().getSimpleName());
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
         }
         return true;
+    }
+
+    private void insertEvent(SQLiteDatabase db, String name, long taskId, String detailsText) {
+        ContentValues values = new ContentValues();
+        values.put("node_id", nodeId);
+        values.put("event", name);
+        try {
+            values.put("details", new JSONObject().put("taskId", taskId).put("details", detailsText).toString());
+        } catch (Exception ignored) {
+            values.put("details", "{}");
+        }
+        db.insertOrThrow("node_events", null, values);
     }
 
     private String execute(String taskType, JSONObject payload) throws Exception {
