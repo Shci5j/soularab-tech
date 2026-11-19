@@ -213,8 +213,10 @@ final class LocalNodeServer extends NanoHTTPD {
                 );
                 try {
                     if (!retry.moveToFirst()) return json(Response.Status.NOT_FOUND, error("task_not_found"));
-                    if (retry.getInt(0) >= retry.getInt(1)) return json(Response.Status.CONFLICT, error("task_retry_limit_reached"));
-                    if (retry.getInt(2) != 1) return json(Response.Status.FORBIDDEN, error("approved_task_approval_required"));
+                    if (!LocalTaskState.mayRetry(currentStatus, retry.getInt(0), retry.getInt(1), retry.getInt(2) == 1)) {
+                        if (retry.getInt(2) != 1) return json(Response.Status.FORBIDDEN, error("approved_task_approval_required"));
+                        return json(Response.Status.CONFLICT, error("task_retry_limit_reached_or_invalid_state"));
+                    }
                 } finally { retry.close(); }
                 values.put("status", "queued");
                 values.put("cancel_requested", 0);
